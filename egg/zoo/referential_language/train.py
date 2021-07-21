@@ -101,21 +101,20 @@ def add_weight_decay(model, weight_decay=1e-5, skip_name=""):
 
 def main(params):
     opts = get_common_opts(params=params)
+    print(f"{opts}\n")
+    assert (
+        not opts.batch_size % 2
+    ), f"Batch size must be multiple of 2. Found {opts.batch_size}"
+    print(
+        f"Distributed training set to: {opts.distributed_context.is_distributed}. "
+        f"Using batch of size {opts.batch_size} on {opts.distributed_context.world_size} device(s)\n"
+        f"Applying augmentations: {opts.use_augmentations} with image size: {opts.image_size}.\n"
+    )
 
-    print(f"{opts}")
-    print(f"Using batch of size {opts.batch_size} with image size: {opts.image_size}.")
-
-    if opts.pdb:
+    if not opts.distributed_context.is_distributed and opts.pdb:
         breakpoint()
 
-    train_loader = get_dataloader(
-        image_size=opts.image_size,
-        batch_size=opts.batch_size,
-        num_workers=opts.num_workers,
-        random_coord=opts.random_coord,
-        seed=opts.random_seed,
-        filter_bbox=opts.filter_bbox,
-    )
+    train_loader = get_dataloader()
 
     game = build_game(opts)
 
