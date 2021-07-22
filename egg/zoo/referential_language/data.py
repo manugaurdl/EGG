@@ -1,3 +1,8 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
 from typing import (
     DefaultDict,
     Dict,
@@ -94,21 +99,32 @@ class OpenImagesObjects(Dataset):
     def __len__(self) -> int:
         return len(self.images)
 
-    def prep_labels(self, labels):
+    def prep_labels(self, labels, image):
         obj_label, *bbox = labels
-        obj_id = torch.tensor(self.label_name_to_id[obj_label])
+
         bbox = torch.tensor(list(map(float, bbox)))
+        bbox[0] *= image.shape[1]
+        bbox[1] *= image.shape[0]
+        bbox[2] *= image.shape[1]
+        bbox[3] *= image.shape[0]
+
+        #  torchvision.transforms.functional.crop(image, top, left, height, width)
+
+        obj_id = torch.tensor(self.label_name_to_id[obj_label])
+
         return (obj_id, bbox)
 
     def __getitem__(self, index: int):
         image_path = self.images[index]
         image = Image.open(image_path)
+
         if image.mode != "RGB":
             image.convert("RGB")
         if self.transform:
             image = self.transform(image)
+
         labels = self.box_labels[image_path.stem]
-        labels = list(map(self.prep_labels, labels))
+        labels = [self.prep_labels(label, image.size) for label in labels]
         return image, labels
 
 
@@ -154,8 +170,7 @@ def multicolumn_csv_to_dict(
     value_cols: Optional[Sequence] = None,
     discard_header: bool = True,
     one_to_n_mapping: bool = False,
-) -> Union[Dict[str, Tuple[str]], DefaultDict[str, Tuple[str]]]:
-    # TODO fix return type: keys can also be tuples...
+):
     table = read_csv(file_path, discard_header)
     if not value_cols:
         value_cols = tuple(i for i in range(1, len(table[0])))
@@ -170,4 +185,7 @@ def multicolumn_csv_to_dict(
 
 if __name__ == "__main__":
     a = OpenImagesObjects(Path("/datasets01/open_images/030119"), split="validation")
-    print([a[i] for i in range(10)])
+    for i in a:
+        continue
+    print(a.lab / len(a))
+    breakpoint()
