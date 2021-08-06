@@ -21,6 +21,7 @@ class _BatchIterator:
         distractors=1,
         max_targets_seen=-1,
         transformations=None,
+        world_size=1,
     ):
         self.dataset = dataset
         self.batch_size = batch_size
@@ -31,6 +32,8 @@ class _BatchIterator:
 
         self.targets_seen = 0
         self.transformations = transformations
+
+        self.world_size = world_size
 
     def __iter__(self):
         return self
@@ -77,7 +80,7 @@ class _BatchIterator:
         # )
 
         targets = torch.stack(targets)
-        self.targets_seen += self.batch_size
+        self.targets_seen += self.batch_size * self.world_size
 
         return (targets, receiver_input), class_labels, targets_position
 
