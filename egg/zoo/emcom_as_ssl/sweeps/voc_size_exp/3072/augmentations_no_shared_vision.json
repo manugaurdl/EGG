@@ -6,6 +6,5 @@
     "use_augmentations": [true],
     "gs_temperature": [5.0],
     "loss_type": ["xent"],
-    "vocab_size": [3072],
-    "wandb": [true]
+    "vocab_size": [3072]
 }
