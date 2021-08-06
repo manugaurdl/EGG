@@ -6,6 +6,7 @@
     "use_augmentations": [true],
     "gs_temperature": [5.0],
     "loss_type": ["xent"],
+    "load_from_checkpoint": ["/private/home/rdessi/rebuttal_exp/voc_exp/512/aug_no_shared/44645233_0/67.tar"],
     "vocab_size": [512],
     "wandb": [true]
 }
