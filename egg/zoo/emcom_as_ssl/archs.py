@@ -36,12 +36,12 @@ def get_resnet(name: str = "resnet50", pretrained: bool = False):
 
 
 def get_vision_modules(
-    encoder_arch: str,
-    shared: bool = False,
-    pretrain_vision: bool = False
+    encoder_arch: str, shared: bool = False, pretrain_vision: bool = False
 ):
     if pretrain_vision:
-        assert shared, "A pretrained not shared vision_module is a waste of memory. Please run with --shared set"
+        assert (
+            shared
+        ), "A pretrained not shared vision_module is a waste of memory. Please run with --shared set"
 
     encoder, features_dim = get_resnet(encoder_arch, pretrain_vision)
     encoder_recv = None
@@ -55,7 +55,7 @@ class VisionModule(nn.Module):
     def __init__(
         self,
         sender_vision_module: nn.Module,
-        receiver_vision_module: Optional[nn.Module] = None
+        receiver_vision_module: Optional[nn.Module] = None,
     ):
         super(VisionModule, self).__init__()
 
@@ -68,9 +68,20 @@ class VisionModule(nn.Module):
     def forward(self, x_i, x_j):
         encoded_input_sender = self.encoder(x_i)
         if self.shared:
-            encoded_input_recv = self.encoder(x_j)
+            # hardcoding the fact that there are 2 distractors
+            # encoded_input_recv = self.encoder(x_j)
+            encoded_input_recv1 = self.encoder(x_j[:, 0, ...]).unsqueeze(1)
+            encoded_input_recv2 = self.encoder(x_j[:, 1, ...]).unsqueeze(1)
+            encoded_input_recv = torch.cat(
+                [encoded_input_recv1, encoded_input_recv2], dim=1
+            )
         else:
-            encoded_input_recv = self.encoder_recv(x_j)
+            # encoded_input_recv = self.encoder_recv(x_j)
+            encoded_input_recv1 = self.encoder_recv(x_j[:, 0, ...]).unsqueeze(1)
+            encoded_input_recv2 = self.encoder_recv(x_j[:, 1, ...]).unsqueeze(1)
+            encoded_input_recv = torch.cat(
+                [encoded_input_recv1, encoded_input_recv2], dim=1
+            )
         return encoded_input_sender, encoded_input_recv
 
 
@@ -90,8 +101,11 @@ class VisionGameWrapper(nn.Module):
 
         return self.game(
             sender_input=sender_encoded_input,
-            labels=labels,
-            receiver_input=receiver_encoded_input
+            labels=(
+                labels,
+                receiver_input,
+            ),  # labels is class_labels, recv_input is target_position
+            receiver_input=receiver_encoded_input,
         )
 
 
@@ -101,7 +115,7 @@ class SimCLRSender(nn.Module):
         input_dim: int,
         hidden_dim: int = 2048,
         output_dim: int = 2048,
-        discrete_evaluation: bool = False
+        discrete_evaluation: bool = False,
     ):
         super(SimCLRSender, self).__init__()
         self.fc = nn.Sequential(
@@ -148,29 +162,28 @@ class EmSSLSender(nn.Module):
         if not trainable_temperature:
             self.temperature = temperature
         else:
-            self.temperature = torch.nn.Parameter(torch.tensor([temperature]), requires_grad=True)
+            self.temperature = torch.nn.Parameter(
+                torch.tensor([temperature]), requires_grad=True
+            )
         self.straight_through = straight_through
 
         self.fc_out = nn.Linear(hidden_dim, output_dim, bias=False)
 
     def forward(self, resnet_output):
         first_projection = self.fc(resnet_output)
-        message = gumbel_softmax_sample(first_projection, self.temperature, self.training, self.straight_through)
+        message = gumbel_softmax_sample(
+            first_projection, self.temperature, self.training, self.straight_through
+        )
         out = self.fc_out(message)
         return out, message.detach(), resnet_output.detach()
 
 
 class Receiver(nn.Module):
-    def __init__(
-        self,
-        input_dim: int,
-        hidden_dim: int = 2048,
-        output_dim: int = 2048
-    ):
+    def __init__(self, input_dim: int, hidden_dim: int = 2048, output_dim: int = 2048):
         super(Receiver, self).__init__()
         self.fc = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
+            nn.BatchNorm1d(2),
             nn.ReLU(),
             nn.Linear(hidden_dim, output_dim, bias=False),
         )
@@ -184,23 +197,26 @@ class EmComSSLSymbolGame(SenderReceiverContinuousCommunication):
         super(EmComSSLSymbolGame, self).__init__(*args, **kwargs)
 
     def forward(self, sender_input, labels, receiver_input=None):
+        class_labels, target_position = labels
+
         if isinstance(self.sender, SimCLRSender):
-            message, message_like, resnet_output_sender = self.sender(sender_input, sender=True)
+            message, message_like, resnet_output_sender = self.sender(
+                sender_input, sender=True
+            )
             receiver_output, _, resnet_output_recv = self.receiver(receiver_input)
         else:
             message, message_like, resnet_output_sender = self.sender(sender_input)
             receiver_output, resnet_output_recv = self.receiver(message, receiver_input)
 
         loss, aux_info = self.loss(
-            sender_input, message, receiver_input, receiver_output, labels
+            sender_input,
+            message,
+            receiver_input,
+            receiver_output,
+            labels=target_position,
         )
 
-        if hasattr(self.sender, "temperature"):
-            if isinstance(self.sender.temperature, torch.nn.Parameter):
-                temperature = self.sender.temperature.detach()
-            else:
-                temperature = torch.Tensor([self.sender.temperature])
-            aux_info["temperature"] = temperature
+        aux_info["class_labels"] = class_labels
 
         if not self.training:
             aux_info["message_like"] = message_like
@@ -213,7 +229,7 @@ class EmComSSLSymbolGame(SenderReceiverContinuousCommunication):
         interaction = logging_strategy.filtered_interaction(
             sender_input=sender_input,
             receiver_input=receiver_input,
-            labels=labels,
+            labels=target_position,
             receiver_output=receiver_output.detach(),
             message=message.detach(),
             message_length=torch.ones(message.size(0)),

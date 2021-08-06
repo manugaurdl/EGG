@@ -53,6 +53,7 @@ def build_game(opts):
     train_logging_strategy = LoggingStrategy(False, False, True, True, True, False)
     test_logging_strategy = LoggingStrategy(False, False, True, True, True, False)
 
+    print(f"using vocab_size with distractors = {opts.vocab_size}")
     if opts.simclr_sender:
         sender = SimCLRSender(
             input_dim=visual_features_dim,

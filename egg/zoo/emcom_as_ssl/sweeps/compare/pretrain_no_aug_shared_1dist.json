@@ -1,0 +1,13 @@
+{
+    "n_epoch": [100],
+    "batch_size": [128],
+    "lr": [2.4],
+    "random_seed": [111],
+    "gs_temperature": [5.0],
+    "loss_type": ["xent"],
+    "vocab_size": [2048],
+    "shared_vision": [true],
+    "pretrain_vision": [true],
+    "use_larc": [true],
+    "dataset_dir": ["/private/home/rdessi/scripts/em_communication_game/images/train_set_imagenet.dat"]
+}
