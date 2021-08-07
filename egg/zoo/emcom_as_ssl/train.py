@@ -9,7 +9,7 @@ import torch
 import wandb
 
 import egg.core as core
-from egg.zoo.emcom_as_ssl.dataloaders import get_dataloader
+from egg.zoo.emcom_as_ssl.new_dataloaders import get_dataloader
 from egg.zoo.emcom_as_ssl.games import build_game
 from egg.zoo.emcom_as_ssl.game_callbacks import get_callbacks
 from egg.zoo.emcom_as_ssl.LARC import LARC
@@ -42,7 +42,6 @@ def main(params):
         image_size=opts.image_size,
         batch_size=opts.batch_size,
         n_distractors=opts.n_distractors,
-        max_targets_seen=opts.max_targets_seen,
         num_workers=opts.num_workers,
         use_augmentations=opts.use_augmentations,
         is_distributed=opts.distributed_context.is_distributed,

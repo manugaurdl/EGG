@@ -6,7 +6,5 @@
     "gs_temperature": [5.0],
     "loss_type": ["xent"],
     "vocab_size": [2048],
-    "use_augmentations": [true],
-    "use_larc": [true],
-    "dataset_dir": ["/private/home/rdessi/scripts/em_communication_game/images/train_set_imagenet.dat"]
+    "use_augmentations": [true]
 }

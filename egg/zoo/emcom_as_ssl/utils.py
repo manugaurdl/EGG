@@ -16,16 +16,7 @@ def get_data_opts(parser):
         default="/datasets01/imagenet_full_size/061417/train",
         help="Dataset location",
     )
-    group.add_argument(
-        "--n_distractors",
-        type=int,
-        default=1,
-    )
-    group.add_argument(
-        "--max_targets_seen",
-        type=int,
-        default=-1,
-    )
+    group.add_argument("--n_distractors", type=int, default=1)
     group.add_argument("--image_size", type=int, default=224, help="Image size")
     group.add_argument(
         "--num_workers", type=int, default=4, help="Workers used in the dataloader"

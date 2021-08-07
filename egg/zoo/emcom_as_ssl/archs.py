@@ -7,6 +7,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 
 from egg.core.continous_communication import SenderReceiverContinuousCommunication
@@ -96,15 +97,13 @@ class VisionGameWrapper(nn.Module):
         self.vision_module = vision_module
 
     def forward(self, sender_input, labels, receiver_input=None):
-        x_i, x_j = sender_input
-        sender_encoded_input, receiver_encoded_input = self.vision_module(x_i, x_j)
+        sender_encoded_input, receiver_encoded_input = self.vision_module(
+            sender_input, receiver_input
+        )
 
         return self.game(
             sender_input=sender_encoded_input,
-            labels=(
-                labels,
-                receiver_input,
-            ),  # labels is class_labels, recv_input is target_position
+            labels=labels,
             receiver_input=receiver_encoded_input,
         )
 
@@ -178,6 +177,60 @@ class EmSSLSender(nn.Module):
         return out, message.detach(), resnet_output.detach()
 
 
+class InformedSender(nn.Module):
+    def __init__(
+        self,
+        game_size,
+        feat_size,
+        embedding_size,
+        hidden_size,
+        vocab_size=100,
+        temp=1.0,
+    ):
+        super(InformedSender, self).__init__()
+        self.game_size = game_size
+        self.embedding_size = embedding_size
+        self.hidden_size = hidden_size
+        self.vocab_size = vocab_size
+        self.temp = temp
+
+        self.lin1 = nn.Linear(feat_size, embedding_size, bias=False)
+        self.conv2 = nn.Conv2d(
+            1,
+            hidden_size,
+            kernel_size=(game_size, 1),
+            stride=(game_size, 1),
+            bias=False,
+        )
+        self.conv3 = nn.Conv2d(
+            1, 1, kernel_size=(hidden_size, 1), stride=(hidden_size, 1), bias=False
+        )
+        self.lin4 = nn.Linear(embedding_size, vocab_size, bias=False)
+
+    def forward(self, x, _aux_input=None):
+        emb = self.return_embeddings(x)
+
+        # in: h of size (batch_size, 1, game_size, embedding_size)
+        # out: h of size (batch_size, hidden_size, 1, embedding_size)
+        h = self.conv2(emb)
+        h = torch.sigmoid(h)
+        # in: h of size (batch_size, hidden_size, 1, embedding_size)
+        # out: h of size (batch_size, 1, hidden_size, embedding_size)
+        h = h.transpose(1, 2)
+        h = self.conv3(h)
+        # h of size (batch_size, 1, 1, embedding_size)
+        h = torch.sigmoid(h)
+        h = h.squeeze(dim=1)
+        h = h.squeeze(dim=1)
+        # h of size (batch_size, embedding_size)
+        h = self.lin4(h)
+        h = h.mul(1.0 / self.temp)
+        # h of size (batch_size, vocab_size)
+        logits = F.log_softmax(h, dim=1)
+
+        return logits
+
+
 class Receiver(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 2048, output_dim: int = 2048):
         super(Receiver, self).__init__()
@@ -216,7 +269,7 @@ class EmComSSLSymbolGame(SenderReceiverContinuousCommunication):
             labels=target_position,
         )
 
-        aux_info["class_labels"] = class_labels
+        aux_info["class_labels"] = class_labels.float()
 
         if not self.training:
             aux_info["message_like"] = message_like
@@ -229,7 +282,7 @@ class EmComSSLSymbolGame(SenderReceiverContinuousCommunication):
         interaction = logging_strategy.filtered_interaction(
             sender_input=sender_input,
             receiver_input=receiver_input,
-            labels=target_position,
+            labels=target_position.float(),
             receiver_output=receiver_output.detach(),
             message=message.detach(),
             message_length=torch.ones(message.size(0)),

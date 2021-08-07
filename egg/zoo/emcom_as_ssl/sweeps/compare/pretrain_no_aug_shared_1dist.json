@@ -7,7 +7,5 @@
     "loss_type": ["xent"],
     "vocab_size": [2048],
     "shared_vision": [true],
-    "pretrain_vision": [true],
-    "use_larc": [true],
-    "dataset_dir": ["/private/home/rdessi/scripts/em_communication_game/images/train_set_imagenet.dat"]
+    "pretrain_vision": [true]
 }
