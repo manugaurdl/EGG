@@ -31,62 +31,56 @@ def add_common_cli_args(parser):
         "--simclr_sender",
         default=False,
         action="store_true",
-        help="Running gaussian evaluation loading a SimCLR model"
+        help="Running gaussian evaluation loading a SimCLR model",
     )
+    parser.add_argument("--vocab_size", default=2048, type=int, help="Vocabulary size")
     parser.add_argument(
         "--discrete_evaluation_simclr",
         default=False,
         action="store_true",
-        help="Evaluate SimCLR playing the game discretizing the message_like layer"
+        help="Evaluate SimCLR playing the game discretizing the message_like layer",
     )
     parser.add_argument(
         "--shared_vision",
         default=False,
         action="store_true",
-        help="Load a model with shared vision module"
+        help="Load a model with shared vision module",
     )
     parser.add_argument(
         "--loss_type",
         type=str,
         default="xent",
         choices=["xent", "ntxent", "comm_ntxent"],
-        help="Specify loss used to train the model"
+        help="Specify loss used to train the model",
     )
-    parser.add_argument(
-        "--checkpoint_path",
-        type=str,
-        help="Path to model checkpoint"
-    )
+    parser.add_argument("--checkpoint_path", type=str, help="Path to model checkpoint")
     parser.add_argument(
         "--evaluate_with_augmentations",
         default=False,
         action="store_true",
-        help="Running gaussian evaluation with data augmentation"
+        help="Running gaussian evaluation with data augmentation",
     )
     parser.add_argument(
         "--return_original_image",
         default=False,
         action="store_true",
-        help="Return original untrasnformed image in the dataloader"
+        help="Return original untrasnformed image in the dataloader",
     )
     parser.add_argument(
         "--test_set",
         type=str,
         choices=["o_test", "i_test"],
         default="i_test",
-        help="Choose which imagenet validation test to use, choices [i_test, o_test] (default: o_test)"
+        help="Choose which imagenet validation test to use, choices [i_test, o_test] (default: o_test)",
     )
     parser.add_argument(
         "--dump_interaction_folder",
         type=str,
         default=None,
-        help="Path where interaction will be saved. If None or empty string interaction won't be saved"
+        help="Path where interaction will be saved. If None or empty string interaction won't be saved",
     )
     parser.add_argument(
-        "--pdb",
-        default=False,
-        action="store_true",
-        help="Run with pdb"
+        "--pdb", default=False, action="store_true", help="Run with pdb"
     )
 
 
@@ -94,13 +88,15 @@ def get_params(
     simclr_sender: bool,
     shared_vision: bool,
     discrete_evaluation_simclr: bool,
-    loss_type: str
+    loss_type: str,
+    vocab_size: int,
 ):
     params = dict(
         simclr_sender=simclr_sender,
         loss_type=loss_type,
         shared_vision=shared_vision,
-        discrete_evaluation_simclr=discrete_evaluation_simclr
+        discrete_evaluation_simclr=discrete_evaluation_simclr,
+        vocab_size=vocab_size,
     )
 
     distributed_context = argparse.Namespace(is_distributed=False)
@@ -139,9 +135,7 @@ def get_game(params: argparse.Namespace, checkpoint_path: str):
 
 
 def save_interaction(
-    interaction: Interaction,
-    log_dir: Union[pathlib.Path, str],
-    test_set: str
+    interaction: Interaction, log_dir: Union[pathlib.Path, str], test_set: str
 ):
     dump_dir = pathlib.Path(log_dir)
     dump_dir.mkdir(exist_ok=True, parents=True)
@@ -156,12 +150,11 @@ def get_dataloader(
     return_original_image: bool = False,
     use_augmentations: bool = False,
 ):
-    transformations = ImageTransformation(image_size, use_augmentations, return_original_image)
-
-    dataset = datasets.ImageFolder(
-        dataset_dir,
-        transform=transformations
+    transformations = ImageTransformation(
+        image_size, use_augmentations, return_original_image
     )
+
+    dataset = datasets.ImageFolder(dataset_dir, transform=transformations)
 
     dataloader = torch.utils.data.DataLoader(
         dataset,
@@ -196,8 +189,8 @@ def evaluate(
             interactions.append(interaction)
 
             mean_loss += optimized_loss
-            soft_accuracy += interaction.aux['acc'].mean().item()
-            game_accuracy += interaction.aux['game_acc'].mean().item()
+            soft_accuracy += interaction.aux["acc"].mean().item()
+            game_accuracy += interaction.aux["game_acc"].mean().item()
             n_batches += 1
             if n_batches % 10 == 0:
                 print(f"finished batch {n_batches}")

@@ -2,10 +2,10 @@
 
 import argparse
 
+from egg.zoo.emcom_as_ssl.new_dataloaders import get_dataloader
 from egg.zoo.emcom_as_ssl.scripts.utils import (
     add_common_cli_args,
     evaluate,
-    get_dataloader,
     get_game,
     get_params,
     I_TEST_PATH,
@@ -44,7 +44,6 @@ def main():
     dataloader = get_dataloader(
         dataset_dir=dataset_dir,
         use_augmentations=cli_args.evaluate_with_augmentations,
-        return_original_image=cli_args.return_original_image,
     )
     print("| Test data fetched.")
 

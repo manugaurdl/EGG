@@ -9,10 +9,8 @@
 
 
 import argparse
-from typing import Callable, Optional
 
 import torch
-from torchvision import transforms
 
 from egg.zoo.emcom_as_ssl.scripts.utils import (
     add_common_cli_args,
@@ -30,19 +28,56 @@ def get_random_noise_dataloader(
     use_augmentations: bool = False,
 ):
 
-    transformations = TransformsGaussianNoise(augmentations=use_augmentations)
-    dataset = GaussianNoiseDataset(
-        size=dataset_size, image_size=image_size, transformations=transformations
-    )
+    dataset = GaussianNoiseDataset(size=dataset_size, image_size=image_size)
+
+    # TODO
+    collater = Collater()
 
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         num_workers=num_workers,
+        collate_fn=collater,
         pin_memory=True,
         drop_last=True,
     )
     return loader
+
+
+class Collater:
+    def __init__(self):
+        self.distractors = 1
+
+    def __call__(self, batch):
+        assert (
+            len(batch) % 2 == 0
+        ), f"batch_size must be a multiple of 2, found {len(batch)} instead"
+        batch_size = len(batch)
+
+        # this piece of code does not work with self.distractors > 1
+        targets_position = torch.randint(self.distractors + 1, size=(batch_size // 2,))
+
+        sender_input, receiver_input, class_labels = [], [], []
+        for elem in batch:
+            sender_input.append(elem[0][0])
+            receiver_input.append(elem[0][1])
+            class_labels.append(torch.LongTensor([elem[1]]))
+
+        img_size = sender_input[0].shape
+
+        sender_input = torch.stack(sender_input).view(
+            batch_size // 2, self.distractors + 1, *img_size
+        )
+        sender_input = sender_input[torch.arange(batch_size // 2), targets_position]
+
+        receiver_input = torch.stack(receiver_input).view(
+            batch_size // 2, self.distractors + 1, *img_size
+        )
+
+        class_labels = torch.stack(class_labels).view(-1, self.distractors + 1)
+        class_labels = class_labels[torch.arange(batch_size // 2), targets_position]
+
+        return sender_input, (class_labels, targets_position), receiver_input
 
 
 class GaussianNoiseDataset(torch.utils.data.Dataset):
@@ -50,9 +85,7 @@ class GaussianNoiseDataset(torch.utils.data.Dataset):
         self,
         size: int = 3072,
         image_size: int = 224,
-        transformations: Optional[Callable] = None,
     ):
-        self.transformations = transformations
         self.image_size = image_size
         self.size = size
 
@@ -60,34 +93,9 @@ class GaussianNoiseDataset(torch.utils.data.Dataset):
         return self.size
 
     def __getitem__(self, index):
-        sample = torch.randn(3, self.image_size, self.image_size)
-        if self.transformations:
-            sample = self.transformations(sample)
-        return sample, torch.zeros(1)
-
-
-class TransformsGaussianNoise:
-    def __init__(self, augmentations: bool = False):
-        transformations = [
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ]
-
-        if augmentations:
-            s = 1
-            color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
-            transformations.extend(
-                [
-                    transforms.RandomApply([color_jitter], p=0.8),
-                    transforms.RandomGrayscale(p=0.2),
-                    transforms.RandomHorizontalFlip(),  # with 0.5 probability
-                ]
-            )
-
-        self.transform = transforms.Compose(transformations)
-
-    def __call__(self, x):
-        x_i, x_j = self.transform(x), self.transform(x)
-        return x_i, x_j
+        sender_input = torch.randn(3, self.image_size, self.image_size)
+        receiver_input = torch.randn(3, self.image_size, self.image_size)
+        return (sender_input, receiver_input), torch.zeros(1)
 
 
 def main():
@@ -108,9 +116,7 @@ def main():
     print(f"| Loading model from {cli_args.checkpoint_path} ...")
     game = get_game(opts, cli_args.checkpoint_path)
     print("| Model loaded")
-    dataloader = get_random_noise_dataloader(
-        use_augmentations=cli_args.evaluate_with_augmentations
-    )
+    dataloader = get_random_noise_dataloader()
 
     print("| Starting evaluation ...")
     loss, soft_acc, game_acc, _ = evaluate(game=game, data=dataloader)
