@@ -7,7 +7,6 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision
 
 from egg.core.continous_communication import SenderReceiverContinuousCommunication
@@ -67,7 +66,11 @@ class VisionModule(nn.Module):
             self.encoder_recv = receiver_vision_module
 
     def forward(self, x_i, x_j):
-        encoded_input_sender = self.encoder(x_i)
+        encoded_input_sender1 = self.encoder(x_i[:, 0, ...]).unsqueeze(1)
+        encoded_input_sender2 = self.encoder(x_i[:, 1, ...]).unsqueeze(1)
+        encoded_input_sender = torch.cat(
+            [encoded_input_sender1, encoded_input_sender2], dim=1
+        )
         if self.shared:
             # hardcoding the fact that there are 2 distractors
             # encoded_input_recv = self.encoder(x_j)
@@ -180,55 +183,61 @@ class EmSSLSender(nn.Module):
 class InformedSender(nn.Module):
     def __init__(
         self,
-        game_size,
-        feat_size,
-        embedding_size,
-        hidden_size,
-        vocab_size=100,
-        temp=1.0,
+        input_dim: int,  # feat_size,
+        hidden_dim: int = 20,
+        embedding_dim: int = 50,
+        vocab_size: int = 2048,
+        game_size: int = 2,  # distractors + 1 target)
+        temperature: int = 1.0,
     ):
         super(InformedSender, self).__init__()
-        self.game_size = game_size
-        self.embedding_size = embedding_size
-        self.hidden_size = hidden_size
-        self.vocab_size = vocab_size
-        self.temp = temp
 
-        self.lin1 = nn.Linear(feat_size, embedding_size, bias=False)
-        self.conv2 = nn.Conv2d(
+        self.temperature = temperature
+
+        self.fc_in = nn.Linear(input_dim, embedding_dim, bias=False)
+        self.conv1 = nn.Conv2d(
             1,
-            hidden_size,
+            hidden_dim,
             kernel_size=(game_size, 1),
             stride=(game_size, 1),
             bias=False,
         )
-        self.conv3 = nn.Conv2d(
-            1, 1, kernel_size=(hidden_size, 1), stride=(hidden_size, 1), bias=False
+        self.conv2 = nn.Conv2d(
+            1, 1, kernel_size=(hidden_dim, 1), stride=(hidden_dim, 1), bias=False
         )
-        self.lin4 = nn.Linear(embedding_size, vocab_size, bias=False)
+        self.lin2 = nn.Linear(embedding_dim, vocab_size, bias=False)
+        self.fc_out = nn.Linear(vocab_size, embedding_dim, bias=False)
 
     def forward(self, x, _aux_input=None):
-        emb = self.return_embeddings(x)
+        emb = self.fc_in(x).unsqueeze(1)
 
         # in: h of size (batch_size, 1, game_size, embedding_size)
         # out: h of size (batch_size, hidden_size, 1, embedding_size)
-        h = self.conv2(emb)
+        h = self.conv1(emb)
         h = torch.sigmoid(h)
         # in: h of size (batch_size, hidden_size, 1, embedding_size)
         # out: h of size (batch_size, 1, hidden_size, embedding_size)
         h = h.transpose(1, 2)
-        h = self.conv3(h)
+        h = self.conv2(h)
         # h of size (batch_size, 1, 1, embedding_size)
         h = torch.sigmoid(h)
-        h = h.squeeze(dim=1)
-        h = h.squeeze(dim=1)
+        h = h.squeeze()
         # h of size (batch_size, embedding_size)
-        h = self.lin4(h)
-        h = h.mul(1.0 / self.temp)
+        h = self.lin2(h)
         # h of size (batch_size, vocab_size)
-        logits = F.log_softmax(h, dim=1)
+        message = gumbel_softmax_sample(h, self.temperature, self.training)
+        out = self.fc_out(message)
 
-        return logits
+        return out, message.detach(), x.detach()
+
+
+class InformedReceiver(nn.Module):
+    def __init__(self, input_dim: int, embedding_dim: int = 50):
+        super(InformedReceiver, self).__init__()
+        self.fc = nn.Linear(input_dim, embedding_dim, bias=False)
+
+    def forward(self, _x, resnet_output):
+        return self.fc(resnet_output), resnet_output.detach()
 
 
 class Receiver(nn.Module):

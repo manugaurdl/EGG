@@ -1,0 +1,11 @@
+{
+    "n_epoch": [100],
+    "batch_size": [64],
+    "lr": [2.4],
+    "random_seed": [111],
+    "gs_temperature": [5.0],
+    "loss_type": ["xent"],
+    "vocab_size": [2048],
+    "informed_sender": [true],
+    "use_augmentations": [true]
+}

@@ -29,33 +29,41 @@ class Collater:
 
     def __call__(self, batch: List[Any]):
         # this piece of code does not work with self.distractors > 1
-        targets_position = torch.randint(
-            self.distractors + 1, size=(self.batch_size // 2,)
+        recv_input_order = torch.stack(
+            [torch.randperm(self.distractors + 1) for _ in range(self.batch_size // 2)]
         )
 
-        sender_input, receiver_input, class_labels = [], [], []
+        targets_position = (recv_input_order[:, 0] == 0).long()
+
+        sender_input, receiver_input, all_class_labels = [], [], []
         for elem in batch:
             sender_input.append(elem[0][0])
             receiver_input.append(elem[0][1])
-            class_labels.append(torch.LongTensor([elem[1]]))
+            all_class_labels.append(torch.LongTensor([elem[1]]))
 
         img_size = sender_input[0].shape
-
         sender_input = torch.stack(sender_input).view(
             self.batch_size // 2, self.distractors + 1, *img_size
         )
-        sender_input = sender_input[
-            torch.arange(self.batch_size // 2), targets_position
-        ]
-
         receiver_input = torch.stack(receiver_input).view(
             self.batch_size // 2, self.distractors + 1, *img_size
         )
 
-        class_labels = torch.stack(class_labels).view(-1, self.distractors + 1)
-        class_labels = class_labels[
-            torch.arange(self.batch_size // 2), targets_position
-        ]
+        all_class_labels = torch.stack(all_class_labels).view(
+            self.batch_size // 2, self.distractors + 1
+        )
+
+        class_labels = []
+        for idx in range(self.batch_size // 2):
+            if targets_position[idx]:
+                tmp = torch.clone(receiver_input[idx, 0])
+                receiver_input[idx, 0] = receiver_input[idx, 1]
+                receiver_input[idx, 1] = tmp
+                class_labels.append(all_class_labels[idx, 1])
+            else:
+                class_labels.append(all_class_labels[idx, 0])
+
+        class_labels = torch.stack(class_labels)
 
         return sender_input, (class_labels, targets_position), receiver_input
 

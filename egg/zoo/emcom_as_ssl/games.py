@@ -9,6 +9,8 @@ from egg.core.interaction import LoggingStrategy
 from egg.zoo.emcom_as_ssl.archs import (
     EmComSSLSymbolGame,
     EmSSLSender,
+    InformedSender,
+    InformedReceiver,
     get_vision_modules,
     Receiver,
     SimCLRSender,
@@ -50,7 +52,7 @@ def build_game(opts):
         loss_type=opts.loss_type,
     )
 
-    train_logging_strategy = LoggingStrategy(False, False, True, True, True, False)
+    train_logging_strategy = LoggingStrategy(False, False, True, False, False, False)
     test_logging_strategy = LoggingStrategy(False, False, True, True, True, False)
 
     print(f"using vocab_size with distractors = {opts.vocab_size}")
@@ -63,19 +65,31 @@ def build_game(opts):
         )
         receiver = sender
     else:
-        sender = EmSSLSender(
-            input_dim=visual_features_dim,
-            hidden_dim=opts.vocab_size,
-            output_dim=opts.projection_output_dim,
-            temperature=opts.gs_temperature,
-            trainable_temperature=opts.train_gs_temperature,
-            straight_through=opts.straight_through,
-        )
-        receiver = Receiver(
-            input_dim=visual_features_dim,
-            hidden_dim=opts.projection_hidden_dim,
-            output_dim=opts.projection_output_dim,
-        )
+        if opts.informed_sender:
+            sender = InformedSender(
+                input_dim=visual_features_dim,
+                hidden_dim=opts.projection_hidden_dim,
+                embedding_dim=opts.projection_output_dim,
+                vocab_size=opts.vocab_size,
+                temperature=opts.gs_temperature,
+            )
+            receiver = InformedReceiver(
+                input_dim=visual_features_dim, embedding_dim=opts.projection_output_dim
+            )
+        else:
+            sender = EmSSLSender(
+                input_dim=visual_features_dim,
+                hidden_dim=opts.vocab_size,
+                output_dim=opts.projection_output_dim,
+                temperature=opts.gs_temperature,
+                trainable_temperature=opts.train_gs_temperature,
+                straight_through=opts.straight_through,
+            )
+            receiver = Receiver(
+                input_dim=visual_features_dim,
+                hidden_dim=opts.projection_hidden_dim,
+                output_dim=opts.projection_output_dim,
+            )
 
     game = EmComSSLSymbolGame(
         sender,

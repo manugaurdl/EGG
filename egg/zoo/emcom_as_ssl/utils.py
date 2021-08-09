@@ -108,6 +108,12 @@ def get_game_arch_opts(parser):
         help="Projection head's output dimension for image features",
     )
     group.add_argument(
+        "--informed_sender",
+        default=False,
+        action="store_true",
+        help="Use the informed sender from Lazaridou et al. 2017",
+    )
+    group.add_argument(
         "--simclr_sender",
         default=False,
         action="store_true",

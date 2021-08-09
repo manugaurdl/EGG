@@ -1,0 +1,14 @@
+{
+    "n_epoch": [100],
+    "batch_size": [128],
+    "lr": [2.4],
+    "random_seed": [111],
+    "gs_temperature": [5.0],
+    "loss_type": ["xent"],
+    "vocab_size": [2048],
+    "use_larc": [true],
+    "informed_sender": [true],
+    "projection_hidden_dim": [2048],
+    "projection_output_dim": [2048],
+    "pretrain_vision": [true]
+}
