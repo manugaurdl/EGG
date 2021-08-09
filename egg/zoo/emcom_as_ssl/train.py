@@ -9,7 +9,7 @@ import torch
 import wandb
 
 import egg.core as core
-from egg.zoo.emcom_as_ssl.data import get_dataloader
+from egg.zoo.emcom_as_ssl.new_dataloaders import get_dataloader
 from egg.zoo.emcom_as_ssl.games import build_game
 from egg.zoo.emcom_as_ssl.game_callbacks import get_callbacks
 from egg.zoo.emcom_as_ssl.LARC import LARC
@@ -25,9 +25,9 @@ def main(params):
         wandb.init(project=opts.wandb_project, id=id)
         opts.wandb_id = id
         wandb.config.update(opts)
-    assert not opts.batch_size % 2, (
-        f"Batch size must be multiple of 2. Found {opts.batch_size} instead"
-    )
+    assert (
+        not opts.batch_size % 2
+    ), f"Batch size must be multiple of 2. Found {opts.batch_size} instead"
     print(
         f"Running a distruted training is set to: {opts.distributed_context.is_distributed}. "
         f"World size is {opts.distributed_context.world_size}. "
@@ -45,27 +45,29 @@ def main(params):
         use_augmentations=opts.use_augmentations,
         is_distributed=opts.distributed_context.is_distributed,
         return_original_image=opts.return_original_image,
-        seed=opts.random_seed
+        seed=opts.random_seed,
     )
 
     simclr_game = build_game(opts)
     if opts.wandb and opts.distributed_context.is_leader:
         wandb.watch(simclr_game, log="all")
 
-    model_parameters = add_weight_decay(
-        simclr_game,
-        opts.weight_decay,
-        skip_name='bn'
-    )
+    model_parameters = add_weight_decay(simclr_game, opts.weight_decay, skip_name="bn")
 
     optimizer = torch.optim.SGD(
         model_parameters,
         lr=opts.lr,
         momentum=0.9,
     )
-    optimizer_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opts.n_epochs)
+    optimizer_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=opts.n_epochs
+    )
 
-    if opts.distributed_context.is_distributed and opts.distributed_context.world_size > 2 and opts.use_larc:
+    if (
+        opts.distributed_context.is_distributed
+        and opts.distributed_context.world_size > 2
+        and opts.use_larc
+    ):
         optimizer = LARC(optimizer, trust_coefficient=0.001, clip=False, eps=1e-8)
 
     callbacks = get_callbacks(
@@ -78,7 +80,7 @@ def main(params):
         update_gs_temp_frequency=opts.update_gs_temp_frequency,
         gs_temperature_decay=opts.gs_temperature_decay,
         is_distributed=opts.distributed_context.is_distributed,
-        wandb=opts.wandb
+        wandb=opts.wandb,
     )
 
     trainer = core.Trainer(
@@ -96,4 +98,5 @@ def main(params):
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     import sys
+
     main(sys.argv[1:])
