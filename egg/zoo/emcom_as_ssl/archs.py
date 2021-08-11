@@ -66,17 +66,8 @@ class VisionModule(nn.Module):
             self.encoder_recv = receiver_vision_module
 
     def forward(self, x_i, x_j):
-        encoder_recv = self.encoder if self.shared else self.encoder_recv
-
-        encoded_input_sender, encoded_input_recv = [], []
-        for idx in range(x_i.shape[0]):
-            encoded_input_sender.append(self.encoder(x_i[idx].unsqueeze(0)))
-            encoded_input_recv.append(encoder_recv(x_j[idx].unsqueeze(0)))
-
-        encoded_input_sender = torch.cat(encoded_input_sender).unsqueeze(0).unsqueeze(0)
-        encoded_input_recv = torch.cat(encoded_input_recv).unsqueeze(0)
-
-        return encoded_input_sender, encoded_input_recv
+        encoded_input_sender = self.encoder(x_i).unsqueeze(0)
+        return encoded_input_sender.unsqueeze(0), encoded_input_sender.clone()
 
 
 class VisionGameWrapper(nn.Module):
