@@ -9,6 +9,5 @@
     "use_larc": [true],
     "informed_sender": [true],
     "projection_hidden_dim": [2048],
-    "projection_output_dim": [2048],
-    "pretrain_vision": [true]
+    "projection_output_dim": [2048]
 }

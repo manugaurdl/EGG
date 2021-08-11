@@ -66,26 +66,18 @@ class VisionModule(nn.Module):
             self.encoder_recv = receiver_vision_module
 
     def forward(self, x_i, x_j):
-        encoded_input_sender1 = self.encoder(x_i[:, 0, ...]).unsqueeze(1)
-        encoded_input_sender2 = self.encoder(x_i[:, 1, ...]).unsqueeze(1)
-        encoded_input_sender = torch.cat(
-            [encoded_input_sender1, encoded_input_sender2], dim=1
-        )
-        if self.shared:
-            # hardcoding the fact that there are 2 distractors
-            # encoded_input_recv = self.encoder(x_j)
-            encoded_input_recv1 = self.encoder(x_j[:, 0, ...]).unsqueeze(1)
-            encoded_input_recv2 = self.encoder(x_j[:, 1, ...]).unsqueeze(1)
-            encoded_input_recv = torch.cat(
-                [encoded_input_recv1, encoded_input_recv2], dim=1
-            )
-        else:
-            # encoded_input_recv = self.encoder_recv(x_j)
-            encoded_input_recv1 = self.encoder_recv(x_j[:, 0, ...]).unsqueeze(1)
-            encoded_input_recv2 = self.encoder_recv(x_j[:, 1, ...]).unsqueeze(1)
-            encoded_input_recv = torch.cat(
-                [encoded_input_recv1, encoded_input_recv2], dim=1
-            )
+        encoder_recv = self.encoder if self.shared else self.encoder_recv
+
+        encoded_input_sender, encoded_input_recv = [], []
+        for idx in range(x_i.shape[0]):
+            sender_input, recv_input = x_i[idx], x_j[idx]
+
+            encoded_input_sender.append(self.encoder(sender_input))
+            encoded_input_recv.append(encoder_recv(recv_input))
+
+        encoded_input_sender = torch.cat(encoded_input_sender)
+        encoded_input_recv = torch.cat(encoded_input_recv)
+
         return encoded_input_sender, encoded_input_recv
 
 

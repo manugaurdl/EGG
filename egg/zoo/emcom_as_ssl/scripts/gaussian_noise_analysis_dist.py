@@ -22,7 +22,7 @@ from egg.zoo.emcom_as_ssl.scripts.utils import (
 
 def get_random_noise_dataloader(
     dataset_size: int = 49152,
-    batch_size: int = 128,
+    batch_size: int = 256,
     image_size: int = 224,
     num_workers: int = 4,
     use_augmentations: bool = False,
@@ -30,7 +30,6 @@ def get_random_noise_dataloader(
 
     dataset = GaussianNoiseDataset(size=dataset_size, image_size=image_size)
 
-    # TODO
     collater = Collater()
 
     loader = torch.utils.data.DataLoader(
@@ -49,6 +48,45 @@ class Collater:
         self.distractors = 1
 
     def __call__(self, batch):
+        batch_size = len(batch)
+        recv_input_order = torch.stack(
+            [torch.randperm(self.distractors + 1) for _ in range(batch_size // 2)]
+        )
+
+        targets_position = (recv_input_order[:, 0] == 0).long()
+
+        sender_input, receiver_input, all_class_labels = [], [], []
+        for elem in batch:
+            sender_input.append(elem[0][0])
+            receiver_input.append(elem[0][1])
+            all_class_labels.append(torch.LongTensor([elem[1]]))
+
+        img_size = sender_input[0].shape
+        sender_input = torch.stack(sender_input).view(
+            batch_size // 2, self.distractors + 1, *img_size
+        )
+        receiver_input = torch.stack(receiver_input).view(
+            batch_size // 2, self.distractors + 1, *img_size
+        )
+
+        all_class_labels = torch.stack(all_class_labels).view(
+            batch_size // 2, self.distractors + 1
+        )
+
+        class_labels = []
+        for idx in range(batch_size // 2):
+            if targets_position[idx]:
+                tmp = torch.clone(receiver_input[idx, 0])
+                receiver_input[idx, 0] = receiver_input[idx, 1]
+                receiver_input[idx, 1] = tmp
+                class_labels.append(all_class_labels[idx, 1])
+            else:
+                class_labels.append(all_class_labels[idx, 0])
+
+        class_labels = torch.stack(class_labels)
+
+        return sender_input, (class_labels, targets_position), receiver_input
+        """
         assert (
             len(batch) % 2 == 0
         ), f"batch_size must be a multiple of 2, found {len(batch)} instead"
@@ -68,7 +106,7 @@ class Collater:
         sender_input = torch.stack(sender_input).view(
             batch_size // 2, self.distractors + 1, *img_size
         )
-        sender_input = sender_input[torch.arange(batch_size // 2), targets_position]
+        # sender_input = sender_input[torch.arange(batch_size // 2), targets_position]
 
         receiver_input = torch.stack(receiver_input).view(
             batch_size // 2, self.distractors + 1, *img_size
@@ -78,6 +116,7 @@ class Collater:
         class_labels = class_labels[torch.arange(batch_size // 2), targets_position]
 
         return sender_input, (class_labels, targets_position), receiver_input
+        """
 
 
 class GaussianNoiseDataset(torch.utils.data.Dataset):

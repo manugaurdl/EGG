@@ -14,7 +14,8 @@ import torch.nn as nn
 from torchvision import datasets
 
 from egg.core.interaction import Interaction
-from egg.core.util import move_to
+
+# from egg.core.util import move_to
 from egg.zoo.emcom_as_ssl.data import ImageTransformation
 from egg.zoo.emcom_as_ssl.games import build_game
 
@@ -97,6 +98,7 @@ def get_params(
         shared_vision=shared_vision,
         discrete_evaluation_simclr=discrete_evaluation_simclr,
         vocab_size=vocab_size,
+        informed_sender=True,
     )
 
     distributed_context = argparse.Namespace(is_distributed=False)
@@ -107,8 +109,8 @@ def get_params(
         loss_temperature=1.0,
         pretrain_vision=False,
         similarity="cosine",
-        projection_hidden_dim=2048,
-        projection_output_dim=2048,
+        projection_hidden_dim=2048,  # 20 this is used for the models that do not use our replica
+        projection_output_dim=2048,  # 50 this is used for the models that do not use our replica
         gs_temperature=5.0,
         gs_temperature_decay=1.0,
         train_gs_temperature=False,
@@ -145,7 +147,7 @@ def save_interaction(
 def get_dataloader(
     dataset_dir: str,
     image_size: int = 224,
-    batch_size: int = 128,
+    batch_size: int = 256,
     num_workers: int = 4,
     return_original_image: bool = False,
     use_augmentations: bool = False,
@@ -174,7 +176,7 @@ def evaluate(
     if torch.cuda.is_available():
         game.cuda()
     game.eval()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     mean_loss = 0.0
     interactions = []
@@ -182,7 +184,7 @@ def evaluate(
     soft_accuracy, game_accuracy = 0.0, 0.0
     with torch.no_grad():
         for batch in data:
-            batch = move_to(batch, device)
+            # batch = move_to(batch, device)
             optimized_loss, interaction = game(*batch)
 
             interaction = interaction.to("cpu")
