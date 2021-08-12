@@ -6,6 +6,7 @@
     "vocab_size": [3072],
     "dataset_dir": ["/datasets01/imagenet_full_size/061417/train"],
     "gs_temperature": [5.0],
+    "vision_model_name": ["resnet50"],
     "pretrain_vision": [true],
     "n_senders": [3],
     "n_recvs": [3],
@@ -13,5 +14,6 @@
     "recv_hidden_dim": [2048],
     "recv_output_dim": [2048],
     "use_larc": [true],
-    "use_different_architectures": [true]
+    "use_different_architectures": [true],
+    "image_size": [299]
 }
