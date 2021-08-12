@@ -60,7 +60,9 @@ def main(params):
     )
     if cli_args.dump_interaction_folder:
         save_interaction(
-            interaction=interaction, log_dir=cli_args.dump_interaction_folder
+            interaction=interaction,
+            log_dir=cli_args.dump_interaction_folder,
+            test_set=cli_args.dataset_name,
         )
         print(f"| Interaction saved at {cli_args.dump_interaction_folder}")
 
