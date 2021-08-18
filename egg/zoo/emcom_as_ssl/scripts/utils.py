@@ -114,10 +114,12 @@ def get_game(params: argparse.Namespace, checkpoint_path: str):
     return game
 
 
-def save_interaction(interaction: Interaction, log_dir: Union[pathlib.Path, str]):
+def save_interaction(
+    interaction: Interaction, log_dir: Union[pathlib.Path, str], test_set: str
+):
     dump_dir = pathlib.Path(log_dir)
     dump_dir.mkdir(exist_ok=True, parents=True)
-    torch.save(interaction, dump_dir / "interactions_test_set.pt")
+    torch.save(interaction, dump_dir / f"interactions_{test_set}.pt")
 
 
 def get_dataloader(
