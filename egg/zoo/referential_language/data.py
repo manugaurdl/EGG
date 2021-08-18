@@ -3,15 +3,16 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import random
 from itertools import chain
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, Optional
 
 import torch
 import torchvision
 from bidict import bidict
-from PIL import Image
-from torch.utils.data import Dataset
+from torchvision import VisionDataset, transforms
+from PIL import Image, ImageFilter
 
 from egg.zoo.referential_language.utils_data import csv_to_dict, multicolumn_csv_to_dict
 
@@ -33,27 +34,30 @@ BBOX_INDICES = {
 }
 
 
-def random_target(labels: List):
-    return labels[0]
+def pop_last_target(targets):
+    return targets.pop()  # remove and return last element of list
 
 
-class OpenImagesObjects(Dataset):
+class OpenImageDataset(VisionDataset):
     def __init__(
         self,
-        root_folder: Path,
+        root: str,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
         split: str = "validation",
-        choose_target_fn: Callable = random_target,
-        transform: Callable = None,
+        choose_target_fn: Optional[Callable] = pop_last_target,
     ):
-        super().__init__()
-        images_folder = root_folder / split / "images"
+        super(OpenImageDataset, self).__init__(
+            root, transform=transform, target_transform=target_transform
+        )
+        images_folder = root / split / "images"
         if split == "train":
             all_folders = images_folder.glob(r"train_0[0-9]")
             all_images = chain(*[folder.glob(r"*.jpg") for folder in all_folders])
         else:
             all_images = (images_folder / split).glob(r"*.jpg")
 
-        bbox_csv_filepath = root_folder.joinpath(split, f"{split}-annotations-bbox.csv")
+        bbox_csv_filepath = root.joinpath(split, f"{split}-annotations-bbox.csv")
         indices = tuple(
             BBOX_INDICES[key]
             for key in (
@@ -76,7 +80,7 @@ class OpenImagesObjects(Dataset):
         ]
 
         self.label_name_to_class_description = csv_to_dict(
-            root_folder.joinpath("metadata", "class-descriptions-boxable.csv"),
+            root.joinpath("metadata", "class-descriptions-boxable.csv"),
             discard_header=False,
         )
         self.label_name_to_id = bidict(
@@ -86,29 +90,13 @@ class OpenImagesObjects(Dataset):
             )
         )
 
-        self.choose_target_fn = choose_target_fn
         self.transform = transform
+        self.target_transform = target_transform
+
+        self.choose_target_fn = choose_target_fn
 
     def __len__(self) -> int:
         return len(self.images)
-
-    def resize_bbox(self, boxes, original_size, new_size):
-        ratios = []
-        for s, s_orig in zip(new_size, original_size):
-            ratios.append(
-                torch.tensor(s, dtype=torch.float32, device=boxes.device)
-                / torch.tensor(s_orig, dtype=torch.float32, device=boxes.device)
-            )
-
-        ratio_height, ratio_width = ratios
-        xmin, ymin, xmax, ymax = boxes
-
-        xmin = xmin * ratio_width
-        xmax = xmax * ratio_width
-        ymin = ymin * ratio_height
-        ymax = ymax * ratio_height
-        new_coords = torch.Tensor((xmin, ymin, xmax, ymax))
-        return new_coords
 
     def __getitem__(self, index: int):
         image_path = self.images[index]
@@ -123,14 +111,13 @@ class OpenImagesObjects(Dataset):
         label = self.choose_target_fn(labels)
         obj_label, *bbox = label
 
-        bbox = torch.tensor([float(coord) for coord in bbox])
-        bbox[0] *= image.size[0]
-        bbox[1] *= image.size[0]
-        bbox[2] *= image.size[1]
-        bbox[3] *= image.size[1]
+        bbox[0] *= image.shape[1]  # assuming image is a tensor of size C x H x W
+        bbox[1] *= image.shape[1]
+        bbox[2] *= image.shape[0]
+        bbox[3] *= image.shape[0]
 
         # Xmin, Xmax, Ymin, Ymax
-        bbox = torch.stack([bbox[0], bbox[2], bbox[1], bbox[3]])
+        bbox = torch.stack(torch.Tensor([bbox[0], bbox[2], bbox[1], bbox[3]]))
         img = torchvision.transforms.functional.pil_to_tensor(image)
 
         cropped_target = torchvision.transforms.functional.crop(
@@ -159,8 +146,75 @@ class OpenImagesObjects(Dataset):
         return image, label, obj_id
 
 
+class GaussianBlur:
+    """Gaussian blur augmentation as in SimCLR https://arxiv.org/abs/2002.05709"""
+
+    def __init__(self, sigma=[0.1, 2.0]):
+        self.sigma = sigma
+
+    def __call__(self, x):
+        sigma = random.uniform(self.sigma[0], self.sigma[1])
+        x = x.filter(ImageFilter.GaussianBlur(radius=sigma))
+        return x
+
+
+class ImageTransformation:
+    def __init__(
+        self,
+        size: int,
+        augmentation: bool = False,
+    ):
+        if augmentation:
+            s = 1
+            color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
+            transformations = [
+                transforms.RandomResizedCrop(size=size),
+                transforms.RandomApply([color_jitter], p=0.8),
+                transforms.RandomGrayscale(p=0.2),
+                transforms.RandomApply([GaussianBlur([0.1, 2.0])], p=0.5),
+                transforms.RandomHorizontalFlip(),  # with 0.5 probability
+            ]
+        else:
+            transformations = [transforms.Resize(size=(size, size))]
+
+        transformations.extend([transforms.ToTensor()])
+
+        self.transform = transforms.Compose(transformations)
+
+    def __call__(self, x):
+        return self.transform(x), self.transform(x)
+
+
+class BoxResize:
+    def __init__(self, new_size: int, height_first: bool = True):
+        self.new_size = new_size
+        self.height_first = height_first
+
+    def __call__(self, boxes, original_size):
+        ratios = [s / s_orig for s, s_orig in zip(self.new_size, original_size)]
+
+        if self.height_first:
+            ratio_height, ratio_width = ratios
+        else:
+            ratio_width, ratio_height = ratios
+        xmin, ymin, xmax, ymax = boxes
+
+        xmin = xmin * ratio_width
+        xmax = xmax * ratio_width
+        ymin = ymin * ratio_height
+        ymax = ymax * ratio_height
+        new_coords = torch.Tensor((xmin, ymin, xmax, ymax))
+        return new_coords
+
+
 if __name__ == "__main__":
-    a = OpenImagesObjects(Path("/datasets01/open_images/030119"), split="validation")
+    transform = ImageTransformation(size=224, augmentation=False)
+    a = OpenImageDataset(
+        Path("/datasets01/open_images/030119"),
+        split="validation",
+        transform=transform,
+        target_transform=BoxResize(224),
+    )
     for idx, i in enumerate(a):
         if idx == 20:
             break
