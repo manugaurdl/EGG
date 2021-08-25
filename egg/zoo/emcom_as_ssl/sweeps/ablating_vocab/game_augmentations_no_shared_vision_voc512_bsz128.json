@@ -1,0 +1,13 @@
+{
+    "n_epoch": [100],
+    "batch_size": [128],
+    "lr": [2.4],
+    "use_larc":[true],
+    "random_seed": [111],
+    "gs_temperature": [5.0],
+    "use_augmentations": [true],
+    "output_dim": [2048],
+    "similarity_temperature": [0.1],
+    "vocab_size": [512],
+    "wandb": [true]
+}
