@@ -50,10 +50,7 @@ def main(params):
 
     callbacks = get_callbacks()
     if opts.wandb and opts.distributed_context.is_leader:
-        run_name = opts.checkpoint_dir.split("/")[-1] if opts.checkpoint_dir else ""
-        wandb.init(
-            project="post_rebuttal", id=run_name, resume=True, tags=[opts.wandb_tag]
-        )
+        wandb.init(project="post_rebuttal", tags=[opts.wandb_tag])
         wandb.config.update(opts)
         wandb.watch(game, log="all")
 
