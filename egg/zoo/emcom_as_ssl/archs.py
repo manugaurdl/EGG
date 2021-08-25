@@ -81,7 +81,7 @@ class VisionGameWrapper(nn.Module):
         self.game = game
         self.vision_module = vision_module
 
-    def forward(self, sender_input, labels, receiver_input=None):
+    def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
         sender_encoded_input, receiver_encoded_input = self.vision_module(
             sender_input, receiver_input
         )
@@ -90,6 +90,7 @@ class VisionGameWrapper(nn.Module):
             sender_input=sender_encoded_input,
             labels=labels,
             receiver_input=receiver_encoded_input,
+            aux_input=aux_input,
         )
 
 
@@ -123,6 +124,73 @@ class Receiver(nn.Module):
             nn.ReLU(),
             nn.Linear(output_dim, output_dim),
         )
+        self.temperature = temperature
+
+    def forward(self, message, resnet_output, aux_input=None):
+        distractors = self.fc(resnet_output)
+        similarity_scores = (
+            torch.nn.functional.cosine_similarity(
+                message.unsqueeze(1), distractors.unsqueeze(0), dim=2
+            )
+            / self.temperature
+        )
+        return similarity_scores
+
+
+class InformedSender(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,  # feat_size,
+        hidden_dim: int = 20,
+        embedding_dim: int = 50,
+        vocab_size: int = 2048,
+        game_size: int = 2,  # distractors + 1 target)
+    ):
+        super(InformedSender, self).__init__()
+
+        self.fc_in = nn.Linear(input_dim, embedding_dim, bias=False)
+        self.conv1 = nn.Conv2d(
+            1,
+            hidden_dim,
+            kernel_size=(game_size, 1),
+            stride=(game_size, 1),
+            bias=False,
+        )
+        self.conv2 = nn.Conv2d(
+            1, 1, kernel_size=(hidden_dim, 1), stride=(hidden_dim, 1), bias=False
+        )
+        self.lin2 = nn.Linear(embedding_dim, vocab_size, bias=False)
+        self.fc_out = nn.Linear(vocab_size, embedding_dim, bias=False)
+
+    def forward(self, x, _aux_input=None):
+        emb = self.fc_in(x)
+
+        # in: h of size (batch_size, 1, game_size, embedding_size)
+        # out: h of size (batch_size, hidden_size, 1, embedding_size)
+        h = self.conv1(emb)
+        h = torch.sigmoid(h)
+        # in: h of size (batch_size, hidden_size, 1, embedding_size)
+        # out: h of size (batch_size, 1, hidden_size, embedding_size)
+        h = h.transpose(1, 2)
+        h = self.conv2(h)
+        # h of size (batch_size, 1, 1, embedding_size)
+        h = torch.sigmoid(h)
+        # h of size (batch_size, embedding_size)
+        h = self.lin2(h)
+        h = h.squeeze(1).squeeze(1)
+        # h of size (batch_size, vocab_size)
+        return h
+
+
+class ReceiverWithInformedSender(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int = 2048,
+        temperature: float = 1.0,
+    ):
+        super(Receiver, self).__init__()
+        self.fc = nn.Linear(input_dim, output_dim)
         self.temperature = temperature
 
     def forward(self, message, resnet_output, aux_input=None):

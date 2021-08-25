@@ -64,6 +64,12 @@ def get_game_arch_opts(parser):
         default=2048,
         help="Projection head's output dimension for image features",
     )
+    group.add_argument(
+        "--informed_sender",
+        default=False,
+        action="store_true",
+        help="If set, Sender will be the one from Lazaridou et al 2017",
+    )
 
 
 def get_loss_opts(parser):

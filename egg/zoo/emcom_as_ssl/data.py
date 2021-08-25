@@ -11,6 +11,29 @@ from PIL import ImageFilter
 from torchvision import datasets, transforms
 
 
+def collate_with_random_recv_input(batch: List[Any]):
+    sender_input, receiver_input, class_labels = [], [], []
+    for elem in batch:
+        sender_input.append(elem[0][0])
+        receiver_input.append(elem[0][1])
+        class_labels.append(torch.LongTensor([elem[1]]))
+
+    sender_input = torch.stack(sender_input)
+    receiver_input = torch.stack(receiver_input)
+    class_labels = torch.stack(class_labels)
+
+    random_order = torch.randperm(len(batch))
+    receiver_input = receiver_input[random_order]
+    target_position = torch.argmin(random_order).unsqueeze(0)
+
+    return (
+        sender_input,
+        class_labels,
+        receiver_input,
+        {"target_position": target_position},
+    )
+
+
 def collate(batch: List[Any]):
     sender_input, labels, receiver_input = [], [], []
     for elem in batch:
@@ -27,6 +50,7 @@ def collate(batch: List[Any]):
 
 def get_dataloader(
     dataset_dir: str,
+    informed_sender: bool,
     image_size: int = 32,
     batch_size: int = 32,
     num_workers: int = 4,
@@ -43,13 +67,17 @@ def get_dataloader(
             train_dataset, shuffle=True, drop_last=True, seed=seed
         )
 
+    if informed_sender:
+        collate_fn = collate_with_random_recv_input
+    else:
+        collate_fn = collate
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=(train_sampler is None),
         sampler=train_sampler,
         num_workers=num_workers,
-        collate_fn=collate,
+        collate_fn=collate_fn,
         pin_memory=True,
         drop_last=True,
     )
@@ -76,9 +104,7 @@ class ImageTransformation:
     denoted x ̃i and x ̃j, which we consider as a positive pair.
     """
 
-    def __init__(
-        self, size: int, augmentation: bool = False, return_original_image: bool = False
-    ):
+    def __init__(self, size: int, augmentation: bool = False):
         if augmentation:
             s = 1
             color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)

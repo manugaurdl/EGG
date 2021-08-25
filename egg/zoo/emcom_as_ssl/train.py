@@ -24,6 +24,7 @@ def main(params):
 
     train_loader = get_dataloader(
         dataset_dir=opts.dataset_dir,
+        informed_sender=opts.informed_sender,
         image_size=opts.image_size,
         batch_size=opts.batch_size,
         num_workers=opts.num_workers,
