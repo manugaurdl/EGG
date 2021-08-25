@@ -12,6 +12,11 @@ from .callbacks import (
     TemperatureUpdater,
     TensorboardLogger,
 )
+from .continous_communication import (
+    ContinuousLinearReceiver,
+    ContinuousLinearSender,
+    SenderReceiverContinuousCommunication,
+)
 from .early_stopping import EarlyStopperAccuracy
 from .gs_wrappers import (
     GumbelSoftmaxWrapper,
@@ -22,13 +27,15 @@ from .gs_wrappers import (
     SymbolGameGS,
     SymbolReceiverWrapper,
 )
-from .interaction import Interaction, LoggingStrategy
+from .interaction import Interaction, LoggingStrategy, dump_interactions
 from .language_analysis import (
+    Disent,
     MessageEntropy,
-    PosDisent,
     PrintValidationEvents,
     TopographicSimilarity,
 )
+from .losses import DiscriminationLoss, NTXentLoss, ReconstructionLoss
+from .population import FullSweepAgentSampler, PopulationGame, UniformAgentSampler
 from .reinforce_wrappers import (
     CommunicationRnnReinforce,
     ReinforceDeterministicWrapper,
@@ -46,7 +53,6 @@ from .trainers import Trainer
 from .util import (
     build_optimizer,
     close,
-    dump_interactions,
     find_lengths,
     get_opts,
     get_summary_writer,
@@ -94,6 +100,15 @@ __all__ = [
     "Interaction",
     "MessageEntropy",
     "TopographicSimilarity",
-    "PosDisent",
+    "Disent",
     "PrintValidationEvents",
+    "DiscriminationLoss",
+    "ReconstructionLoss",
+    "NTXentLoss",
+    "UniformAgentSampler",
+    "FullSweepAgentSampler",
+    "PopulationGame",
+    "ContinuousLinearSender",
+    "ContinuousLinearReceiver",
+    "SenderReceiverContinuousCommunication",
 ]

@@ -3,26 +3,33 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import torch.nn as nn
-import random
-import numpy as np
 import itertools
+
+import numpy as np
+import torch.nn as nn
 
 
 class UniformAgentSampler(nn.Module):
     # NB: only a module to facilitate checkpoint persistance
-    def __init__(self, senders, receivers, losses):
+    def __init__(self, senders, receivers, losses, seed=1234):
         super().__init__()
+
+        np.random.seed(seed)
 
         self.senders = nn.ModuleList(senders)
         self.receivers = nn.ModuleList(receivers)
         self.losses = list(losses)
 
     def forward(self):
+        s_idx, r_idx, l_idx = (
+            np.random.choice(len(self.senders)),
+            np.random.choice(len(self.receivers)),
+            np.random.choice(len(self.losses)),
+        )
         return (
-            random.choice(self.senders),
-            random.choice(self.receivers),
-            random.choice(self.losses),
+            self.senders[s_idx],
+            self.receivers[r_idx],
+            self.losses[l_idx],
         )
 
 
@@ -52,11 +59,11 @@ class FullSweepAgentSampler(nn.Module):
 
     def forward(self):
         try:
-            s, r, l = next(self.iterator)
+            sender_idx, recv_idx, loss_idx = next(self.iterator)
         except StopIteration:
             self.reset_order()
-            s, r, l = next(self.iterator)
-        return self.senders[s], self.receivers[r], self.losses[l]
+            sender_idx, recv_idx, loss_idx = next(self.iterator)
+        return self.senders[sender_idx], self.receivers[recv_idx], self.losses[loss_idx]
 
 
 class PopulationGame(nn.Module):

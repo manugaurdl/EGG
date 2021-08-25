@@ -3,17 +3,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import itertools
 import math
-import random
 
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.distributions import Bernoulli, Categorical
-
-import egg.core as core
 
 
 class Receiver(nn.Module):
@@ -30,7 +23,7 @@ class Receiver(nn.Module):
 
             self.net = nn.Sequential(*l)
 
-    def forward(self, x, _):
+    def forward(self, x, input, aux_input):
         x = self.net(x)
         return x
 
@@ -41,9 +34,7 @@ class IdentitySender(nn.Module):
         self.n_attributes = n_attributes
         self.n_values = n_values
 
-    def forward(self, x):
-        batch_size = x.size(0)
-
+    def forward(self, x, aux_input):
         message = x
         assert message.size(1) == 2
 
@@ -57,14 +48,12 @@ class RotatedSender(nn.Module):
         self.n_attributes = n_attributes
         self.n_values = n_values
 
-    def forward(self, x):
-        batch_size = x.size(0)
+    def forward(self, x, aux_input):
         message = torch.zeros_like(x).long()
 
         if x.size(1) == 2:
             message[:, 0] = (x[:, 0] + x[:, 1]).fmod(self.n_values)
-            message[:, 1] = (self.n_values + x[:, 0] -
-                             x[:, 1]).fmod(self.n_values)
+            message[:, 1] = (self.n_values + x[:, 0] - x[:, 1]).fmod(self.n_values)
         else:
             assert False
 
@@ -81,7 +70,8 @@ class Lenses(nn.Module):
         sin_theta = math.sin(theta)
 
         self.rotation_matrix = torch.tensor(
-            [[cos_theta, -sin_theta], [sin_theta, cos_theta]], requires_grad=False)
+            [[cos_theta, -sin_theta], [sin_theta, cos_theta]], requires_grad=False
+        )
         self.rotation_matrix = nn.Parameter(self.rotation_matrix)
 
     def __call__(self, examples):
@@ -95,9 +85,7 @@ class CircleSender(nn.Module):
         super().__init__()
         self.vocab_size = vocab_size
 
-    def forward(self, x):
-        batch_size = x.size(0)
-
+    def forward(self, x, aux_input):
         assert (x >= -1).all() and (x <= 1).all()
         message = ((x + 1) / 2 * (self.vocab_size - 1)).round().long()
         assert (message < self.vocab_size).all()

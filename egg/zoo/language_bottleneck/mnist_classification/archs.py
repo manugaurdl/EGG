@@ -15,7 +15,7 @@ class LeNet(nn.Module):
         super(LeNet, self).__init__()
         self.conv1 = nn.Conv2d(1, 20, 5, 1)
         self.conv2 = nn.Conv2d(20, 50, 5, 1)
-        self.fc1 = nn.Linear(4*11*50, 400)
+        self.fc1 = nn.Linear(4 * 11 * 50, 400)
 
     def forward(self, x):
         x = F.leaky_relu(self.conv1(x))
@@ -34,7 +34,7 @@ class Sender(nn.Module):
         self.vision = LeNet()
         self.fc = nn.Linear(400, vocab_size)
 
-    def forward(self, x):
+    def forward(self, x, _aux_input):
         x = self.vision(x)
         x = self.fc(x)
         logits = F.log_softmax(x, dim=1)
@@ -49,16 +49,18 @@ class Receiver(nn.Module):
         hidden = []
 
         for _ in range(n_hidden):
-            hidden.extend([
-                nn.LeakyReLU(),
-                nn.Linear(400, 400),
-            ])
+            hidden.extend(
+                [
+                    nn.LeakyReLU(),
+                    nn.Linear(400, 400),
+                ]
+            )
 
         self.hidden = nn.Sequential(*hidden)
 
         self.fc = nn.Linear(400, n_classes)
 
-    def forward(self, message, image):
+    def forward(self, message, image, _aux_input):
         x = self.message_inp(message)
         if self.hidden:
             x = self.hidden(x)
@@ -66,4 +68,3 @@ class Receiver(nn.Module):
         x = self.fc(x)
 
         return torch.log_softmax(x, dim=1)
-

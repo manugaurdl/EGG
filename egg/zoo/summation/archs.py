@@ -12,7 +12,7 @@ class Receiver(nn.Module):
         super(Receiver, self).__init__()
         self.output = nn.Linear(n_hidden, 2)
 
-    def forward(self, x, _input):
+    def forward(self, x, _input, _aux_input=None):
         return self.output(x)
 
 
@@ -22,18 +22,33 @@ class Encoder(nn.Module):
 
         self.encoder_cell = None
         cell = cell.lower()
-        if cell == 'rnn':
-            self.cell = nn.RNN(input_size=embed_dim, batch_first=True, hidden_size=n_hidden, num_layers=1)
-        elif cell == 'gru':
-            self.cell = nn.GRU(input_size=embed_dim, batch_first=True, hidden_size=n_hidden, num_layers=1)
-        elif cell == 'lstm':
-            self.cell = nn.LSTM(input_size=embed_dim, batch_first=True, hidden_size=n_hidden, num_layers=1)
+        if cell == "rnn":
+            self.cell = nn.RNN(
+                input_size=embed_dim,
+                batch_first=True,
+                hidden_size=n_hidden,
+                num_layers=1,
+            )
+        elif cell == "gru":
+            self.cell = nn.GRU(
+                input_size=embed_dim,
+                batch_first=True,
+                hidden_size=n_hidden,
+                num_layers=1,
+            )
+        elif cell == "lstm":
+            self.cell = nn.LSTM(
+                input_size=embed_dim,
+                batch_first=True,
+                hidden_size=n_hidden,
+                num_layers=1,
+            )
         else:
             raise ValueError(f"Unknown RNN Cell: {cell}")
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)
 
-    def forward(self, x):
+    def forward(self, x, _aux_input=None):
         messages, lengths = x
         emb = self.embedding(messages)
 
@@ -43,6 +58,3 @@ class Encoder(nn.Module):
             rnn_hidden = rnn_hidden[0]
         hidden = rnn_hidden.squeeze(0)
         return hidden
-
-
-

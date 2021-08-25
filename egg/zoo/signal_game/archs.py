@@ -9,8 +9,15 @@ import torch.nn.functional as F
 
 
 class InformedSender(nn.Module):
-    def __init__(self, game_size, feat_size, embedding_size, hidden_size,
-                 vocab_size=100, temp=1.):
+    def __init__(
+        self,
+        game_size,
+        feat_size,
+        embedding_size,
+        hidden_size,
+        vocab_size=100,
+        temp=1.0,
+    ):
         super(InformedSender, self).__init__()
         self.game_size = game_size
         self.embedding_size = embedding_size
@@ -19,15 +26,19 @@ class InformedSender(nn.Module):
         self.temp = temp
 
         self.lin1 = nn.Linear(feat_size, embedding_size, bias=False)
-        self.conv2 = nn.Conv2d(1, hidden_size,
-                               kernel_size=(game_size, 1),
-                               stride=(game_size, 1), bias=False)
-        self.conv3 = nn.Conv2d(1, 1,
-                               kernel_size=(hidden_size, 1),
-                               stride=(hidden_size, 1), bias=False)
+        self.conv2 = nn.Conv2d(
+            1,
+            hidden_size,
+            kernel_size=(game_size, 1),
+            stride=(game_size, 1),
+            bias=False,
+        )
+        self.conv3 = nn.Conv2d(
+            1, 1, kernel_size=(hidden_size, 1), stride=(hidden_size, 1), bias=False
+        )
         self.lin4 = nn.Linear(embedding_size, vocab_size, bias=False)
 
-    def forward(self, x, return_embeddings=False):
+    def forward(self, x, _aux_input=None):
         emb = self.return_embeddings(x)
 
         # in: h of size (batch_size, 1, game_size, embedding_size)
@@ -44,7 +55,7 @@ class InformedSender(nn.Module):
         h = h.squeeze(dim=1)
         # h of size (batch_size, embedding_size)
         h = self.lin4(h)
-        h = h.mul(1./self.temp)
+        h = h.mul(1.0 / self.temp)
         # h of size (batch_size, vocab_size)
         logits = F.log_softmax(h, dim=1)
 
@@ -70,8 +81,7 @@ class InformedSender(nn.Module):
 
 
 class Receiver(nn.Module):
-    def __init__(self, game_size, feat_size, embedding_size,
-                 vocab_size, reinforce):
+    def __init__(self, game_size, feat_size, embedding_size, vocab_size, reinforce):
         super(Receiver, self).__init__()
         self.game_size = game_size
         self.embedding_size = embedding_size
@@ -82,7 +92,7 @@ class Receiver(nn.Module):
         else:
             self.lin2 = nn.Linear(vocab_size, embedding_size, bias=False)
 
-    def forward(self, signal, x):
+    def forward(self, signal, x, _aux_input=None):
         # embed each image (left or right)
         emb = self.return_embeddings(x)
         # embed the signal
