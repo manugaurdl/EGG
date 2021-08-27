@@ -1,0 +1,16 @@
+{
+    "n_epoch": [2],
+    "batch_size": [256],
+    "lr": [2.4],
+    "use_larc":[true],
+    "random_seed": [111],
+    "gs_temperature": [5.0],
+    "output_dim": [2048],
+    "similarity_temperature": [0.1],
+    "vocab_size": [2048],
+    "pretrain_vision": [true],
+    "shared_vision": [true],
+    "informed_sender": [true],
+    "wandb": [true],
+    "wandb_tag": ["informed_exp1"]
+}

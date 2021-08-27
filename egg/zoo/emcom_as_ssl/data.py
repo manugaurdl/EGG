@@ -23,10 +23,7 @@ def collate_with_random_recv_input(batch: List[Any]):
     receiver_input = torch.stack(receiver_input)
     class_labels = torch.stack(class_labels).view(2, 1, bsz // 2, -1)
 
-    random_order1 = torch.randperm(len(batch) // 2)
-    random_order2 = torch.randperm(len(batch) // 2)
-
-    random_order = torch.stack([random_order1, random_order2])
+    random_order = torch.stack([torch.randperm(bsz // 2) for _ in range(2)])
     target_position = torch.argmin(random_order, dim=1)
 
     return (
