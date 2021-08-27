@@ -15,6 +15,7 @@ from egg.zoo.emcom_as_ssl.archs import (
     Receiver,
     ReceiverWithInformedSender,
     VisionGameWrapper,
+    VisionGameWrapperWithInformed,
     VisionModule,
     get_vision_modules,
 )
@@ -67,7 +68,7 @@ def build_game(opts):
         sender = InformedSender(
             input_dim=visual_features_dim,
             vocab_size=opts.vocab_size,
-            game_size=opts.batch_size,
+            game_size=opts.batch_size // 2,
         )
         receiver = ReceiverWithInformedSender(
             input_dim=visual_features_dim,
@@ -99,7 +100,10 @@ def build_game(opts):
         test_logging_strategy=test_logging_strategy,
     )
 
-    game = VisionGameWrapper(game, vision_encoder)
+    if opts.informed_sender:
+        game = VisionGameWrapperWithInformed(game, vision_encoder)
+    else:
+        game = VisionGameWrapper(game, vision_encoder)
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
 

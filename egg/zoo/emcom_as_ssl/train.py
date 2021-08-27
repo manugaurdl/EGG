@@ -49,7 +49,7 @@ def main(params):
     if opts.use_larc:
         optimizer = LARC(optimizer, trust_coefficient=0.001, clip=False, eps=1e-8)
 
-    callbacks = get_callbacks()
+    callbacks = get_callbacks(checkpoint_freq=opts.checkpoint_freq)
     if opts.wandb and opts.distributed_context.is_leader:
         wandb.init(project="post_rebuttal", tags=[opts.wandb_tag])
         wandb.config.update(opts)

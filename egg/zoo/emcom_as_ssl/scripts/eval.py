@@ -7,10 +7,10 @@
 
 import argparse
 
+from egg.zoo.emcom_as_ssl.data import get_dataloader
 from egg.zoo.emcom_as_ssl.scripts.utils import (
     add_common_cli_args,
     evaluate,
-    get_dataloader,
     get_game,
     get_params,
     save_interaction,
@@ -50,11 +50,10 @@ def main():
 
     dataloader = get_dataloader(
         dataset_dir=dataset_dir,
-        image_size=opts.image_size,
-        batch_size=opts.batch_size,
-        num_workers=opts.num_workers,
+        informed_sender=False,  # TODO INFORMED SENDER
+        batch_size=cli_args.batch_size,
         use_augmentations=cli_args.evaluate_with_augmentations,
-        is_distributed=False,
+        is_distributed=opts.distributed_context.is_distributed,
     )
     print("| Test data fetched.")
 

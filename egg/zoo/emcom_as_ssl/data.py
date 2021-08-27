@@ -18,19 +18,22 @@ def collate_with_random_recv_input(batch: List[Any]):
         receiver_input.append(elem[0][1])
         class_labels.append(torch.LongTensor([elem[1]]))
 
+    bsz = len(batch)
     sender_input = torch.stack(sender_input)
     receiver_input = torch.stack(receiver_input)
-    class_labels = torch.stack(class_labels)
+    class_labels = torch.stack(class_labels).view(2, 1, bsz // 2, -1)
 
-    random_order = torch.randperm(len(batch))
-    receiver_input = receiver_input[random_order]
-    target_position = torch.argmin(random_order).unsqueeze(0)
+    random_order1 = torch.randperm(len(batch) // 2)
+    random_order2 = torch.randperm(len(batch) // 2)
+
+    random_order = torch.stack([random_order1, random_order2])
+    target_position = torch.argmin(random_order, dim=1)
 
     return (
         sender_input,
         class_labels,
         receiver_input,
-        {"target_position": target_position},
+        {"target_position": target_position, "random_order": random_order},
     )
 
 
@@ -51,7 +54,7 @@ def collate(batch: List[Any]):
 def get_dataloader(
     dataset_dir: str,
     informed_sender: bool,
-    image_size: int = 32,
+    image_size: int = 224,
     batch_size: int = 32,
     num_workers: int = 4,
     use_augmentations: bool = True,

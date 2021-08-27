@@ -32,6 +32,7 @@ def add_common_cli_args(parser):
         help="Load a model with a pretrained shared vision module",
     )
     parser.add_argument("--vocab_size", default=2048, type=int, help="Vocabulary size")
+    parser.add_argument("--batch_size", default=128, type=int, help="Test batch size")
     parser.add_argument(
         "--evaluate_with_augmentations",
         default=False,
@@ -61,7 +62,7 @@ def get_params(
     pretrain_vision: bool,
     vocab_size: int,
 ):
-    assert pretrain_vision and shared_vision, "Cannot load a pretrain non-shared model"
+    assert not pretrain_vision or shared_vision
     params = dict(
         shared_vision=shared_vision,
         pretrain_vision=pretrain_vision,
@@ -69,11 +70,13 @@ def get_params(
     )
 
     params_fixed = dict(
+        informed_sender=False,  # TODO INFORMED SENDER
         random_seed=111,
         model_name="resnet50",
         gs_temperature=1.0,
         similarity_temperature=0.1,
         output_dim=2048,
+        image_size=224,
         distributed_context=argparse.Namespace(is_distributed=False),
     )
     params.update(params_fixed)

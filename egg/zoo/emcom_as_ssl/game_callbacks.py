@@ -13,68 +13,24 @@ from egg.core import Callback, ConsoleLogger, Interaction
 
 class BestStatsTracker(Callback):
     def __init__(self):
-        # TRAIN
-        self.best_train_acc, self.best_train_loss, self.best_train_epoch = (
-            -float("inf"),
-            float("inf"),
-            -1,
-        )
-        self.last_train_acc, self.last_train_loss, self.last_train_epoch = 0.0, 0.0, 0
-        # last_val_epoch useful for runs that end before the final epoch
-
-        self.best_val_acc, self.best_val_loss, self.best_val_epoch = (
-            -float("inf"),
-            float("inf"),
-            -1,
-        )
-        self.last_val_acc, self.last_val_loss, self.last_val_epoch = 0.0, 0.0, 0
-        # last_{train, val}_epoch useful for runs that end before the final epoch
+        self.best = {"acc": -float("inf"), "loss": float("inf"), "epoch": -1}
 
     def on_epoch_end(self, loss, logs: Interaction, epoch: int):
-        if logs.aux["acc"].mean().item() > self.best_train_acc:
-            self.best_train_acc = logs.aux["acc"].mean().item()
-            self.best_train_epoch = epoch
-            self.best_train_loss = loss
-
-        self.last_train_acc = logs.aux["acc"].mean().item()
-        self.last_train_epoch = epoch
-        self.last_train_loss = loss
-
-    def on_test_end(self, loss, logs: Interaction, epoch: int):
-        if logs.aux["acc"].mean().item() > self.best_val_acc:
-            self.best_val_acc = logs.aux["acc"].mean().item()
-            self.best_val_epoch = epoch
-            self.best_val_loss = loss
-
-        self.last_val_acc = logs.aux["acc"].mean().item()
-        self.last_val_epoch = epoch
-        self.last_val_loss = loss
+        if logs.aux["acc"].mean().item() > self.best["acc"]:
+            self.best["acc"] = logs.aux["acc"].mean().item()
+            self.best["loss"] = loss
+            self.best["epoch"] = epoch
 
     def on_train_end(self):
-        train_stats = dict(
-            mode="best train acc",
-            best_epoch=self.best_train_epoch,
-            best_acc=self.best_train_acc,
-            best_loss=self.best_train_loss,
-            last_epoch=self.last_train_epoch,
-            last_acc=self.last_train_acc,
-            last_loss=self.last_train_loss,
-        )
-        print(json.dumps(train_stats), flush=True)
-        val_stats = dict(
-            mode="best validation acc",
-            best_epoch=self.best_val_epoch,
-            best_acc=self.best_val_acc,
-            best_loss=self.best_val_loss,
-            last_epoch=self.last_val_epoch,
-            last_acc=self.last_val_acc,
-            last_loss=self.last_val_loss,
-        )
-        print(json.dumps(val_stats), flush=True)
+        best_stats = dict(mode="best_stats", **self.best)
+        print(json.dumps(best_stats), flush=True)
 
 
 class VisionModelSaver(Callback):
     """A callback that stores vision module(s) in trainer's checkpoint_dir, if any."""
+
+    def __init__(self, checkpoint_freq: int = 1):
+        self.checkpoint_freq = checkpoint_freq
 
     def on_train_begin(self, trainer_instance: "Trainer"):  # noqa: F821
         self.trainer = trainer_instance
@@ -109,8 +65,9 @@ class VisionModelSaver(Callback):
             self.save_vision_model()
 
     def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int):
-        if self.trainer.distributed_context.is_leader:
-            self.save_vision_model(epoch=epoch)
+        if self.checkpoint_freq > 0 and (epoch % self.checkpoint_freq == 0):
+            if self.trainer.distributed_context.is_leader:
+                self.save_vision_model(epoch=epoch)
 
 
 class DistributedSamplerEpochSetter(Callback):
@@ -148,11 +105,11 @@ class WandbLogger(Callback):
             )
 
 
-def get_callbacks():
+def get_callbacks(checkpoint_freq: int = 1):
     callbacks = [
         ConsoleLogger(as_json=True, print_train_loss=True),
         BestStatsTracker(),
-        VisionModelSaver(),
+        VisionModelSaver(checkpoint_freq=checkpoint_freq),
         DistributedSamplerEpochSetter(),
     ]
     return callbacks

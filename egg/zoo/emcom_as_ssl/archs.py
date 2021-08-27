@@ -94,6 +94,38 @@ class VisionGameWrapper(nn.Module):
         )
 
 
+class VisionGameWrapperWithInformed(nn.Module):
+    def __init__(
+        self,
+        game: nn.Module,
+        vision_module: nn.Module,
+    ):
+        super(VisionGameWrapperWithInformed, self).__init__()
+        self.game = game
+        self.vision_module = vision_module
+
+    def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
+        sender_encoded_input, receiver_encoded_input = self.vision_module(
+            sender_input, receiver_input
+        )
+        bsz = sender_encoded_input.shape[0]
+        sender_encoded_input = sender_encoded_input.view(2, 1, bsz // 2, -1)
+        receiver_encoded_input = receiver_encoded_input.view(2, 1, bsz // 2, -1)
+        random_order = aux_input["random_order"]
+        receiver_encoded_input1 = receiver_encoded_input[0, 0, random_order[0]]
+        receiver_encoded_input2 = receiver_encoded_input[1, 0, random_order[1]]
+        receiver_encoded_input = torch.stack(
+            [receiver_encoded_input1, receiver_encoded_input2]
+        )
+
+        return self.game(
+            sender_input=sender_encoded_input,
+            labels=labels,
+            receiver_input=receiver_encoded_input,
+            aux_input=aux_input,
+        )
+
+
 class EmSSLSender(nn.Module):
     def __init__(
         self,
@@ -189,7 +221,7 @@ class ReceiverWithInformedSender(nn.Module):
         output_dim: int = 2048,
         temperature: float = 1.0,
     ):
-        super(Receiver, self).__init__()
+        super(ReceiverWithInformedSender, self).__init__()
         self.fc = nn.Linear(input_dim, output_dim)
         self.temperature = temperature
 
@@ -197,7 +229,7 @@ class ReceiverWithInformedSender(nn.Module):
         distractors = self.fc(resnet_output)
         similarity_scores = (
             torch.nn.functional.cosine_similarity(
-                message.unsqueeze(1), distractors.unsqueeze(0), dim=2
+                message.unsqueeze(1), distractors, dim=2
             )
             / self.temperature
         )
