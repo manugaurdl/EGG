@@ -55,9 +55,21 @@ def add_common_cli_args(parser):
     )
     parser.add_argument(
         "--vision_model_names",
-        type=list,
-        default=["resnet50", "inception", "vgg11"],
+        type=str,
+        default=["[#resnet50#, #inception#, #vgg11#]"],
         help="Model names for the encoder of senders and receivers.",
+    )
+    parser.add_argument(
+        "--vision_model_names_senders",
+        type=str,
+        default=["[]"],
+        help="Model names for the encoder of senders.",
+    )
+    parser.add_argument(
+        "--vision_model_names_recvs",
+        type=str,
+        default=["[]"],
+        help="Model names for the encoder of receivers.",
     )
 
 
@@ -68,6 +80,8 @@ def get_params(
     use_different_architectures: bool,
     vision_model_name: bool,
     vision_model_names: bool,
+    vision_model_names_senders: bool,
+    vision_model_names_recvs: bool,
 ):
     params = dict(
         n_senders=n_senders,
@@ -76,6 +90,8 @@ def get_params(
         use_different_architectures=use_different_architectures,
         vision_model_name=vision_model_name,
         vision_model_names=vision_model_names,
+        vision_model_names_senders=vision_model_names_senders,
+        vision_model_names_recvs=vision_model_names_recvs,
     )
 
     distributed_context = argparse.Namespace(is_distributed=False)
@@ -205,8 +221,8 @@ def evaluate(game, data, device, n_senders, n_recvs):
     mean_loss = 0.0
     interactions = []
     n_batches = 0
-    if torch.cuda.is_available():
-        game.cuda()
+    # if torch.cuda.is_available():
+    game.cuda()
     game.eval()
     with torch.no_grad():
         for batch_id, batch in enumerate(data):
