@@ -4,27 +4,25 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-import wandb
 
 import egg.core as core
-from egg.zoo.emcom_as_ssl.utils import add_weight_decay, get_common_opts
-from egg.zoo.emcom_as_ssl.data import get_dataloader
-from egg.zoo.emcom_as_ssl.games import build_game
-from egg.zoo.emcom_as_ssl.game_callbacks import get_callbacks, WandbLogger
+from egg.zoo.emcom_as_ssl.callbacks import add_wandb_logger, get_callbacks
 from egg.zoo.emcom_as_ssl.LARC import LARC
+from egg.zoo.emcom_as_ssl.linear_sender.data import get_dataloader
+from egg.zoo.emcom_as_ssl.linear_sender.games import build_game
+from egg.zoo.emcom_as_ssl.linear_sender.utils import add_weight_decay, get_common_opts
 
 
 def main(params):
-    opts = get_common_opts(params=params)
+    parser = get_common_opts()
+    opts = core.init(arg_parser=parser, params=params)
     print(f"{opts}\n")
-    assert not opts.batch_size % 2, "Batch size must be multiple of 2"
 
     if not opts.distributed_context.is_distributed and opts.pdb:
         breakpoint()
 
     train_loader = get_dataloader(
         dataset_dir=opts.dataset_dir,
-        informed_sender=opts.informed_sender,
         image_size=opts.image_size,
         batch_size=opts.batch_size,
         num_workers=opts.num_workers,
@@ -50,12 +48,8 @@ def main(params):
         optimizer = LARC(optimizer, trust_coefficient=0.001, clip=False, eps=1e-8)
 
     callbacks = get_callbacks(checkpoint_freq=opts.checkpoint_freq)
-    if opts.wandb and opts.distributed_context.is_leader:
-        wandb.init(project="post_rebuttal", tags=[opts.wandb_tag])
-        wandb.config.update(opts)
-        wandb.watch(game, log="all")
-
-        callbacks.append(WandbLogger())
+    if opts.wandb:
+        add_wandb_logger(callbacks, opts, game)
 
     trainer = core.Trainer(
         game=game,

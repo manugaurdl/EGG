@@ -41,7 +41,7 @@ class GaussianNoiseDataset(torch.utils.data.Dataset):
             gaussian_sample2 = torch.randn_like(gaussian_sample)
             receiver_input = normalize_fn(gaussian_sample2)
         else:
-            receiver_input = sender_input.copy()
+            receiver_input = sender_input.detach()
 
         return sender_input, torch.zeros(1), receiver_input
 
@@ -75,7 +75,7 @@ def main():
 
     print("| Starting evaluation ...")
     loss, accuracy, _ = evaluate(game=game, data=dataloader)
-    print(f"| Loss: {loss}, accuracy (out of 100)")
+    print(f"| Loss: {loss}, {round(accuracy * 100, 2)} accuracy (out of 100)")
 
 
 if __name__ == "__main__":

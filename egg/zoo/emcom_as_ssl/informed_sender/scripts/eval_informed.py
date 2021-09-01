@@ -7,7 +7,13 @@
 
 import argparse
 
-from egg.zoo.emcom_as_ssl.data import get_dataloader
+import torch
+from torchvision import datasets
+
+from egg.zoo.emcom_as_ssl.data import (
+    ImageTransformation,
+    collate_with_random_recv_input,
+)
 from egg.zoo.emcom_as_ssl.scripts.utils import (
     add_common_cli_args,
     evaluate,
@@ -23,15 +29,53 @@ O_TEST_PATH = (
 I_TEST_PATH = "/datasets01/imagenet_full_size/061417/val"
 
 
+class MyImageFolder(datasets.ImageFolder):
+    def update_images(self, repeat):
+        if repeat > 1:
+            self.imgs *= repeat
+
+
+def get_dataloader(
+    dataset_dir: str,
+    repeat: int = 2,
+    image_size: int = 224,
+    batch_size: int = 32,
+    num_workers: int = 0,
+    use_augmentations: bool = True,
+    seed: int = 111,
+):
+    transformations = ImageTransformation(image_size, use_augmentations)
+
+    train_dataset = MyImageFolder(dataset_dir, transform=transformations)
+    train_dataset.update_images(repeat)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        collate_fn=collate_with_random_recv_input,
+        pin_memory=True,
+        drop_last=True,
+    )
+
+    return train_loader
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=2,
+        help="How many times the dataset will be repeated. Useful for balancing the batching+distractors",
+    )
+    parser.add_argument("--force_compare_two", default=False, action="store_true")
     add_common_cli_args(parser)
     cli_args = parser.parse_args()
-    opts = get_params(
-        shared_vision=cli_args.shared_vision,
-        pretrain_vision=cli_args.pretrain_vision,
-        vocab_size=cli_args.vocab_size,
-    )
+    cli_args.informed_sender = True
+
+    opts = get_params(**vars(cli_args))
 
     if cli_args.pdb:
         breakpoint()
@@ -50,10 +94,9 @@ def main():
 
     dataloader = get_dataloader(
         dataset_dir=dataset_dir,
-        informed_sender=False,  # TODO INFORMED SENDER
         batch_size=cli_args.batch_size,
+        repeat=cli_args.repeat,
         use_augmentations=cli_args.evaluate_with_augmentations,
-        is_distributed=opts.distributed_context.is_distributed,
     )
     print("| Test data fetched.")
 

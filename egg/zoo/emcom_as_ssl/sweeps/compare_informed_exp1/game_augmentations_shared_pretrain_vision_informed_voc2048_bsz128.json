@@ -1,5 +1,5 @@
 {
-    "n_epoch": [2],
+    "n_epoch": [1600],
     "batch_size": [256],
     "lr": [2.4],
     "use_larc":[true],

@@ -20,6 +20,12 @@ from egg.zoo.emcom_as_ssl.games import build_game
 def add_common_cli_args(parser):
     parser.add_argument("--checkpoint_path", type=str, help="Path to model checkpoint")
     parser.add_argument(
+        "--informed_sender",
+        default=False,
+        action="store_true",
+        help="Load an informed sender arch",
+    )
+    parser.add_argument(
         "--shared_vision",
         default=False,
         action="store_true",
@@ -61,16 +67,21 @@ def get_params(
     shared_vision: bool,
     pretrain_vision: bool,
     vocab_size: int,
+    informed_sender: bool = False,
+    batch_size: int = 128,
+    **other_params,
 ):
+    print(f"Batch_size is {batch_size}")
     assert not pretrain_vision or shared_vision
     params = dict(
         shared_vision=shared_vision,
         pretrain_vision=pretrain_vision,
         vocab_size=vocab_size,
+        informed_sender=informed_sender,
+        batch_size=batch_size,
     )
 
     params_fixed = dict(
-        informed_sender=False,  # TODO INFORMED SENDER
         random_seed=111,
         model_name="resnet50",
         gs_temperature=1.0,
@@ -78,6 +89,7 @@ def get_params(
         output_dim=2048,
         image_size=224,
         distributed_context=argparse.Namespace(is_distributed=False),
+        **other_params,
     )
     params.update(params_fixed)
     params = argparse.Namespace(**params)

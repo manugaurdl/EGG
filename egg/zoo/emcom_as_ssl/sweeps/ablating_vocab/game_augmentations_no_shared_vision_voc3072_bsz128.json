@@ -9,5 +9,6 @@
     "output_dim": [2048],
     "similarity_temperature": [0.1],
     "vocab_size": [3072],
-    "wandb": [true]
+    "wandb": [true],
+    "wandb_tag": ["ablating_vocab"]
 }

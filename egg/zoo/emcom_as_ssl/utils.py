@@ -5,8 +5,6 @@
 
 import argparse
 
-import egg.core as core
-
 
 def get_data_opts(parser):
     group = parser.add_argument_group("data")
@@ -64,12 +62,6 @@ def get_game_arch_opts(parser):
         default=2048,
         help="Projection head's output dimension for image features",
     )
-    group.add_argument(
-        "--informed_sender",
-        default=False,
-        action="store_true",
-        help="If set, Sender will be the one from Lazaridou et al 2017",
-    )
 
 
 def get_loss_opts(parser):
@@ -82,8 +74,9 @@ def get_loss_opts(parser):
     )
 
 
-def get_common_opts(params):
-    parser = argparse.ArgumentParser()
+def get_common_opts(parser=None):
+    if parser is None:
+        parser = argparse.ArgumentParser()
     parser.add_argument(
         "--weight_decay",
         type=float,
@@ -113,8 +106,7 @@ def get_common_opts(params):
     get_loss_opts(parser)
     get_game_arch_opts(parser)
 
-    opts = core.init(arg_parser=parser, params=params)
-    return opts
+    return parser
 
 
 def add_weight_decay(model, weight_decay=1e-5, skip_name=""):

@@ -9,35 +9,12 @@ from egg.core.continous_communication import SenderReceiverContinuousCommunicati
 from egg.core.gs_wrappers import GumbelSoftmaxWrapper, SymbolReceiverWrapper
 from egg.core.interaction import LoggingStrategy
 from egg.core.losses import DiscriminationLoss
-from egg.zoo.emcom_as_ssl.archs import (
-    EmSSLSender,
+from egg.zoo.emcom_as_ssl.informed_sender.archs import (
     InformedSender,
-    Receiver,
     ReceiverWithInformedSender,
-    VisionGameWrapper,
     VisionGameWrapperWithInformed,
-    VisionModule,
-    get_vision_modules,
 )
-
-
-def build_vision_encoder(
-    model_name: str = "resnet50",
-    shared_vision: bool = False,
-    pretrain_vision: bool = False,
-):
-    (
-        sender_vision_module,
-        receiver_vision_module,
-        visual_features_dim,
-    ) = get_vision_modules(
-        encoder_arch=model_name, shared=shared_vision, pretrain_vision=pretrain_vision
-    )
-    vision_encoder = VisionModule(
-        sender_vision_module=sender_vision_module,
-        receiver_vision_module=receiver_vision_module,
-    )
-    return vision_encoder, visual_features_dim
+from egg.zoo.emcom_as_ssl.utils_game import build_vision_encoder
 
 
 def xent_loss_with_informed(
@@ -47,11 +24,20 @@ def xent_loss_with_informed(
     return DiscriminationLoss.discrimination_loss(receiver_output, labels)
 
 
-def xent_loss(
+def xent_loss_force_compare_two(
     _sender_input, _message, _receiver_input, receiver_output, _labels, aux_input=None
 ):
-    labels = torch.arange(receiver_output.shape[0], device=receiver_output.device)
-    return DiscriminationLoss.discrimination_loss(receiver_output, labels)
+    guess = torch.argmax(receiver_output, dim=-1)
+    labels = aux_input["target_position"].view(-1, 1).repeat((1, 128))
+    acc = (
+        (
+            torch.sum((guess == labels), 1)
+            == torch.Tensor([guess.shape[-1]] * 2).to(guess.device)
+        )
+        .float()
+        .mean()
+    )
+    return 0.0, {"acc": acc}
 
 
 def build_game(opts):
@@ -64,29 +50,22 @@ def build_game(opts):
     train_logging_strategy = LoggingStrategy(False, False, True, True, True, False)
     test_logging_strategy = LoggingStrategy(False, False, True, False, False, False)
 
-    if opts.informed_sender:
-        sender = InformedSender(
-            input_dim=visual_features_dim,
-            vocab_size=opts.vocab_size,
-            game_size=opts.batch_size // 2,
-        )
-        receiver = ReceiverWithInformedSender(
-            input_dim=visual_features_dim,
-            output_dim=opts.output_dim,
-            temperature=opts.similarity_temperature,
-        )
-        loss = xent_loss_with_informed
+    sender = InformedSender(
+        input_dim=visual_features_dim,
+        vocab_size=opts.vocab_size,
+        game_size=opts.batch_size // 2,
+        force_compare_two=opts.force_compare_two,
+    )
+    receiver = ReceiverWithInformedSender(
+        input_dim=visual_features_dim,
+        output_dim=opts.output_dim,
+        temperature=opts.similarity_temperature,
+        force_compare_two=opts.force_compare_two,
+    )
+    if opts.force_compare_two:
+        loss = xent_loss_force_compare_two
     else:
-        sender = EmSSLSender(
-            input_dim=visual_features_dim,
-            vocab_size=opts.vocab_size,
-        )
-        receiver = Receiver(
-            input_dim=visual_features_dim,
-            output_dim=opts.output_dim,
-            temperature=opts.similarity_temperature,
-        )
-        loss = xent_loss
+        loss = xent_loss_with_informed
 
     sender = GumbelSoftmaxWrapper(agent=sender, temperature=opts.gs_temperature)
     receiver = SymbolReceiverWrapper(
@@ -100,10 +79,7 @@ def build_game(opts):
         test_logging_strategy=test_logging_strategy,
     )
 
-    if opts.informed_sender:
-        game = VisionGameWrapperWithInformed(game, vision_encoder)
-    else:
-        game = VisionGameWrapper(game, vision_encoder)
+    game = VisionGameWrapperWithInformed(game, vision_encoder)
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
 

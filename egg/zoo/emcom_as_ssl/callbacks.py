@@ -3,11 +3,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import argparse
 import json
+from typing import List
 
 import torch
-import wandb
 
+import wandb
 from egg.core import Callback, ConsoleLogger, Interaction
 
 
@@ -103,6 +105,16 @@ class WandbLogger(Callback):
                     "epoch": epoch,
                 },
             )
+
+
+def add_wandb_logger(
+    callbacks: List[Callback], opts: argparse.Namespace, game: torch.nn.Module
+):
+    wandb.init(project="post_rebuttal", tags=[opts.wandb_tag])
+    wandb.config.update(opts)
+    wandb.watch(game, log="all")
+
+    callbacks.append(WandbLogger())
 
 
 def get_callbacks(checkpoint_freq: int = 1):

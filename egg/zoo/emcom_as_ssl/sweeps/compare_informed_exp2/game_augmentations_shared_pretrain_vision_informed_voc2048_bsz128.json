@@ -1,6 +1,6 @@
 {
     "n_epoch": [100],
-    "batch_size": [128],
+    "batch_size": [4],
     "lr": [2.4],
     "use_larc":[true],
     "random_seed": [111],
@@ -9,6 +9,9 @@
     "output_dim": [2048],
     "similarity_temperature": [0.1],
     "vocab_size": [2048],
+    "pretrain_vision": [true],
+    "shared_vision": [true],
+    "informed_sender": [true],
     "wandb": [true],
-    "wandb_tag": ["ablating_vocab"]
+    "wandb_tag": ["informed_exp2"]
 }
