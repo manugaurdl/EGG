@@ -6,16 +6,19 @@
 import torch
 
 import egg.core as core
-from egg.zoo.emcom_as_ssl.data import get_dataloader
-from egg.zoo.emcom_as_ssl.game_callbacks import add_wandb_logger, get_callbacks
-from egg.zoo.emcom_as_ssl.games import build_game
+from egg.zoo.emcom_as_ssl.informed_sender.data import get_dataloader
+from egg.zoo.emcom_as_ssl.callbacks import add_wandb_logger, get_callbacks
+from egg.zoo.emcom_as_ssl.informed_sender.games import build_game
+from egg.zoo.emcom_as_ssl.informed_sender.utils import get_game_opts
 from egg.zoo.emcom_as_ssl.LARC import LARC
 from egg.zoo.emcom_as_ssl.utils import add_weight_decay, get_common_opts
 
 
 def main(params):
     parser = get_common_opts()
+    parser = get_game_opts(parser)
     opts = core.init(arg_parser=parser, params=params)
+    assert opts.batch_size % opts.game_size == 0
     print(f"{opts}\n")
 
     if not opts.distributed_context.is_distributed and opts.pdb:
@@ -23,9 +26,9 @@ def main(params):
 
     train_loader = get_dataloader(
         dataset_dir=opts.dataset_dir,
-        informed_sender=opts.informed_sender,
         image_size=opts.image_size,
         batch_size=opts.batch_size,
+        game_size=opts.game_size,
         num_workers=opts.num_workers,
         use_augmentations=opts.use_augmentations,
         is_distributed=opts.distributed_context.is_distributed,
@@ -52,6 +55,7 @@ def main(params):
     if opts.wandb:
         add_wandb_logger(callbacks, opts, game)
 
+    callbacks.append(core.EarlyStopperAccuracy(0.9999, validation=False))
     trainer = core.Trainer(
         game=game,
         optimizer=optimizer,

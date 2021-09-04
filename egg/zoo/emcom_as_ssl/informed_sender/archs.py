@@ -7,38 +7,6 @@ import torch
 import torch.nn as nn
 
 
-class VisionGameWrapperWithInformed(nn.Module):
-    def __init__(
-        self,
-        game: nn.Module,
-        vision_module: nn.Module,
-    ):
-        super(VisionGameWrapperWithInformed, self).__init__()
-        self.game = game
-        self.vision_module = vision_module
-
-    def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
-        sender_encoded_input, receiver_encoded_input = self.vision_module(
-            sender_input, receiver_input
-        )
-        bsz = sender_encoded_input.shape[0]
-        sender_encoded_input = sender_encoded_input.view(2, 1, bsz // 2, -1)
-        receiver_encoded_input = receiver_encoded_input.view(2, 1, bsz // 2, -1)
-        random_order = aux_input["random_order"]
-        receiver_encoded_input1 = receiver_encoded_input[0, 0, random_order[0]]
-        receiver_encoded_input2 = receiver_encoded_input[1, 0, random_order[1]]
-        receiver_encoded_input = torch.stack(
-            [receiver_encoded_input1, receiver_encoded_input2]
-        )
-
-        return self.game(
-            sender_input=sender_encoded_input,
-            labels=labels,
-            receiver_input=receiver_encoded_input,
-            aux_input=aux_input,
-        )
-
-
 class InformedSender(nn.Module):
     def __init__(
         self,
@@ -46,16 +14,11 @@ class InformedSender(nn.Module):
         hidden_dim: int = 20,
         embedding_dim: int = 50,
         vocab_size: int = 2048,
-        game_size: int = 2,  # distractors + 1 target)
-        force_compare_two: bool = False,
+        game_size: int = 2,  # distractors + 1 target
     ):
         super(InformedSender, self).__init__()
 
-        self.force_compare_two = force_compare_two
-
-        # testing a model trained with 1 distractors on 127 distractors by computing 64
-        if self.force_compare_two:
-            game_size = 2
+        self.game_size = game_size
 
         self.fc_in = nn.Linear(input_dim, embedding_dim, bias=False)
         self.conv1 = nn.Conv2d(
@@ -89,64 +52,42 @@ class InformedSender(nn.Module):
         return h
 
     def forward(self, x, _aux_input=None):
-        bsz = x.shape[0]
+        bsz = x.shape[0] // self.game_size
         emb = self.fc_in(x)
-        if (not self.training) and self.force_compare_two:
-            msgs = []
-            for batch_idx in range(bsz):
-                for distractor_idx in range(emb.shape[2] - 1):
-                    candidate_pair = (
-                        torch.stack(
-                            [
-                                emb[batch_idx, 0, 0],
-                                emb[batch_idx, 0, distractor_idx + 1],
-                            ]
-                        )
-                        .unsqueeze(0)
-                        .unsqueeze(0)
-                    )
-                    msgs.append(self.compute_message(candidate_pair))
-            result = torch.cat(msgs).view(bsz, emb.shape[2] - 1, -1)
-            return result
+        emb = emb.view(bsz, 1, self.game_size, -1)
         return self.compute_message(emb)
 
 
-class ReceiverWithInformedSender(nn.Module):
+class Receiver(nn.Module):
     def __init__(
         self,
         input_dim: int,
         output_dim: int = 2048,
         temperature: float = 1.0,
-        force_compare_two: bool = False,
+        game_size: int = 2,
     ):
-        super(ReceiverWithInformedSender, self).__init__()
+        super(Receiver, self).__init__()
         self.fc = nn.Linear(input_dim, output_dim)
         self.temperature = temperature
-        self.force_compare_two = force_compare_two
+        self.game_size = game_size
 
     def forward(self, message, resnet_output, aux_input=None):
+        bsz = resnet_output.shape[0] // self.game_size
+        random_order = aux_input["random_order"]
+
         distractors = self.fc(resnet_output)
-        if (not self.training) and self.force_compare_two:
-            bsz = message.shape[0]
-            message = torch.cat(
-                [
-                    message,
-                    torch.zeros(bsz, 1, message.shape[-1], device=message.device),
-                ],
-                dim=1,
+        distractors = distractors.view(bsz, 1, self.game_size, -1)
+        distractors = torch.stack(
+            [
+                distractors[batch_idx, 0, random_order[batch_idx]]
+                for batch_idx in range(bsz)
+            ]
+        )
+
+        similarity_scores = (
+            torch.nn.functional.cosine_similarity(
+                message.unsqueeze(1), distractors, dim=2
             )
-            similarity_scores = (
-                torch.nn.functional.cosine_similarity(
-                    message.unsqueeze(2), distractors.unsqueeze(1), dim=3
-                )
-                / self.temperature
-            )
-            return similarity_scores
-        else:
-            similarity_scores = (
-                torch.nn.functional.cosine_similarity(
-                    message.unsqueeze(1), distractors, dim=2
-                )
-                / self.temperature
-            )
-            return similarity_scores
+            / self.temperature
+        )
+        return similarity_scores

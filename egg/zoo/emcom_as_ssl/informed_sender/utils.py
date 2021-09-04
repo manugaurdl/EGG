@@ -6,24 +6,19 @@
 import argparse
 
 
-def get_informed_sender_opts(parser):
+def get_opts(parser):
     group = parser.add_argument_group("game architecture")
     group.add_argument(
-        "--informed_sender",
-        default=False,
-        action="store_true",
-        help="If set, Sender will be the one from Lazaridou et al 2017",
-    )
-    group.add_argument(
-        "--force_compare_two",
-        default=False,
-        action="store_true",
+        "--game_size",
+        type=int,
+        default=2,
+        help="Image candidates lineup for the communication game",
     )
 
 
 def get_game_opts(parser=None):
     if parser is None:
         parser = argparse.ArgumentParser()
-    get_informed_sender_opts(parser)
+    get_opts(parser)
 
     return parser

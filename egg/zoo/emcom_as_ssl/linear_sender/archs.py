@@ -7,29 +7,6 @@ import torch
 import torch.nn as nn
 
 
-class VisionGameWrapper(nn.Module):
-    def __init__(
-        self,
-        game: nn.Module,
-        vision_module: nn.Module,
-    ):
-        super(VisionGameWrapper, self).__init__()
-        self.game = game
-        self.vision_module = vision_module
-
-    def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
-        sender_encoded_input, receiver_encoded_input = self.vision_module(
-            sender_input, receiver_input
-        )
-
-        return self.game(
-            sender_input=sender_encoded_input,
-            labels=labels,
-            receiver_input=receiver_encoded_input,
-            aux_input=aux_input,
-        )
-
-
 class LinearSender(nn.Module):
     def __init__(
         self,

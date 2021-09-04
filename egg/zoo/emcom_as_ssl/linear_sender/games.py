@@ -12,8 +12,8 @@ from egg.core.losses import DiscriminationLoss
 from egg.zoo.emcom_as_ssl.linear_sender.archs import (
     LinearSender,
     Receiver,
-    VisionGameWrapper,
 )
+from egg.zoo.emcom_as_ssl.utils_archs import VisionGameWrapper
 from egg.zoo.emcom_as_ssl.utils_game import build_vision_encoder
 
 

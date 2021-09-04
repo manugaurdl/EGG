@@ -11,19 +11,13 @@ from egg.core.interaction import LoggingStrategy
 from egg.core.losses import DiscriminationLoss
 from egg.zoo.emcom_as_ssl.informed_sender.archs import (
     InformedSender,
-    ReceiverWithInformedSender,
-    VisionGameWrapperWithInformed,
+    Receiver,
 )
+from egg.zoo.emcom_as_ssl.utils_archs import VisionGameWrapper
 from egg.zoo.emcom_as_ssl.utils_game import build_vision_encoder
 
 
-def xent_loss_with_informed(
-    _sender_input, _message, _receiver_input, receiver_output, _labels, aux_input=None
-):
-    labels = aux_input["target_position"]
-    return DiscriminationLoss.discrimination_loss(receiver_output, labels)
-
-
+"""
 def xent_loss_force_compare_two(
     _sender_input, _message, _receiver_input, receiver_output, _labels, aux_input=None
 ):
@@ -38,6 +32,14 @@ def xent_loss_force_compare_two(
         .mean()
     )
     return 0.0, {"acc": acc}
+"""
+
+
+def xent_loss(
+    _sender_input, _message, _receiver_input, receiver_output, _labels, aux_input=None
+):
+    labels = aux_input["target_position"]
+    return DiscriminationLoss.discrimination_loss(receiver_output, labels)
 
 
 def build_game(opts):
@@ -53,19 +55,14 @@ def build_game(opts):
     sender = InformedSender(
         input_dim=visual_features_dim,
         vocab_size=opts.vocab_size,
-        game_size=opts.batch_size // 2,
-        force_compare_two=opts.force_compare_two,
+        game_size=opts.game_size,
     )
-    receiver = ReceiverWithInformedSender(
+    receiver = Receiver(
         input_dim=visual_features_dim,
         output_dim=opts.output_dim,
         temperature=opts.similarity_temperature,
-        force_compare_two=opts.force_compare_two,
+        game_size=opts.game_size,
     )
-    if opts.force_compare_two:
-        loss = xent_loss_force_compare_two
-    else:
-        loss = xent_loss_with_informed
 
     sender = GumbelSoftmaxWrapper(agent=sender, temperature=opts.gs_temperature)
     receiver = SymbolReceiverWrapper(
@@ -74,12 +71,12 @@ def build_game(opts):
     game = SenderReceiverContinuousCommunication(
         sender,
         receiver,
-        loss,
+        xent_loss,
         train_logging_strategy=train_logging_strategy,
         test_logging_strategy=test_logging_strategy,
     )
 
-    game = VisionGameWrapperWithInformed(game, vision_encoder)
+    game = VisionGameWrapper(game, vision_encoder)
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
 
