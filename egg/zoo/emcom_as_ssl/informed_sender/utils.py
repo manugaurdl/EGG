@@ -6,19 +6,18 @@
 import argparse
 
 
-def get_opts(parser):
+def add_opts(parser):
     group = parser.add_argument_group("game architecture")
     group.add_argument(
         "--game_size",
         type=int,
         default=2,
-        help="Image candidates lineup for the communication game",
+        help="image candidates lineup for the communication game",
     )
 
 
-def get_game_opts(parser=None):
+def add_game_opts(parser=None):
     if parser is None:
         parser = argparse.ArgumentParser()
-    get_opts(parser)
-
+    add_opts(parser)
     return parser

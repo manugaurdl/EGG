@@ -9,14 +9,14 @@ import egg.core as core
 from egg.zoo.emcom_as_ssl.informed_sender.data import get_dataloader
 from egg.zoo.emcom_as_ssl.callbacks import add_wandb_logger, get_callbacks
 from egg.zoo.emcom_as_ssl.informed_sender.games import build_game
-from egg.zoo.emcom_as_ssl.informed_sender.utils import get_game_opts
+from egg.zoo.emcom_as_ssl.informed_sender.utils import add_game_opts
 from egg.zoo.emcom_as_ssl.LARC import LARC
 from egg.zoo.emcom_as_ssl.utils import add_weight_decay, get_common_opts
 
 
 def main(params):
     parser = get_common_opts()
-    parser = get_game_opts(parser)
+    parser = add_game_opts(parser)
     opts = core.init(arg_parser=parser, params=params)
     assert opts.batch_size % opts.game_size == 0
     print(f"{opts}\n")

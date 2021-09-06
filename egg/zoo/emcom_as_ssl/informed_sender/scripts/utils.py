@@ -9,14 +9,31 @@ import random
 import numpy as np
 import torch
 
-from egg.zoo.emcom_as_ssl.games import build_game
+from egg.zoo.emcom_as_ssl.informed_sender.games import build_game
+
+
+def add_eval_opts(parser):
+    group = parser.add_argument_group("game architecture")
+    group.add_argument(
+        "--game_size",
+        type=int,
+        default=2,
+        help="image candidates lineup for the communication game",
+    )
+    group.add_argument(
+        "--repeat",
+        type=int,
+        default=2,
+        help="How many times the dataset will be repeated. Useful for balancing the batching+distractors",
+    )
+    group.add_argument("--force_compare_two", default=False, action="store_true")
 
 
 def get_params(
     shared_vision: bool,
     pretrain_vision: bool,
     vocab_size: int,
-    informed_sender: bool = False,
+    game_size: int,
     batch_size: int = 128,
     **other_params,
 ):
@@ -26,7 +43,7 @@ def get_params(
         shared_vision=shared_vision,
         pretrain_vision=pretrain_vision,
         vocab_size=vocab_size,
-        informed_sender=informed_sender,
+        game_size=game_size,
         batch_size=batch_size,
     )
 
