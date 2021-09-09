@@ -8,11 +8,14 @@ import argparse
 import torch
 from torchvision import transforms
 
-from egg.zoo.emcom_as_ssl.scripts.utils import (
-    add_common_cli_args,
-    evaluate,
+from egg.zoo.emcom_as_ssl.informed_sender.scripts.utils import (
+    add_eval_opts,
     get_game,
     get_params,
+)
+from egg.zoo.emcom_as_ssl.utils_eval import (
+    add_common_cli_args,
+    evaluate,
 )
 
 
@@ -70,22 +73,19 @@ class GaussianNoiseDataset(torch.utils.data.Dataset):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    add_common_cli_args(parser)
-    parser.add_argument(
-        "--repeat",
-        type=int,
-        default=2,
-        help="How many times the dataset will be repeated. Useful for balancing the batching+distractors",
-    )
+    parser = add_common_cli_args()
+    add_eval_opts(parser)
     cli_args = parser.parse_args()
-    opts = get_params(
+    args = get_params(
         shared_vision=cli_args.shared_vision,
         pretrain_vision=cli_args.pretrain_vision,
         vocab_size=cli_args.vocab_size,
-        informed_sender=True,
         batch_size=cli_args.batch_size,
+        game_size=cli_args.game_size,
     )
+
+    cli_args, args = vars(cli_args), vars(args)
+    opts = argparse.Namespace(**{**cli_args, **args})
 
     if cli_args.pdb:
         breakpoint()

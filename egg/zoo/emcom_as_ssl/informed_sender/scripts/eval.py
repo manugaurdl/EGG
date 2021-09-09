@@ -96,7 +96,7 @@ def get_dataloader(
     image_size: int = 224,
     batch_size: int = 32,
     game_size: int = 2,
-    num_workers: int = 6,
+    num_workers: int = 0,
     use_augmentations: bool = True,
     seed: int = 111,
 ):
@@ -165,7 +165,9 @@ def main():
 
     if opts.dump_interaction_folder:
         save_interaction(
-            interaction=full_interaction, log_dir=opts.dump_interaction_folder
+            interaction=full_interaction,
+            log_dir=opts.dump_interaction_folder,
+            test_set=opts.test_set,
         )
         print(f"| Interaction saved at {opts.dump_interaction_folder}")
 

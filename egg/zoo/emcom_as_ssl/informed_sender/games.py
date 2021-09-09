@@ -17,22 +17,11 @@ from egg.zoo.emcom_as_ssl.utils_archs import VisionGameWrapper
 from egg.zoo.emcom_as_ssl.utils_game import build_vision_encoder
 
 
-"""
 def xent_loss_force_compare_two(
     _sender_input, _message, _receiver_input, receiver_output, _labels, aux_input=None
 ):
-    guess = torch.argmax(receiver_output, dim=-1)
-    labels = aux_input["target_position"].view(-1, 1).repeat((1, 128))
-    acc = (
-        (
-            torch.sum((guess == labels), 1)
-            == torch.Tensor([guess.shape[-1]] * 2).to(guess.device)
-        )
-        .float()
-        .mean()
-    )
-    return 0.0, {"acc": acc}
-"""
+    mean_acc = receiver_output
+    return torch.Tensor([0.0]), {"acc": mean_acc}
 
 
 def xent_loss(
@@ -56,22 +45,28 @@ def build_game(opts):
         input_dim=visual_features_dim,
         vocab_size=opts.vocab_size,
         game_size=opts.game_size,
+        force_compare_two=opts.force_compare_two,
     )
     receiver = Receiver(
         input_dim=visual_features_dim,
         output_dim=opts.output_dim,
         temperature=opts.similarity_temperature,
         game_size=opts.game_size,
+        force_compare_two=opts.force_compare_two,
     )
 
     sender = GumbelSoftmaxWrapper(agent=sender, temperature=opts.gs_temperature)
     receiver = SymbolReceiverWrapper(
         agent=receiver, vocab_size=opts.vocab_size, agent_input_size=opts.output_dim
     )
+    if opts.force_compare_two:
+        loss = xent_loss_force_compare_two
+    else:
+        loss = xent_loss
     game = SenderReceiverContinuousCommunication(
         sender,
         receiver,
-        xent_loss,
+        loss,
         train_logging_strategy=train_logging_strategy,
         test_logging_strategy=test_logging_strategy,
     )

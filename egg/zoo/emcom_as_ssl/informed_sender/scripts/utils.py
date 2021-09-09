@@ -20,12 +20,6 @@ def add_eval_opts(parser):
         default=2,
         help="image candidates lineup for the communication game",
     )
-    group.add_argument(
-        "--repeat",
-        type=int,
-        default=2,
-        help="How many times the dataset will be repeated. Useful for balancing the batching+distractors",
-    )
     group.add_argument("--force_compare_two", default=False, action="store_true")
 
 

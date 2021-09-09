@@ -59,7 +59,9 @@ def main():
 
     if opts.dump_interaction_folder:
         save_interaction(
-            interaction=full_interaction, log_dir=opts.dump_interaction_folder
+            interaction=full_interaction,
+            log_dir=opts.dump_interaction_folder,
+            test_set=opts.test_set,
         )
         print(f"| Interaction saved at {opts.dump_interaction_folder}")
 
