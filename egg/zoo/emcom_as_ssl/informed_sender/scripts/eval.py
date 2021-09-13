@@ -91,18 +91,29 @@ class EvalIterator:
             return next(self.curr_batch)
 
 
+class MyImageFolder(datasets.ImageFolder):
+    def update_images(self):
+        random.shuffle(self.samples)
+        self.samples = self.samples[:10000]
+        self.imgs = self.imgs[:10000]
+
+
 def get_dataloader(
     dataset_dir: str,
     image_size: int = 224,
     batch_size: int = 32,
     game_size: int = 2,
-    num_workers: int = 0,
+    num_workers: int = 6,
     use_augmentations: bool = True,
     seed: int = 111,
 ):
     transformations = ImageTransformation(image_size, use_augmentations)
 
-    train_dataset = datasets.ImageFolder(dataset_dir, transform=transformations)
+    if dataset_dir == I_TEST_PATH:
+        train_dataset = MyImageFolder(dataset_dir, transform=transformations)
+        train_dataset.update_images()
+    else:
+        train_dataset = datasets.ImageFolder(dataset_dir, transform=transformations)
 
     my_sampler = MyRandomSampler(data_source=train_dataset, game_size=game_size)
     collate_fn = CollaterWithRandomRecv(batch_size=batch_size, game_size=game_size)

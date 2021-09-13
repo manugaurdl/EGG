@@ -19,27 +19,36 @@ from egg.zoo.emcom_as_ssl.utils_eval import (
 )
 
 
-def collate_with_random_recv_input(batch):
-    sender_input, receiver_input, class_labels = [], [], []
-    for elem in batch:
-        sender_input.append(elem[0])
-        receiver_input.append(elem[2])
-        class_labels.append(torch.LongTensor([elem[1]]))
+class CollaterWithRandomRecv:
+    def __init__(self, batch_size: int, game_size: int):
+        self.batch_size = batch_size
+        self.game_size = game_size
 
-    bsz = len(batch)
-    sender_input = torch.stack(sender_input)
-    receiver_input = torch.stack(receiver_input)
-    class_labels = torch.stack(class_labels).view(2, 1, bsz // 2, -1)
+    def __call__(self, batch):
+        adjusted_bsz = self.batch_size // self.game_size
+        sender_input, receiver_input, class_labels = [], [], []
+        for elem in batch:
+            sender_input.append(elem[0])
+            receiver_input.append(elem[2])
+            class_labels.append(torch.LongTensor([elem[1]]))
 
-    random_order = torch.stack([torch.randperm(bsz // 2) for _ in range(2)])
-    target_position = torch.argmin(random_order, dim=1)
+        sender_input = torch.stack(sender_input)
+        receiver_input = torch.stack(receiver_input)
+        class_labels = torch.stack(class_labels).view(
+            adjusted_bsz, 1, self.game_size, -1
+        )
 
-    return (
-        sender_input,
-        class_labels,
-        receiver_input,
-        {"target_position": target_position, "random_order": random_order},
-    )
+        random_order = torch.stack(
+            [torch.randperm(self.game_size) for _ in range(adjusted_bsz)]
+        )
+        target_position = torch.argmin(random_order, dim=1)
+
+        return (
+            sender_input,
+            class_labels,
+            receiver_input,
+            {"target_position": target_position, "random_order": random_order},
+        )
 
 
 class GaussianNoiseDataset(torch.utils.data.Dataset):
@@ -62,14 +71,7 @@ class GaussianNoiseDataset(torch.utils.data.Dataset):
         )
         gaussian_sample = torch.randn(3, self.image_size, self.image_size)
         sender_input = normalize_fn(gaussian_sample)
-
-        if self.augmentations:
-            gaussian_sample2 = torch.randn_like(gaussian_sample)
-            receiver_input = normalize_fn(gaussian_sample2)
-        else:
-            receiver_input = sender_input.detach()
-
-        return sender_input, 1, receiver_input
+        return sender_input, 1, sender_input
 
 
 def main():
@@ -87,22 +89,25 @@ def main():
     cli_args, args = vars(cli_args), vars(args)
     opts = argparse.Namespace(**{**cli_args, **args})
 
-    if cli_args.pdb:
+    if opts.pdb:
         breakpoint()
 
-    print(f"| Loading model from {cli_args.checkpoint_path} ...")
-    game = get_game(opts, cli_args.checkpoint_path)
+    print(f"| Loading model from {opts.checkpoint_path} ...")
+    game = get_game(opts, opts.checkpoint_path)
     print("| Model loaded")
-    data_size = 49920 * cli_args.repeat
+    data_size = 49920
 
     dataset = GaussianNoiseDataset(
-        size=data_size, augmentations=cli_args.evaluate_with_augmentations
+        size=data_size, augmentations=opts.evaluate_with_augmentations
+    )
+    collate_fn = CollaterWithRandomRecv(
+        batch_size=opts.batch_size, game_size=opts.game_size
     )
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=cli_args.batch_size,
+        batch_size=opts.batch_size,
         num_workers=6,
-        collate_fn=collate_with_random_recv_input,
+        collate_fn=collate_fn,
         pin_memory=True,
         drop_last=True,
     )
