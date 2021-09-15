@@ -107,7 +107,7 @@ class Receiver(nn.Module):
 
             accs = []
             for batch_idx in range(eval_bsz):
-                for distractor_idx in range(1, 128):
+                for distractor_idx in range(127):
                     candidate_msg = message[batch_idx, distractor_idx].unsqueeze(0)
                     candidate_imgs = torch.stack(
                         [

@@ -82,7 +82,7 @@ class EvalIterator:
 
     def __next__(self):
         if self.curr_target_idx >= self.n:
-            self._reset()
+            # self._reset()
             raise StopIteration()
         try:
             return next(self.curr_batch)
