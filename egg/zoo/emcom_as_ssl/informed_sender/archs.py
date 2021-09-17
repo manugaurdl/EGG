@@ -112,7 +112,7 @@ class Receiver(nn.Module):
                     candidate_imgs = torch.stack(
                         [
                             distractors[batch_idx, 0],
-                            distractors[batch_idx, distractor_idx],
+                            distractors[batch_idx, distractor_idx + 1],
                         ]
                     )
                     sim = F.cosine_similarity(candidate_msg, candidate_imgs, dim=1)
