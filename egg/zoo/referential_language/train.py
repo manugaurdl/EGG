@@ -9,7 +9,7 @@ import torch
 
 import egg.core as core
 from egg.zoo.referential_language.data import get_dataloader
-from egg.zoo.referential_language.game_callbacks import get_callbacks
+from egg.zoo.referential_language.callbacks import get_callbacks
 from egg.zoo.referential_language.archs import build_game
 
 

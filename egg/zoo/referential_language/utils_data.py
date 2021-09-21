@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from collections import defaultdict
-from operator import itemgetter, methodcaller
+from operator import itemgetter
 from pathlib import Path
 from typing import (
     DefaultDict,
@@ -29,20 +29,6 @@ def default_dict(pairs: Iterable[Tuple[K, V]]) -> DefaultDict[K, V]:
     return mapping
 
 
-def read_csv(file_path: Path, discard_header: bool = True) -> List[List[str]]:
-    with open(file_path) as text_file:
-        text = text_file.read()
-
-    lines = text.split("\n")
-    _ = lines.pop() if lines[-1] == "" else None  # pop final empty line if present
-    print(file_path, len(lines))
-    # [x.split(',') for x in lines]
-    table = map(methodcaller("split", ","), lines)
-    if discard_header:
-        next(table)
-    return list(table)
-
-
 def csv_to_dict(
     file_path: Path,
     key_col: int = 0,
@@ -51,8 +37,8 @@ def csv_to_dict(
     one_to_n_mapping: bool = False,
 ) -> Union[Dict[str, str], DefaultDict[str, str]]:
     table = read_csv(file_path, discard_header)
-    # ((line[key_col], line[value_col]) for line in table)
-    pairs = map(itemgetter(key_col, value_col), table)
+    # map(itemgetter(key_col, value_col), table)
+    pairs = ((line[key_col], line[value_col]) for line in table)
     if one_to_n_mapping:
         return default_dict(pairs)
     return dict(pairs)
@@ -75,3 +61,16 @@ def multicolumn_csv_to_dict(
     if one_to_n_mapping:
         return default_dict(pairs)
     return dict(pairs)
+
+
+def read_csv(file_path: Path, discard_header: bool = True) -> List[List[str]]:
+    with open(file_path) as text_file:
+        text = text_file.read()
+
+    lines = text.split("\n")
+    _ = lines.pop() if lines[-1] == "" else None  # pop final empty line if present
+    print(f"Loaded file {file_path}, with {len(lines)} lines")
+    table = (x.split(",") for x in lines)
+    if discard_header:
+        next(table)
+    return list(table)
