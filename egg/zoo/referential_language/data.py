@@ -36,7 +36,18 @@ BBOX_INDICES = {
 
 
 class Collater:
-    def __call__(self, batch: List[Any]) -> List[torch.Tensor]:
+    def __init__(self, random_distractors: bool):
+        if self.random_distractors:
+            self.collate_fn = self._collate_with_random_distractors
+        else:
+            self.collate_fn = self._collate_with_contextual_distractors
+
+    def _collate_with_random_distractors(self, batch: List[Any]) -> List[torch.Tensor]:
+        pass
+
+    def _collate_with_contextual_distractors(
+        self, batch: List[Any]
+    ) -> List[torch.Tensor]:
         # batch.sort(key=lambda x: x[-1], reverse=True)
 
         max_batch_size = len(batch)
@@ -72,11 +83,15 @@ class Collater:
             torch.cat(elem_idx_in_batch),
         )
 
+    def __call__(self, batch: List[Any]) -> List[torch.Tensor]:
+        self.collate_fn(batch)
+
 
 def get_dataloader(
     dataset_dir: str = "/datasets01/open_images/030119",
-    batch_size: int = 32,
+    batch_size: int = 128,
     num_workers: int = 4,
+    random_distarctors: bool = False,
     is_distributed: bool = False,
     use_augmentations: bool = True,
     seed: int = 111,
@@ -268,23 +283,15 @@ class ImageTransformation:
 
 if __name__ == "__main__":
     """
-        a = OpenImages(
-            Path("/datasets01/open_images/030119"),
-            split="validation",
-            transform=ImageTransformation(size=224, augmentation=False),
-    =======
-        transform = ImageTransformation(size=224, augmentation=False)
-        a = OpenImageDataset(
-            Path("/datasets01/open_images/030119"),
-            split="validation",
-            transform=transform,
-            target_transform=BoxResize(224),
-    >>>>>>> a45daab978e2a73e4de92e017af702b8679f45ec
-        )
-        for idx, i in enumerate(a):
-            if idx == 20:
-                break
-            continue
+    a = OpenImages(
+        Path("/datasets01/open_images/030119"),
+        split="validation",
+        transform=ImageTransformation(size=224, augmentation=False),
+    )
+    for idx, i in enumerate(a):
+        if idx == 20:
+            break
+        continue
     """
     data = get_dataloader(num_workers=0)
     for idx, i in enumerate(data):
