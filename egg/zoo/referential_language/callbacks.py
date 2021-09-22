@@ -40,11 +40,11 @@ class VisionModelSaver(Callback):
             self.trainer.checkpoint_path.mkdir(exist_ok=True, parents=True)
 
             model_name = f"vision_module_{'shared' if self.shared else 'sender'}_{epoch if epoch else 'final'}.pt"
-            self.write_model(self.game.sender.vision_module, model_name)
+            self.write_model(self.game.sender.agent.vision_module, model_name)
 
             if not self.shared:
                 model_name = f"vision_module_recv_{epoch if epoch else 'final'}.pt"
-                self.write_model(self.game.receiver.vision_module, model_name)
+                self.write_model(self.game.receiver.agent.vision_module, model_name)
 
     def on_train_end(self):
         if self.trainer.distributed_context.is_leader:

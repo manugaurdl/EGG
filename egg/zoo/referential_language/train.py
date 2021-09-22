@@ -49,7 +49,7 @@ def main(params):
     if opts.wandb:
         callbacks.append(
             MyWandbLogger(
-                opts=opts, projects="contexualized_emcomm", tags=[opts.wandb_tag]
+                opts=opts, project="contexualized_emcomm", tags=[opts.wandb_tag]
             )
         )
 

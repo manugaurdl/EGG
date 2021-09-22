@@ -176,7 +176,7 @@ class OpenImages(VisionDataset):
         )
         # removing elements with only one target object
         # print(f"Before removing single object images: {len(self.box_labels)} images")
-        if contextual_distractors:
+        if True:  # contextual_distractors:
             self._remove_single_target_imgs()
         # print(f"After removing single object images: {len(self.box_labels)} images")
 
@@ -292,8 +292,8 @@ class ImageTransformation:
             ]
         else:
             transformations = [
-                transforms.ToTensor(),
                 transforms.Resize(size=(size, size)),
+                transforms.ToTensor(),
             ]
 
         self.transform = transforms.Compose(transformations)
