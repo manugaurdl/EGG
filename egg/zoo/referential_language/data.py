@@ -36,14 +36,15 @@ BBOX_INDICES = {
 
 
 class Collater:
-    def __init__(self, random_distractors: bool):
-        if self.random_distractors:
-            self.collate_fn = self._collate_with_random_distractors
-        else:
+    def __init__(self, contextual_distractors: bool):
+        if contextual_distractors:
             self.collate_fn = self._collate_with_contextual_distractors
+        else:
+            self.collate_fn = self._collate_with_random_distractors
 
     def _collate_with_random_distractors(self, batch: List[Any]) -> List[torch.Tensor]:
-        pass
+        # sender_input, labels, receiver_input = [], [], []
+        raise NotImplementedError
 
     def _collate_with_contextual_distractors(
         self, batch: List[Any]
@@ -56,19 +57,20 @@ class Collater:
         sender_input, labels, receiver_input, elem_idx_in_batch = [], [], [], []
 
         for idx, elem in enumerate(batch):
-            if curr_batch_size + int(elem[-1].item()) >= max_batch_size:
+            if curr_batch_size + int(elem[3].item()) >= max_batch_size:
                 missing_elems = max_batch_size - curr_batch_size
+
                 elem = (
-                    elem[0][missing_elems:],
-                    elem[1][missing_elems:],
-                    elem[2][missing_elems:],
+                    elem[0][:missing_elems],
+                    elem[1][:missing_elems],
+                    elem[2][:missing_elems],
                     torch.Tensor([missing_elems]).int(),
                 )
 
             sender_input.append(elem[0])
             labels.append(elem[1])
             receiver_input.append(elem[2])
-            elem_idx_in_batch = torch.Tensor([idx for _ in range(elem[3])])
+            elem_idx_in_batch.append(torch.Tensor([idx for _ in range(elem[3])]).int())
 
             curr_batch_size += elem[3].item()
 
@@ -84,18 +86,18 @@ class Collater:
         )
 
     def __call__(self, batch: List[Any]) -> List[torch.Tensor]:
-        self.collate_fn(batch)
+        return self.collate_fn(batch)
 
 
 def get_dataloader(
     dataset_dir: str = "/datasets01/open_images/030119",
     batch_size: int = 128,
     num_workers: int = 4,
-    random_distarctors: bool = False,
-    is_distributed: bool = False,
-    use_augmentations: bool = True,
-    seed: int = 111,
+    contextual_distractors: bool = False,
     image_size: int = 32,
+    use_augmentations: bool = True,
+    is_distributed: bool = False,
+    seed: int = 111,
 ):
 
     transformations = ImageTransformation(
@@ -118,7 +120,7 @@ def get_dataloader(
         batch_size=batch_size,
         shuffle=(train_sampler is None),
         sampler=train_sampler,
-        collate_fn=Collater(),
+        collate_fn=Collater(contextual_distractors=contextual_distractors),
         num_workers=num_workers,
         pin_memory=True,
         drop_last=True,
@@ -162,9 +164,9 @@ class OpenImages(VisionDataset):
             bbox_csv_filepath, value_cols=indices, one_to_n_mapping=True
         )
         # removing elements with only one target object
-        print(len(self.box_labels))
+        print(f"Before removing sinble object images: {len(self.box_labels)} images")
         self._remove_single_target_imgs()
-        print(len(self.box_labels))
+        print(f"After removing sinble object images: {len(self.box_labels)} images")
 
         images_with_labels = set(self.box_labels.keys())
         self.images = [
@@ -223,8 +225,8 @@ class OpenImages(VisionDataset):
 
         return (
             torch.stack(sender_input),
-            torch.stack(receiver_input),
             torch.stack(label),
+            torch.stack(receiver_input),
             torch.Tensor([len(bboxes)]).int(),
         )
 
@@ -279,85 +281,3 @@ class ImageTransformation:
         )
 
         return self.transform(img), self.transform(img)
-
-
-if __name__ == "__main__":
-    """
-    a = OpenImages(
-        Path("/datasets01/open_images/030119"),
-        split="validation",
-        transform=ImageTransformation(size=224, augmentation=False),
-    )
-    for idx, i in enumerate(a):
-        if idx == 20:
-            break
-        continue
-    """
-    data = get_dataloader(num_workers=0)
-    for idx, i in enumerate(data):
-        if idx == 20:
-            break
-        continue
-
-"""
-class BboxResizer:
-    def __init__(self, new_size: Sequence[int]):
-        self.new_sie = new_size
-
-    def __call__(self, original_size: Sequence[int], bbox: List[Sequence[int]]):
-        # it assumes original_size is in the W x H format
-        ratios = [
-            torch.tensor(s) / torch.tensor(s_orig)
-            for s, s_orig in zip(self.new_size, original_size)
-        ]
-
-        ratio_height, ratio_width = ratios
-        xmin, ymin, xmax, ymax = bbox
-
-        xmin = xmin * ratio_width
-        xmax = xmax * ratio_width
-        ymin = ymin * ratio_height
-        ymax = ymax * ratio_height
-        new_coords = torch.Tensor((xmin, ymin, xmax, ymax))
-        return new_coords
-"""
-
-"""
-self.queue.extend(batch[idx:])
-
-while curr_batch_size < max_batch_size:
-    try:
-        elem = self.queue.popleft()
-    except IndexError:
-        break
-
-    idx += 1
-    if curr_batch_size + int(elem[-1].item()) > max_batch_size:
-        missing_elems = max_batch_size - curr_batch_size
-        elem = (
-            elem[0][missing_elems:],
-            elem[1][missing_elems:],
-            elem[2][missing_elems:],
-            torch.Tensor([missing_elems]),
-        )
-
-    sender_input.append(elem[0])
-    labels.append(elem[1])
-    receiver_input.append(elem[2])
-    elem_idx_in_batch = torch.Tensor([idx for _ in range(elem[3])])
-
-    curr_batch_size += elem[3].item()
-
-if curr_batch_size < max_batch_size:
-    missing_elems = curr_batch_size - max_batch_size
-    img_size, channels = sender_input[0][2:], 3
-
-    sender_input.append(torch.zeros(missing_elems, channels, img_size))
-    receiver_input.append(torch.zeros(missing_elems, channels, img_size))
-
-    # -100 is missing_index for xent loss
-    labels.append(torch.Tensor([-100 for _ in range(missing_elems)]))
-    elem_idx_in_batch = torch.Tensor([-100 for _ in range(missing_elems)])
-
-    curr_batch_size += missing_elems
-"""

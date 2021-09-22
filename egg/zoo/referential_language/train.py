@@ -3,118 +3,34 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import argparse
+import sys
 
 import torch
 
 import egg.core as core
+from egg.zoo.referential_language.callbacks import get_callbacks, MyWandbLogger
 from egg.zoo.referential_language.data import get_dataloader
-from egg.zoo.referential_language.callbacks import get_callbacks
-from egg.zoo.referential_language.archs import build_game
-
-
-def get_common_opts(params):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--weight_decay",
-        type=float,
-        default=10e-6,
-        help="Weight decay used for SGD",
-    )
-    parser.add_argument(
-        "--pdb",
-        action="store_true",
-        default=False,
-        help="Run the game with pdb enabled",
-    )
-    parser.add_argument(
-        "--wandb",
-        action="store_true",
-        default=False,
-        help="Run the game with wandb enabled",
-    )
-    parser.add_argument(
-        "--sender_type",
-        choices=["cat", "proj"],
-        default="cat",
-        help="Model architecture",
-    )
-    parser.add_argument(
-        "--filter_bbox",
-        choices=["random", "minority", "smallest"],
-        default="minority",
-        help="Strategy to choose the target bbox in the image (default: minority",
-    )
-
-    parser.add_argument(
-        "--merge_mode",
-        choices=["sum", "cat", "mul"],
-        default="sum",
-        help="How to combine coordinate information with visual features in proj sender (default: sum)",
-    )
-    parser.add_argument(
-        "--model_name",
-        type=str,
-        default="resnet50",
-        choices=["resnet50", "resnet101", "resnet152"],
-        help="Model name for the encoder",
-    )
-    parser.add_argument(
-        "--projection_hidden_dim",
-        type=int,
-        default=128,
-        help="Hidden dimension for class prediction",
-    )
-    parser.add_argument(
-        "--num_classes", type=int, default=80, help="Num of prediction layer"
-    )
-    parser.add_argument(
-        "--random_coord",
-        default=False,
-        action="store_true",
-        help="Run the model generating random coordinates",
-    )
-    parser.add_argument("--image_size", type=int, default=224, help="Image size")
-    parser.add_argument(
-        "--num_workers", type=int, default=4, help="Workers used in the dataloader"
-    )
-
-    opts = core.init(arg_parser=parser, params=params)
-    return opts
-
-
-def add_weight_decay(model, weight_decay=1e-5, skip_name=""):
-    decay = []
-    no_decay = []
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            continue
-        if len(param.shape) == 1 or skip_name in name:
-            no_decay.append(param)
-        else:
-            decay.append(param)
-    return [
-        {"params": no_decay, "weight_decay": 0.0},
-        {"params": decay, "weight_decay": weight_decay},
-    ]
+from egg.zoo.referential_language.games import build_game
+from egg.zoo.referential_language.utils import add_weight_decay, get_common_opts
 
 
 def main(params):
     opts = get_common_opts(params=params)
-    print(f"{opts}\n")
-    assert (
-        not opts.batch_size % 2
-    ), f"Batch size must be multiple of 2. Found {opts.batch_size}"
-    print(
-        f"Distributed training set to: {opts.distributed_context.is_distributed}. "
-        f"Using batch of size {opts.batch_size} on {opts.distributed_context.world_size} device(s)\n"
-        f"Applying augmentations: {opts.use_augmentations} with image size: {opts.image_size}.\n"
-    )
+    print(f"{opts}")
 
     if not opts.distributed_context.is_distributed and opts.pdb:
         breakpoint()
 
-    train_loader = get_dataloader()
+    train_loader = get_dataloader(
+        dataset_dir=opts.dataset_dir,
+        batch_size=opts.batch_size,
+        num_workers=opts.num_workers,
+        contextual_distractors=opts.contextual_distractors,
+        image_size=opts.image_size,
+        use_augmentations=opts.use_augmentations,
+        is_distributed=opts.distributed_context.is_distributed,
+        seed=opts.random_seed,
+    )
 
     game = build_game(opts)
 
@@ -129,12 +45,20 @@ def main(params):
         optimizer, T_max=opts.n_epochs
     )
 
+    callbacks = get_callbacks(opts)
+    if opts.wandb:
+        callbacks.append(
+            MyWandbLogger(
+                opts=opts, projects="contexualized_emcomm", tags=[opts.wandb_tag]
+            )
+        )
+
     trainer = core.Trainer(
         game=game,
         optimizer=optimizer,
         optimizer_scheduler=optimizer_scheduler,
         train_data=train_loader,
-        callbacks=get_callbacks(opts),
+        callbacks=callbacks,
     )
     trainer.train(n_epochs=opts.n_epochs)
 
@@ -142,7 +66,4 @@ def main(params):
 
 
 if __name__ == "__main__":
-    torch.autograd.set_detect_anomaly(True)
-    import sys
-
     main(sys.argv[1:])

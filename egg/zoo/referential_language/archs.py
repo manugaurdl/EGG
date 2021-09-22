@@ -50,7 +50,7 @@ class Sender(nn.Module):
             raise RuntimeError("Unknown vision module for the Sender")
 
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, vocab_size),
+            nn.Linear(input_dim, vocab_size, bias=False),
             nn.BatchNorm1d(vocab_size),
         )
 
@@ -77,11 +77,12 @@ class Receiver(nn.Module):
             self.vision_module, input_dim = initialize_vision_module(vision_module)
         else:
             raise RuntimeError("Unknown vision module for the Receiver")
+
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
+            nn.Linear(input_dim, hidden_dim, bias=False),
             nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, output_dim, bias=False),
+            nn.Linear(hidden_dim, output_dim),
         )
         self.temperature = temperature
 

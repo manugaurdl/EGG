@@ -13,15 +13,15 @@ def get_data_opts(parser):
     group.add_argument(
         "--dataset_dir",
         type=str,
-        default="./data",
+        default="/datasets01/open_images/030119",
         help="Dataset location",
     )
 
     group.add_argument(
-        "--dataset_name",
-        choices=["cifar10", "imagenet"],
-        default="imagenet",
-        help="Dataset used for training a model",
+        "--contextual_distractors",
+        default=False,
+        action="store_true",
+        help="If set distractors will include all the objects in each image",
     )
 
     group.add_argument("--image_size", type=int, default=224, help="Image size")
@@ -30,12 +30,6 @@ def get_data_opts(parser):
         "--num_workers", type=int, default=4, help="Workers used in the dataloader"
     )
     group.add_argument("--use_augmentations", action="store_true", default=False)
-    group.add_argument(
-        "--return_original_image",
-        action="store_true",
-        default=False,
-        help="Dataloader will yield also the non-augmented version of the input images",
-    )
 
 
 def get_gs_opts(parser):
@@ -134,6 +128,13 @@ def get_common_opts(params):
     parser.add_argument(
         "--use_larc", action="store_true", default=False, help="Use LARC optimizer"
     )
+    parser.add_argument(
+        "--wandb",
+        action="store_true",
+        default=False,
+        help="Run the game logging to wandb",
+    )
+    parser.add_argument("--wandb_tag", help="wandb tag for current run")
     parser.add_argument(
         "--pdb",
         action="store_true",

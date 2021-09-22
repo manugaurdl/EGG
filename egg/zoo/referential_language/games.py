@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from egg.core.gs_wrappers import GumbelSoftmaxWrapper, SymbolReceiverWrapper
 from egg.core.interaction import LoggingStrategy
 from egg.core.continous_communication import SenderReceiverContinuousCommunication
-from egg.zoo.referential_game.archs import (
+from egg.zoo.referential_language.archs import (
     Receiver,
     Sender,
     initialize_vision_module,
