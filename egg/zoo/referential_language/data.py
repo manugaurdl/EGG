@@ -43,8 +43,17 @@ class Collater:
             self.collate_fn = self._collate_with_random_distractors
 
     def _collate_with_random_distractors(self, batch: List[Any]) -> List[torch.Tensor]:
-        # sender_input, labels, receiver_input = [], [], []
-        raise NotImplementedError
+        sender_input, receiver_input, class_labels = [], [], []
+        for elem in batch:
+            sender_input.append(elem[0])
+            class_labels.append(torch.LongTensor([elem[1]]))
+            receiver_input.append(elem[2])
+
+        sender_input = torch.stack(sender_input)
+        receiver_input = torch.stack(receiver_input)
+        class_labels = torch.stack(class_labels)
+
+        return sender_input, class_labels, receiver_input
 
     def _collate_with_contextual_distractors(
         self, batch: List[Any]
@@ -64,13 +73,13 @@ class Collater:
                     elem[0][:missing_elems],
                     elem[1][:missing_elems],
                     elem[2][:missing_elems],
-                    torch.Tensor([missing_elems]).int(),
+                    torch.LongTensor([missing_elems]),
                 )
 
             sender_input.append(elem[0])
             labels.append(elem[1])
             receiver_input.append(elem[2])
-            elem_idx_in_batch.append(torch.Tensor([idx for _ in range(elem[3])]).int())
+            elem_idx_in_batch.append(torch.LongTensor([idx for _ in range(elem[3])]))
 
             curr_batch_size += elem[3].item()
 
@@ -103,10 +112,11 @@ def get_dataloader(
     transformations = ImageTransformation(
         size=image_size, augmentation=use_augmentations
     )
-    # TODO O O O O O
-    # CHANGE TO TRAIN SET
     train_dataset = OpenImages(
-        Path(dataset_dir), split="validation", transform=transformations
+        Path(dataset_dir),
+        split="train",
+        transform=transformations,
+        contextual_distractors=contextual_distractors,
     )
 
     train_sampler = None
@@ -136,6 +146,7 @@ class OpenImages(VisionDataset):
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         transform_before: bool = False,
+        contextual_distractors: bool = False,
     ):
         super(OpenImages, self).__init__(
             root=root_folder, transform=transform, target_transform=target_transform
@@ -164,9 +175,10 @@ class OpenImages(VisionDataset):
             bbox_csv_filepath, value_cols=indices, one_to_n_mapping=True
         )
         # removing elements with only one target object
-        print(f"Before removing sinble object images: {len(self.box_labels)} images")
-        self._remove_single_target_imgs()
-        print(f"After removing sinble object images: {len(self.box_labels)} images")
+        # print(f"Before removing single object images: {len(self.box_labels)} images")
+        if contextual_distractors:
+            self._remove_single_target_imgs()
+        # print(f"After removing single object images: {len(self.box_labels)} images")
 
         images_with_labels = set(self.box_labels.keys())
         self.images = [
@@ -174,9 +186,7 @@ class OpenImages(VisionDataset):
             for image_path in all_images
             if image_path.stem in images_with_labels
         ]
-        print(
-            f"Loaded dataset from {root_folder}, split {split}, with {len(self.images)} images."
-        )
+        print(f"Loaded dataset from {root_folder}, with {len(self.images)} images.")
 
         self.label_name_to_class_description = csv_to_dict(
             root_folder / "metadata" / "class-descriptions-boxable.csv",
@@ -190,8 +200,10 @@ class OpenImages(VisionDataset):
         )
 
         self.transform = transform
-        self.target_transform = target_transform
-        self.transform_before = transform_before  # not used now
+        if contextual_distractors:
+            self._extract_objects_fn = self._extract_contextual_objects
+        else:
+            self._extract_objects_fn = self._extract_random_objects
 
     def __len__(self) -> int:
         return len(self.images)
@@ -204,7 +216,22 @@ class OpenImages(VisionDataset):
         for key in keys_to_remove:
             del self.box_labels[key]
 
-    def _extract_objects(self, img, bboxes):
+    def _extract_random_objects(self, img, bboxes):
+        label_code, *coords = random.choice(bboxes)
+
+        # coords of format Xmin, Xmax, Ymin, Ymax
+        coords = [float(coord) for coord in coords]
+        coords[0] *= img.size[0]
+        coords[1] *= img.size[0]
+        coords[2] *= img.size[1]
+        coords[3] *= img.size[1]
+
+        sender_img, receiver_img = self.transform(img, coords)
+        label_id = torch.tensor(self.label_name_to_id[label_code])
+
+        return sender_img, label_id, receiver_img, torch.LongTensor([len(bboxes)])
+
+    def _extract_contextual_objects(self, img, bboxes):
         sender_input, receiver_input, label = [], [], []
         for label_code, *coords in bboxes:
             # coords of format Xmin, Xmax, Ymin, Ymax
@@ -227,7 +254,7 @@ class OpenImages(VisionDataset):
             torch.stack(sender_input),
             torch.stack(label),
             torch.stack(receiver_input),
-            torch.Tensor([len(bboxes)]).int(),
+            torch.LongTensor([len(bboxes)]),
         )
 
     def __getitem__(self, index: int):
@@ -236,7 +263,7 @@ class OpenImages(VisionDataset):
             image = Image.open(f).convert("RGB")
 
         labels = self.box_labels[image_path.stem]
-        extracted_objects = self._extract_objects(image, labels)
+        extracted_objects = self._extract_objects_fn(image, labels)
 
         return extracted_objects
 
