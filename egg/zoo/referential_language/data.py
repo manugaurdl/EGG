@@ -7,12 +7,13 @@ import random
 
 from itertools import chain
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Optional, Sequence, Union
 
 import torch
 from bidict import bidict
 from PIL import Image, ImageFilter
 from torchvision import transforms
+import torchvision.transforms.functional as tr_F
 from torchvision.datasets.vision import VisionDataset
 
 from egg.zoo.referential_language.utils_data import csv_to_dict, multicolumn_csv_to_dict
@@ -109,13 +110,12 @@ def get_dataloader(
     seed: int = 111,
 ):
 
-    transformations = ImageTransformation(
-        size=image_size, augmentation=use_augmentations
-    )
+    transform = ImageTransformation(size=image_size, augmentation=use_augmentations)
+
     train_dataset = OpenImages(
         Path(dataset_dir),
         split="train",
-        transform=transformations,
+        transform=transform,
         contextual_distractors=contextual_distractors,
     )
 
@@ -145,7 +145,6 @@ class OpenImages(VisionDataset):
         split: str = "validation",
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
-        transform_before: bool = False,
         contextual_distractors: bool = False,
     ):
         super(OpenImages, self).__init__(
@@ -175,17 +174,16 @@ class OpenImages(VisionDataset):
             bbox_csv_filepath, value_cols=indices, one_to_n_mapping=True
         )
         # removing elements with only one target object
-        # print(f"Before removing single object images: {len(self.box_labels)} images")
-        if True:  # contextual_distractors:
-            self._remove_single_target_imgs()
-        # print(f"After removing single object images: {len(self.box_labels)} images")
+        self._remove_single_target_imgs()
 
         images_with_labels = set(self.box_labels.keys())
-        self.images = [
-            image_path
-            for image_path in all_images
-            if image_path.stem in images_with_labels
-        ]
+
+        self.images = []
+        for image_path in all_images:
+            p = random.uniform(0, 1)
+            if image_path.stem in images_with_labels and p < 0.25:
+                self.images.append(image_path)
+
         print(f"Loaded dataset from {root_folder}, with {len(self.images)} images.")
 
         self.label_name_to_class_description = csv_to_dict(
@@ -208,6 +206,17 @@ class OpenImages(VisionDataset):
     def __len__(self) -> int:
         return len(self.images)
 
+    @staticmethod
+    def unnormalize_coords(coords: List[str], img_shape: Sequence[int]):
+        # This method modifies the coordinates list in place
+        # coords of format Xmin, Xmax, Ymin, Ymax
+        coords = [float(coord) for coord in coords]
+        coords[0] *= img_shape[0]
+        coords[1] *= img_shape[0]
+        coords[2] *= img_shape[1]
+        coords[3] *= img_shape[1]
+        return coords
+
     def _remove_single_target_imgs(self):
         keys_to_remove = []
         for key, value in self.box_labels.items():
@@ -216,46 +225,45 @@ class OpenImages(VisionDataset):
         for key in keys_to_remove:
             del self.box_labels[key]
 
+    @staticmethod
+    def _crop_img(img: torch.Tensor, coords: Sequence[int]):
+        top, left = int(coords[3]), int(coords[0])
+        height, width = int(coords[3] - coords[2]), int(coords[1] - coords[0])
+        return tr_F.crop(img, top=top, left=left, height=height, width=width)
+
     def _extract_random_objects(self, img, bboxes):
         label_code, *coords = random.choice(bboxes)
+        coords = self.unnormalize_coords(coords, img.size)
 
-        # coords of format Xmin, Xmax, Ymin, Ymax
-        coords = [float(coord) for coord in coords]
-        coords[0] *= img.size[0]
-        coords[1] *= img.size[0]
-        coords[2] *= img.size[1]
-        coords[3] *= img.size[1]
+        img = self._crop_img(img, coords)
 
-        sender_img, receiver_img = self.transform(img, coords)
+        sender_img = self.transform(img, coords)
+        receiver_img = self.transform(img, coords)
         label_id = torch.tensor(self.label_name_to_id[label_code])
 
         return sender_img, label_id, receiver_img, torch.LongTensor([len(bboxes)])
 
     def _extract_contextual_objects(self, img, bboxes):
         sender_input, receiver_input, label = [], [], []
+
         for label_code, *coords in bboxes:
-            # coords of format Xmin, Xmax, Ymin, Ymax
-            coords = [float(coord) for coord in coords]
-            coords[0] *= img.size[0]
-            coords[1] *= img.size[0]
-            coords[2] *= img.size[1]
-            coords[3] *= img.size[1]
+            coords = self.unnormalize_coords(coords, img.size)
+            img = self._crop_img(img, coords)
 
             # TODO: for now we only support transforming images after we crop them
-            sender_img, receiver_img = self.transform(img, coords)
-
+            sender_img = self.transform(img, coords)
+            receiver_img = self.transform(img, coords)
             label_id = torch.tensor(self.label_name_to_id[label_code])
 
             sender_input.append(sender_img)
             receiver_input.append(receiver_img)
             label.append(label_id)
 
-        return (
-            torch.stack(sender_input),
-            torch.stack(label),
-            torch.stack(receiver_input),
-            torch.LongTensor([len(bboxes)]),
-        )
+        sender_input = torch.stack(sender_input)
+        label = torch.stack(label)
+        receiver_input = torch.stack(receiver_input)
+        num_obj = torch.LongTensor([len(bboxes)])
+        return sender_input, label, receiver_input, num_obj
 
     def __getitem__(self, index: int):
         image_path = self.images[index]
@@ -299,12 +307,4 @@ class ImageTransformation:
         self.transform = transforms.Compose(transformations)
 
     def __call__(self, img, coords):
-        img = transforms.functional.crop(  # cropped_obj
-            img,
-            top=int(coords[3]),
-            left=int(coords[0]),
-            height=int(coords[3] - coords[2]),
-            width=int(coords[1] - coords[0]),
-        )
-
-        return self.transform(img), self.transform(img)
+        return self.transform(img)

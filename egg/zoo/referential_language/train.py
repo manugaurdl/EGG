@@ -46,7 +46,7 @@ def main(params):
     )
 
     callbacks = get_callbacks(opts)
-    if opts.wandb:
+    if opts.wandb and opts.distributed_context.is_leader:
         callbacks.append(
             MyWandbLogger(
                 opts=opts, project="contexualized_emcomm", tags=[opts.wandb_tag]
