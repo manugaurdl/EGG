@@ -104,7 +104,7 @@ def get_dataloader(
     batch_size: int = 128,
     num_workers: int = 4,
     contextual_distractors: bool = False,
-    image_size: int = 32,
+    image_size: int = 64,
     use_augmentations: bool = True,
     is_distributed: bool = False,
     seed: int = 111,
@@ -142,7 +142,7 @@ class OpenImages(VisionDataset):
     def __init__(
         self,
         root_folder: Union[Path, str] = "/datasets01/open_images/030119",
-        split: str = "validation",
+        split: str = "train",
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         contextual_distractors: bool = False,
@@ -159,7 +159,12 @@ class OpenImages(VisionDataset):
         else:
             all_images = (images_folder / split).glob(r"*.jpg")
 
-        bbox_csv_filepath = root_folder / split / f"{split}-annotations-bbox.csv"
+        if split == "train":
+            bbox_csv_filepath = (
+                "/private/home/rdessi/contextual_emcomm/train-annotations-bbox.csv"
+            )
+        else:
+            bbox_csv_filepath = root_folder / split / f"{split}-annotations-bbox.csv"
         indices = tuple(
             BBOX_INDICES[key]
             for key in (
@@ -178,11 +183,11 @@ class OpenImages(VisionDataset):
 
         images_with_labels = set(self.box_labels.keys())
 
-        self.images = []
-        for image_path in all_images:
-            p = random.uniform(0, 1)
-            if image_path.stem in images_with_labels and p < 0.25:
-                self.images.append(image_path)
+        self.images = [
+            image_path
+            for image_path in all_images
+            if image_path.stem in images_with_labels
+        ]
 
         print(f"Loaded dataset from {root_folder}, with {len(self.images)} images.")
 

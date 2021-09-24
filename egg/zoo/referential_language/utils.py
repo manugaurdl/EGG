@@ -24,7 +24,7 @@ def get_data_opts(parser):
         help="If set distractors will include all the objects in each image",
     )
 
-    group.add_argument("--image_size", type=int, default=224, help="Image size")
+    group.add_argument("--image_size", type=int, default=64, help="Image size")
 
     group.add_argument(
         "--num_workers", type=int, default=4, help="Workers used in the dataloader"
