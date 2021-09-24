@@ -5,9 +5,8 @@
 
 import random
 
-from itertools import chain
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Sequence, Union
+from typing import Any, Callable, List, Optional, Sequence
 
 import torch
 from bidict import bidict
@@ -113,7 +112,6 @@ def get_dataloader(
     transform = ImageTransformation(size=image_size, augmentation=use_augmentations)
 
     train_dataset = OpenImages(
-        Path(dataset_dir),
         split="train",
         transform=transform,
         contextual_distractors=contextual_distractors,
@@ -141,30 +139,20 @@ def get_dataloader(
 class OpenImages(VisionDataset):
     def __init__(
         self,
-        root_folder: Union[Path, str] = "/datasets01/open_images/030119",
         split: str = "train",
         transform: Optional[Callable] = None,
-        target_transform: Optional[Callable] = None,
         contextual_distractors: bool = False,
     ):
-        super(OpenImages, self).__init__(
-            root=root_folder, transform=transform, target_transform=target_transform
-        )
-        if isinstance(root_folder, str):
-            root_folder = Path(root_folder)
-        images_folder = root_folder / split / "images"
-        if split == "train":
-            all_folders = images_folder.glob(r"train_0[0-9]")
-            all_images = chain(*[folder.glob(r"*.jpg") for folder in all_folders])
-        else:
-            all_images = (images_folder / split).glob(r"*.jpg")
+        root_folder = Path("/datasets01/open_images/030119")
+        super(OpenImages, self).__init__(root=root_folder, transform=transform)
 
-        if split == "train":
-            bbox_csv_filepath = (
-                "/private/home/rdessi/contextual_emcomm/train-annotations-bbox.csv"
-            )
-        else:
-            bbox_csv_filepath = root_folder / split / f"{split}-annotations-bbox.csv"
+        all_images_path = (
+            f"/private/home/rdessi/contextual_emcomm/{split}_path_files.txt"
+        )
+
+        bbox_csv_filepath = (
+            f"/private/home/rdessi/contextual_emcomm/{split}-annotations-bbox.csv"
+        )
         indices = tuple(
             BBOX_INDICES[key]
             for key in (
@@ -183,11 +171,12 @@ class OpenImages(VisionDataset):
 
         images_with_labels = set(self.box_labels.keys())
 
-        self.images = [
-            image_path
-            for image_path in all_images
-            if image_path.stem in images_with_labels
-        ]
+        with open(all_images_path) as fin:
+            self.images = [
+                Path(image_path.strip())
+                for image_path in fin
+                if Path(image_path.strip()).stem in images_with_labels
+            ]
 
         print(f"Loaded dataset from {root_folder}, with {len(self.images)} images.")
 
@@ -232,8 +221,9 @@ class OpenImages(VisionDataset):
 
     @staticmethod
     def _crop_img(img: torch.Tensor, coords: Sequence[int]):
-        top, left = int(coords[3]), int(coords[0])
-        height, width = int(coords[3] - coords[2]), int(coords[1] - coords[0])
+        top, left = int(coords[2]), int(coords[0])
+        height = max(1, int(coords[3] - coords[2]))
+        width = max(1, int(coords[1] - coords[0]))
         return tr_F.crop(img, top=top, left=left, height=height, width=width)
 
     def _extract_random_objects(self, img, bboxes):
@@ -242,8 +232,7 @@ class OpenImages(VisionDataset):
 
         img = self._crop_img(img, coords)
 
-        sender_img = self.transform(img, coords)
-        receiver_img = self.transform(img, coords)
+        sender_img, receiver_img = self.transform(img), self.transform(img)
         label_id = torch.tensor(self.label_name_to_id[label_code])
 
         return sender_img, label_id, receiver_img, torch.LongTensor([len(bboxes)])
@@ -253,11 +242,14 @@ class OpenImages(VisionDataset):
 
         for label_code, *coords in bboxes:
             coords = self.unnormalize_coords(coords, img.size)
+            if len(bboxes) > 2:
+                width = int(coords[1] - coords[0])
+                height = int(coords[3] - coords[2])
+                if width * height < 20:
+                    continue
             img = self._crop_img(img, coords)
 
-            # TODO: for now we only support transforming images after we crop them
-            sender_img = self.transform(img, coords)
-            receiver_img = self.transform(img, coords)
+            sender_img, receiver_img = self.transform(img), self.transform(img)
             label_id = torch.tensor(self.label_name_to_id[label_code])
 
             sender_input.append(sender_img)
@@ -296,11 +288,11 @@ class ImageTransformation:
         if augmentation:
             color_jitter = transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)
             transformations = [
-                transforms.RandomResizedCrop(size=size),
                 transforms.RandomApply([color_jitter], p=0.8),
                 transforms.RandomGrayscale(p=0.2),
                 transforms.RandomApply([GaussianBlur([0.1, 2.0])], p=0.5),
                 transforms.RandomHorizontalFlip(),  # with 0.5 probability
+                transforms.Resize(size=(size, size)),
                 transforms.ToTensor(),
             ]
         else:
@@ -308,8 +300,7 @@ class ImageTransformation:
                 transforms.Resize(size=(size, size)),
                 transforms.ToTensor(),
             ]
-
         self.transform = transforms.Compose(transformations)
 
-    def __call__(self, img, coords):
+    def __call__(self, img):
         return self.transform(img)

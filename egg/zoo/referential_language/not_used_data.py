@@ -60,3 +60,17 @@ if curr_batch_size < max_batch_size:
 
     curr_batch_size += missing_elems
 """
+
+
+"""
+torch.save(
+    (
+        img,
+        sender_img,
+        receiver_img,
+        coords,
+        self.label_name_to_class_description[label_code],
+    ),
+    f"/private/home/rdessi/dump_img/img_{index}.jpg",
+)
+"""
