@@ -61,16 +61,17 @@ class MyWandbLogger(WandbLogger):
         self, logs: Interaction, loss: float, batch_id: int, is_training: bool = True
     ):
         if is_training and self.trainer.distributed_context.is_leader:
-            self.log_to_wandb(
-                {"batch_loss": loss, "batch_accuracy": logs.aux["acc"]}, commit=True
-            )
+            metrics = {"batch_loss": loss, "batch_accuracy": logs.aux["acc"]}
+            self.log_to_wandb(metrics, commit=True)
 
     def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
         if self.trainer.distributed_context.is_leader:
-            self.log_to_wandb(
-                {"train_loss": loss, "train_accuracy": logs.aux["acc"], "epoch": epoch},
-                commit=True,
-            )
+            metrics = {
+                "train_loss": loss,
+                "train_accuracy": logs.aux["acc"],
+                "epoch": epoch,
+            }
+            self.log_to_wandb(metrics, commit=True)
 
 
 class BestStatsTracker(Callback):

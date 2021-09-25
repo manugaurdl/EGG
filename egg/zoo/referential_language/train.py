@@ -4,8 +4,10 @@
 # LICENSE file in the root directory of this source tree.
 
 import sys
+from pathlib import Path
 
 import torch
+import wandb
 
 import egg.core as core
 from egg.zoo.referential_language.callbacks import get_callbacks, MyWandbLogger
@@ -22,12 +24,24 @@ def main(params):
         breakpoint()
 
     train_loader = get_dataloader(
-        dataset_dir=opts.dataset_dir,
+        dataset_dir="/datasets01/open_images/030119",
+        split="train",
         batch_size=opts.batch_size,
         num_workers=opts.num_workers,
         contextual_distractors=opts.contextual_distractors,
         image_size=opts.image_size,
         use_augmentations=opts.use_augmentations,
+        is_distributed=opts.distributed_context.is_distributed,
+        seed=opts.random_seed,
+    )
+    validation_loader = get_dataloader(
+        dataset_dir="/datasets01/open_images/030119",
+        split="validation",
+        batch_size=opts.batch_size,
+        num_workers=opts.num_workers,
+        contextual_distractors=opts.contextual_distractors,
+        image_size=opts.image_size,
+        use_augmentations=False,
         is_distributed=opts.distributed_context.is_distributed,
         seed=opts.random_seed,
     )
@@ -58,9 +72,21 @@ def main(params):
         optimizer=optimizer,
         optimizer_scheduler=optimizer_scheduler,
         train_data=train_loader,
+        validation_data=validation_loader,
         callbacks=callbacks,
     )
     trainer.train(n_epochs=opts.n_epochs)
+
+    print("| STARTING EVALUATION")
+    loss, interaction = trainer.eval()
+    if opts.wandb:
+        metrics = {
+            "eval_loss": loss,
+            "eval_accuracy": interaction.aux["acc"].mean().item(),
+        }
+        print(metrics)
+        wandb.log(metrics, commit=True)
+    torch.save(interaction, Path(opts.checkpoint_dir) / "eval_interaction")
 
     print("| FINISHED JOB")
 

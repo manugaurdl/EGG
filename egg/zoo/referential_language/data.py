@@ -58,8 +58,6 @@ class Collater:
     def _collate_with_contextual_distractors(
         self, batch: List[Any]
     ) -> List[torch.Tensor]:
-        # batch.sort(key=lambda x: x[-1], reverse=True)
-
         max_batch_size = len(batch)
         curr_batch_size = 0
 
@@ -86,20 +84,24 @@ class Collater:
             if curr_batch_size == max_batch_size:
                 break
 
-        assert curr_batch_size == max_batch_size
-        return (
-            torch.cat(sender_input),
-            torch.cat(labels),
-            torch.cat(receiver_input),
-            torch.cat(elem_idx_in_batch),
-        )
+        sender_input = torch.cat(sender_input)
+        labels = torch.cat(labels)
+        receiver_input = torch.cat(receiver_input)
+        aux_input = {"idx": torch.cat(elem_idx_in_batch)}
+
+        assert max_batch_size == sender_input.shape[0]
+        assert max_batch_size == labels.shape[0]
+        assert max_batch_size == receiver_input.shape[0]
+
+        return sender_input, labels, receiver_input, aux_input
 
     def __call__(self, batch: List[Any]) -> List[torch.Tensor]:
         return self.collate_fn(batch)
 
 
 def get_dataloader(
-    dataset_dir: str = "/datasets01/open_images/030119",
+    dataset_dir: str,
+    split: str,
     batch_size: int = 128,
     num_workers: int = 4,
     contextual_distractors: bool = False,
@@ -111,29 +113,29 @@ def get_dataloader(
 
     transform = ImageTransformation(size=image_size, augmentation=use_augmentations)
 
-    train_dataset = OpenImages(
-        split="train",
+    dataset = OpenImages(
+        split=split,
         transform=transform,
         contextual_distractors=contextual_distractors,
     )
 
-    train_sampler = None
+    sampler = None
     if is_distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(
-            train_dataset, shuffle=True, drop_last=True, seed=seed
+        sampler = torch.utils.data.distributed.DistributedSampler(
+            dataset, shuffle=True, drop_last=True, seed=seed
         )
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
+    loader = torch.utils.data.DataLoader(
+        dataset,
         batch_size=batch_size,
-        shuffle=(train_sampler is None),
-        sampler=train_sampler,
+        shuffle=(sampler is None),
+        sampler=sampler,
         collate_fn=Collater(contextual_distractors=contextual_distractors),
         num_workers=num_workers,
         pin_memory=True,
         drop_last=True,
     )
-    return train_loader
+    return loader
 
 
 class OpenImages(VisionDataset):
@@ -259,7 +261,7 @@ class OpenImages(VisionDataset):
         sender_input = torch.stack(sender_input)
         label = torch.stack(label)
         receiver_input = torch.stack(receiver_input)
-        num_obj = torch.LongTensor([len(bboxes)])
+        num_obj = torch.LongTensor([len(sender_input)])
         return sender_input, label, receiver_input, num_obj
 
     def __getitem__(self, index: int):
