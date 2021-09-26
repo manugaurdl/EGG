@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import json
 import sys
 from pathlib import Path
 
@@ -74,11 +75,16 @@ def main(params):
     trainer.train(n_epochs=opts.n_epochs)
 
     print("| STARTING TEST")
-    _, interaction = trainer.eval(test_loader)
+    _, test_interaction = trainer.eval(test_loader)
+    dump = dict((k, v.mean().item()) for k, v in test_interaction.aux.items())
+    dump.update(dict(mode="TEST"))
+    print(json.dumps(dump), flush=True)
     if opts.wandb:
-        wandb.log({"test_accuracy": interaction.aux["acc"].mean().item()}, commit=True)
+        wandb.log(
+            {"test_accuracy": test_interaction.aux["acc"].mean().item()}, commit=True
+        )
     if opts.checkpoint_dir:
-        torch.save(interaction, Path(opts.checkpoint_dir) / "test_interaction")
+        torch.save(test_interaction, Path(opts.checkpoint_dir) / "test_interaction")
 
     print("| FINISHED JOB")
 

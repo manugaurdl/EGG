@@ -181,7 +181,7 @@ class OpenImages(VisionDataset):
                 if Path(image_path.strip()).stem in images_with_labels
             ]
 
-        print(f"Loaded dataset from {root_folder}, with {len(self.images)} images.")
+        print(f"Loaded {split} set has {len(self.images)} images.")
 
         self.label_name_to_class_description = csv_to_dict(
             root_folder / "metadata" / "class-descriptions-boxable.csv",

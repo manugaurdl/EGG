@@ -121,10 +121,10 @@ class EarlyStopperValidationAccuracy(EarlyStopperAccuracy):
             assert (
                 self.validation_stats
             ), "Validation data must be provided for early stooping to work"
-            _, ref_metric = self.validation_stats[-3].aux[self.field_name].mean()
+            ref_metric = self.validation_stats[-3][1].aux[self.field_name].mean()
 
-            ref_metric_minus2 = self.validation_stats[-2].aux[self.field_name].mean()
-            ref_metric_minus1 = self.validation_stats[-1].aux[self.field_name].mean()
+            ref_metric_minus2 = self.validation_stats[-2][1].aux[self.field_name].mean()
+            ref_metric_minus1 = self.validation_stats[-1][1].aux[self.field_name].mean()
 
             delta_m2, delta_m1 = (
                 ref_metric - ref_metric_minus2,

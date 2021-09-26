@@ -162,13 +162,14 @@ class Trainer:
         else:
             self.scaler = None
 
-    def eval(self):
+    def eval(self, data=None):
         mean_loss = 0.0
         interactions = []
         n_batches = 0
+        validation_data = self.validation_data if data is None else data
         self.game.eval()
         with torch.no_grad():
-            for batch in self.validation_data:
+            for batch in validation_data:
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
@@ -273,7 +274,6 @@ class Trainer:
 
             for callback in self.callbacks:
                 callback.on_epoch_end(train_loss, train_interaction, epoch + 1)
-
             validation_loss = validation_interaction = None
             if (
                 self.validation_data is not None
