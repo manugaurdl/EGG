@@ -8,7 +8,12 @@ import json
 
 import torch
 
-from egg.core import Callback, ConsoleLogger, EarlyStopperAccuracy, Interaction
+from egg.core import (
+    Callback,
+    ConsoleLogger,
+    EarlyStopperAccuracy,
+    Interaction,
+)
 from egg.core.callbacks import WandbLogger
 
 
@@ -73,6 +78,15 @@ class MyWandbLogger(WandbLogger):
             }
             self.log_to_wandb(metrics, commit=True)
 
+    def on_validation_end(self, loss: float, logs: Interaction, epoch: int):
+        if self.trainer.distributed_context.is_leader:
+            metrics = {
+                "validation_loss": loss,
+                "validation_accuracy": logs.aux["acc"],
+                "epoch": epoch,
+            }
+            self.log_to_wandb(metrics, commit=True)
+
 
 class BestStatsTracker(Callback):
     def __init__(self):
@@ -101,11 +115,30 @@ class DistributedSamplerEpochSetter(Callback):
             self.trainer.validation_data.sampler.set_epoch(epoch)
 
 
+class EarlyStopperValidationAccuracy(EarlyStopperAccuracy):
+    def should_stop(self) -> bool:
+        if self.validation and len(self.validation_stats) > 3:
+            assert (
+                self.validation_stats
+            ), "Validation data must be provided for early stooping to work"
+            _, ref_metric = self.validation_stats[-3].aux[self.field_name].mean()
+
+            ref_metric_minus2 = self.validation_stats[-2].aux[self.field_name].mean()
+            ref_metric_minus1 = self.validation_stats[-1].aux[self.field_name].mean()
+
+            delta_m2, delta_m1 = (
+                ref_metric - ref_metric_minus2,
+                ref_metric - ref_metric_minus1,
+            )
+            return delta_m2 > self.threshold or delta_m1 > self.threshold
+
+
 def get_callbacks(opts: argparse.Namespace):
     callbacks = [
         BestStatsTracker(),
         ConsoleLogger(as_json=True, print_train_loss=True),
         EarlyStopperAccuracy(0.99, validation=False),
+        EarlyStopperValidationAccuracy(0.05),
         VisionModelSaver(opts.shared_vision, opts.checkpoint_freq),
     ]
 

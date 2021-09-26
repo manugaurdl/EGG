@@ -23,27 +23,23 @@ def main(params):
     if not opts.distributed_context.is_distributed and opts.pdb:
         breakpoint()
 
+    data_kwargs = {
+        "dataset_dir": "/datasets01/open_images/030119",
+        "batch_size": opts.batch_size,
+        "num_workers": opts.num_workers,
+        "contextual_distractors": opts.contextual_distractors,
+        "image_size": opts.image_size,
+        "is_distributed": opts.distributed_context.is_distributed,
+        "seed": opts.random_seed,
+    }
     train_loader = get_dataloader(
-        dataset_dir="/datasets01/open_images/030119",
-        split="train",
-        batch_size=opts.batch_size,
-        num_workers=opts.num_workers,
-        contextual_distractors=opts.contextual_distractors,
-        image_size=opts.image_size,
-        use_augmentations=opts.use_augmentations,
-        is_distributed=opts.distributed_context.is_distributed,
-        seed=opts.random_seed,
+        split="train", use_augmentations=opts.use_augmentations, **data_kwargs
     )
     validation_loader = get_dataloader(
-        dataset_dir="/datasets01/open_images/030119",
-        split="validation",
-        batch_size=opts.batch_size,
-        num_workers=opts.num_workers,
-        contextual_distractors=opts.contextual_distractors,
-        image_size=opts.image_size,
-        use_augmentations=False,
-        is_distributed=opts.distributed_context.is_distributed,
-        seed=opts.random_seed,
+        split="validation", use_augmentations=False, shuffle=False, **data_kwargs
+    )
+    test_loader = get_dataloader(
+        split="test", use_augmentations=False, shuffle=False, **data_kwargs
     )
 
     game = build_game(opts)
@@ -77,16 +73,12 @@ def main(params):
     )
     trainer.train(n_epochs=opts.n_epochs)
 
-    print("| STARTING EVALUATION")
-    loss, interaction = trainer.eval()
+    print("| STARTING TEST")
+    _, interaction = trainer.eval(test_loader)
     if opts.wandb:
-        metrics = {
-            "eval_loss": loss,
-            "eval_accuracy": interaction.aux["acc"].mean().item(),
-        }
-        print(metrics)
-        wandb.log(metrics, commit=True)
-    torch.save(interaction, Path(opts.checkpoint_dir) / "eval_interaction")
+        wandb.log({"test_accuracy": interaction.aux["acc"].mean().item()}, commit=True)
+    if opts.checkpoint_dir:
+        torch.save(interaction, Path(opts.checkpoint_dir) / "test_interaction")
 
     print("| FINISHED JOB")
 

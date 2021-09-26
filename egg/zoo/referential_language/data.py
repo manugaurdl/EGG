@@ -106,6 +106,7 @@ def get_dataloader(
     num_workers: int = 4,
     contextual_distractors: bool = False,
     image_size: int = 64,
+    shuffle: bool = True,
     use_augmentations: bool = True,
     is_distributed: bool = False,
     seed: int = 111,
@@ -122,7 +123,7 @@ def get_dataloader(
     sampler = None
     if is_distributed:
         sampler = torch.utils.data.distributed.DistributedSampler(
-            dataset, shuffle=True, drop_last=True, seed=seed
+            dataset, shuffle=shuffle, drop_last=True, seed=seed
         )
 
     loader = torch.utils.data.DataLoader(
