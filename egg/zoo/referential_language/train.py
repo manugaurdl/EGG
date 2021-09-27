@@ -3,12 +3,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import json
+# import json
 import sys
-from pathlib import Path
+
+# from pathlib import Path
 
 import torch
-import wandb
+
+# import wandb
 
 import egg.core as core
 from egg.zoo.referential_language.callbacks import get_callbacks, MyWandbLogger
@@ -39,9 +41,9 @@ def main(params):
     validation_loader = get_dataloader(
         split="validation", use_augmentations=False, shuffle=False, **data_kwargs
     )
-    test_loader = get_dataloader(
-        split="test", use_augmentations=False, shuffle=False, **data_kwargs
-    )
+    # test_loader = get_dataloader(
+    #    split="test", use_augmentations=False, shuffle=False, **data_kwargs
+    # )
 
     game = build_game(opts)
 
@@ -74,6 +76,7 @@ def main(params):
     )
     trainer.train(n_epochs=opts.n_epochs)
 
+    """
     print("| STARTING TEST")
     _, test_interaction = trainer.eval(test_loader)
     dump = dict((k, v.mean().item()) for k, v in test_interaction.aux.items())
@@ -81,11 +84,10 @@ def main(params):
     print(json.dumps(dump), flush=True)
     if opts.wandb:
         wandb.log(
-            {"test_accuracy": test_interaction.aux["acc"].mean().item()}, commit=True
-        )
+            {"test_accuracy": test_interaction.aux["acc"].mean().item()}, commit=True)
     if opts.checkpoint_dir:
         torch.save(test_interaction, Path(opts.checkpoint_dir) / "test_interaction")
-
+    """
     print("| FINISHED JOB")
 
 

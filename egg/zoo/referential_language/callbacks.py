@@ -11,9 +11,10 @@ import torch
 from egg.core import (
     Callback,
     ConsoleLogger,
-    EarlyStopperAccuracy,
     Interaction,
 )
+from egg.core.early_stopping import EarlyStopper
+
 from egg.core.callbacks import WandbLogger
 
 
@@ -115,30 +116,34 @@ class DistributedSamplerEpochSetter(Callback):
             self.trainer.validation_data.sampler.set_epoch(epoch)
 
 
-class EarlyStopperValidationAccuracy(EarlyStopperAccuracy):
+class EarlyStopperValidationAccuracy(EarlyStopper):
+    def __init__(self, field_name: str = "acc", validation: bool = True):
+        super(EarlyStopperValidationAccuracy, self).__init__(validation)
+        self.field_name = field_name
+
     def should_stop(self) -> bool:
         if self.validation and len(self.validation_stats) > 3:
             assert (
                 self.validation_stats
             ), "Validation data must be provided for early stooping to work"
-            ref_metric = self.validation_stats[-3][1].aux[self.field_name].mean()
 
-            ref_metric_minus2 = self.validation_stats[-2][1].aux[self.field_name].mean()
-            ref_metric_minus1 = self.validation_stats[-1][1].aux[self.field_name].mean()
-
-            delta_m2, delta_m1 = (
-                ref_metric - ref_metric_minus2,
-                ref_metric - ref_metric_minus1,
-            )
-            return delta_m2 > self.threshold or delta_m1 > self.threshold
+            conds = [
+                self.validation_stats[-i][1].aux[self.field_name].mean()
+                - self.validation_stats[-i + 1][1].aux[self.field_name].mean()
+                > 0
+                for i in [3, 2]
+            ]  # stopping if val accuracy decreases for two consecutives epochs
+            if all(conds):
+                print("Stopped for excess of decrease in validation accuracy")
+                return True
+            return False
 
 
 def get_callbacks(opts: argparse.Namespace):
     callbacks = [
         BestStatsTracker(),
         ConsoleLogger(as_json=True, print_train_loss=True),
-        EarlyStopperAccuracy(0.99, validation=False),
-        EarlyStopperValidationAccuracy(0.05),
+        EarlyStopperValidationAccuracy(),
         VisionModelSaver(opts.shared_vision, opts.checkpoint_freq),
     ]
 
