@@ -136,6 +136,18 @@ def get_common_opts(params):
     )
     parser.add_argument("--wandb_tag", help="wandb tag for current run")
     parser.add_argument(
+        "--eval_only",
+        action="store_true",
+        default=False,
+        help="Only run the evaluation loop",
+    )
+    parser.add_argument(
+        "--gaussian_eval",
+        action="store_true",
+        default=False,
+        help="Perform Gaussian evaluation",
+    )
+    parser.add_argument(
         "--pdb",
         action="store_true",
         default=False,

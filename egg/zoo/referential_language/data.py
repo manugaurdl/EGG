@@ -129,7 +129,7 @@ def get_dataloader(
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=(sampler is None),
+        shuffle=shuffle if sampler is None else False,
         sampler=sampler,
         collate_fn=Collater(contextual_distractors=contextual_distractors),
         num_workers=num_workers,

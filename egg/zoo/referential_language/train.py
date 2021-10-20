@@ -14,6 +14,9 @@ import torch
 
 import egg.core as core
 from egg.zoo.referential_language.callbacks import get_callbacks, MyWandbLogger
+from egg.zoo.referential_language.gaussian_noise_data import (
+    get_gaussian_noise_dataloader,
+)
 from egg.zoo.referential_language.data import get_dataloader
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils import add_weight_decay, get_common_opts
@@ -35,15 +38,19 @@ def main(params):
         "is_distributed": opts.distributed_context.is_distributed,
         "seed": opts.random_seed,
     }
-    train_loader = get_dataloader(
-        split="train", use_augmentations=opts.use_augmentations, **data_kwargs
-    )
-    validation_loader = get_dataloader(
-        split="validation", use_augmentations=False, shuffle=False, **data_kwargs
-    )
-    # test_loader = get_dataloader(
-    #    split="test", use_augmentations=False, shuffle=False, **data_kwargs
-    # )
+    if opts.eval_only or opts.gaussian_eval:
+        train_loader = None
+    else:
+        train_loader = get_dataloader(
+            split="train", use_augmentations=opts.use_augmentations, **data_kwargs
+        )
+
+    if opts.gaussian_eval:
+        validation_loader = get_gaussian_noise_dataloader(**data_kwargs)
+    else:
+        validation_loader = get_dataloader(
+            split="validation", use_augmentations=False, shuffle=False, **data_kwargs
+        )
 
     game = build_game(opts)
 
@@ -74,20 +81,28 @@ def main(params):
         validation_data=validation_loader,
         callbacks=callbacks,
     )
-    trainer.train(n_epochs=opts.n_epochs)
+    if not (opts.eval_only or opts.gaussian_eval):
+        trainer.train(n_epochs=opts.n_epochs)
 
-    """
     print("| STARTING TEST")
-    _, test_interaction = trainer.eval(test_loader)
+    import json
+    from pathlib import Path
+
+    import wandb
+
+    _, test_interaction = trainer.eval(validation_loader)
     dump = dict((k, v.mean().item()) for k, v in test_interaction.aux.items())
-    dump.update(dict(mode="TEST"))
+    dump.update(dict(mode="VALIDATION"))
     print(json.dumps(dump), flush=True)
-    if opts.wandb:
+    if opts.wandb and opts.distributed_context.is_leader:
         wandb.log(
-            {"test_accuracy": test_interaction.aux["acc"].mean().item()}, commit=True)
-    if opts.checkpoint_dir:
-        torch.save(test_interaction, Path(opts.checkpoint_dir) / "test_interaction")
-    """
+            {"post_hoc_validation_accuracy": test_interaction.aux["acc"].mean().item()},
+            commit=True,
+        )
+    if opts.checkpoint_dir and not opts.gaussian_eval:
+        output_path = Path(opts.checkpoint_dir)
+        output_path.mkdir(exist_ok=True, parents=True)
+        torch.save(test_interaction, output_path / "validation_interaction_last_epoch")
     print("| FINISHED JOB")
 
 

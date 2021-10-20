@@ -67,14 +67,14 @@ class MyWandbLogger(WandbLogger):
         self, logs: Interaction, loss: float, batch_id: int, is_training: bool = True
     ):
         if is_training and self.trainer.distributed_context.is_leader:
-            metrics = {"batch_loss": loss, "batch_accuracy": logs.aux["acc"]}
+            metrics = {"batch_loss": loss, "batch_accuracy": logs.aux["acc"].mean()}
             self.log_to_wandb(metrics, commit=True)
 
     def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
         if self.trainer.distributed_context.is_leader:
             metrics = {
                 "train_loss": loss,
-                "train_accuracy": logs.aux["acc"],
+                "train_accuracy": logs.aux["acc"].mean().item(),
                 "epoch": epoch,
             }
             self.log_to_wandb(metrics, commit=True)
@@ -83,7 +83,7 @@ class MyWandbLogger(WandbLogger):
         if self.trainer.distributed_context.is_leader:
             metrics = {
                 "validation_loss": loss,
-                "validation_accuracy": logs.aux["acc"],
+                "validation_accuracy": logs.aux["acc"].mean().item(),
                 "epoch": epoch,
             }
             self.log_to_wandb(metrics, commit=True)
@@ -133,6 +133,11 @@ class EarlyStopperValidationAccuracy(EarlyStopper):
                 > 0
                 for i in [3, 2]
             ]  # stopping if val accuracy decreases for two consecutives epochs
+            conds.append(
+                self.validation_stats[-2][1].aux[self.field_name].mean()
+                - self.validation_stats[-1][1].aux[self.field_name].mean()
+                > 0.10
+            )  # stopping if validation accuracy drops by more than 10%
             if all(conds):
                 print("Stopped for excess of decrease in validation accuracy")
                 return True
