@@ -117,12 +117,8 @@ and Reinforce-based implementations.
 ## Citation
 If you find EGG useful in your research, please cite this repository:
 ```
-@misc{Kharitonov2021,
- author = "Kharitonov, Eugene  and
-       {Dess{\`\i}, Roberto and
-       Chaabouni, Rahma  and
-       Bouchacourt, Diane  and
-       Baroni, Marco",
+@misc{kharitonov:etal:2021,
+  author = "Kharitonov, Eugene  and Dess{\`i}, Roberto and Chaabouni, Rahma  and Bouchacourt, Diane  and Baroni, Marco",
   title = "{EGG}: a toolkit for research on {E}mergence of lan{G}uage in {G}ames",
   howpublished = {\url{https://github.com/facebookresearch/EGG}},
   year = {2021}
@@ -130,7 +126,7 @@ If you find EGG useful in your research, please cite this repository:
 ```
 
 ## Contributing
-Please read the contribution [guide](CONTRIBUTING.md).
+Please read the contribution [guide](.github/CONTRIBUTING.md).
 
 
 ## Testing
@@ -143,5 +139,6 @@ python -m pytest
 All tests should pass.
 
 ## Licence
-EGG is licensed under the MIT license. The text of the license can be found [here](LICENSE).
+The majority of EGG is licensed under CC-BY-NC, however portions of the project are available under separate license terms: [LARC](egg/zoo/emcom_as_ssl/LARC.py) is licensed under the BSD 3-Clause license.
 
+The text of the license for EGG can be found [here](LICENSE).
