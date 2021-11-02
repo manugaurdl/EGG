@@ -52,8 +52,6 @@ def build_game(opts):
             vocab_size=opts.vocab_size,
         ),
         temperature=opts.gs_temperature,
-        trainable_temperature=opts.train_gs_temperature,
-        straight_through=opts.straight_through,
     )
     receiver = SymbolReceiverWrapper(
         Receiver(

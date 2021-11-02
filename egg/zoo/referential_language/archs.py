@@ -7,6 +7,7 @@ from typing import Optional, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 
 
@@ -50,12 +51,33 @@ class Sender(nn.Module):
             raise RuntimeError("Unknown vision module for the Sender")
 
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, vocab_size, bias=False),
+            nn.Linear(input_dim * 2, vocab_size, bias=False),
             nn.BatchNorm1d(vocab_size),
         )
 
+    @staticmethod
+    def dot_product_attention(q, v):
+        score = q @ v.t()
+        attn = F.softmax(score, dim=-1)
+        context = attn @ v
+        return context, attn
+
     def forward(self, x, aux_input=None):
-        return self.fc(self.vision_module(x))
+        img_embeddings = self.vision_module(x)
+
+        if img_embeddings.shape[0] == 2:  # we only have to bboxes in the image
+            first_target = img_embeddings.view(-1)
+            second_target = torch.flip(img_embeddings, dims=[0]).view(-1)
+            return self.fc(torch.stack([first_target, second_target], dim=0))
+
+        contexts = []
+        for idx, target in enumerate(img_embeddings):
+            distractors = torch.cat([img_embeddings[:idx], img_embeddings[idx + 1 :]])
+            context, _ = self.dot_product_attention(target.unsqueeze(0), distractors)
+            contexts.append(context)
+        contexts = torch.cat(contexts)
+        output = torch.cat([img_embeddings, contexts], dim=1)
+        return self.fc(output)
 
 
 class Receiver(nn.Module):

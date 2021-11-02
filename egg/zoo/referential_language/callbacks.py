@@ -149,7 +149,7 @@ def get_callbacks(opts: argparse.Namespace):
         BestStatsTracker(),
         ConsoleLogger(as_json=True, print_train_loss=True),
         EarlyStopperValidationAccuracy(),
-        VisionModelSaver(opts.shared_vision, opts.checkpoint_freq),
+        # VisionModelSaver(opts.shared_vision, opts.checkpoint_freq),
     ]
 
     if opts.distributed_context.is_distributed:

@@ -36,25 +36,6 @@ BBOX_INDICES = {
 
 
 class Collater:
-    def __init__(self, contextual_distractors: bool):
-        if contextual_distractors:
-            self.collate_fn = self._collate_with_contextual_distractors
-        else:
-            self.collate_fn = self._collate_with_random_distractors
-
-    def _collate_with_random_distractors(self, batch: List[Any]) -> List[torch.Tensor]:
-        sender_input, receiver_input, class_labels = [], [], []
-        for elem in batch:
-            sender_input.append(elem[0])
-            class_labels.append(torch.LongTensor([elem[1]]))
-            receiver_input.append(elem[2])
-
-        sender_input = torch.stack(sender_input)
-        receiver_input = torch.stack(receiver_input)
-        class_labels = torch.stack(class_labels)
-
-        return sender_input, class_labels, receiver_input
-
     def _collate_with_contextual_distractors(
         self, batch: List[Any]
     ) -> List[torch.Tensor]:
@@ -99,12 +80,16 @@ class Collater:
         return self.collate_fn(batch)
 
 
+def collate_fn(batch):
+    # dirty hack to avoid default collate_fn that stack tensors and add a batch_dimension
+    return batch[0]
+
+
 def get_dataloader(
     dataset_dir: str,
     split: str,
     batch_size: int = 128,
     num_workers: int = 4,
-    contextual_distractors: bool = False,
     image_size: int = 64,
     shuffle: bool = True,
     use_augmentations: bool = True,
@@ -117,7 +102,6 @@ def get_dataloader(
     dataset = OpenImages(
         split=split,
         transform=transform,
-        contextual_distractors=contextual_distractors,
     )
 
     sampler = None
@@ -131,8 +115,8 @@ def get_dataloader(
         batch_size=batch_size,
         shuffle=shuffle if sampler is None else False,
         sampler=sampler,
-        collate_fn=Collater(contextual_distractors=contextual_distractors),
         num_workers=num_workers,
+        collate_fn=collate_fn,
         pin_memory=True,
         drop_last=True,
     )
@@ -144,7 +128,6 @@ class OpenImages(VisionDataset):
         self,
         split: str = "train",
         transform: Optional[Callable] = None,
-        contextual_distractors: bool = False,
     ):
         root_folder = Path("/datasets01/open_images/030119")
         super(OpenImages, self).__init__(root=root_folder, transform=transform)
@@ -195,10 +178,6 @@ class OpenImages(VisionDataset):
         )
 
         self.transform = transform
-        if contextual_distractors:
-            self._extract_objects_fn = self._extract_contextual_objects
-        else:
-            self._extract_objects_fn = self._extract_random_objects
 
     def __len__(self) -> int:
         return len(self.images)
@@ -229,27 +208,11 @@ class OpenImages(VisionDataset):
         width = max(1, int(coords[1] - coords[0]))
         return tr_F.crop(img, top=top, left=left, height=height, width=width)
 
-    def _extract_random_objects(self, img, bboxes):
-        label_code, *coords = random.choice(bboxes)
-        coords = self.unnormalize_coords(coords, img.size)
-
-        img = self._crop_img(img, coords)
-
-        sender_img, receiver_img = self.transform(img), self.transform(img)
-        label_id = torch.tensor(self.label_name_to_id[label_code])
-
-        return sender_img, label_id, receiver_img, torch.LongTensor([len(bboxes)])
-
     def _extract_contextual_objects(self, img, bboxes):
-        sender_input, receiver_input, label = [], [], []
+        sender_input, receiver_input, labels = [], [], []
 
         for label_code, *coords in bboxes:
             coords = self.unnormalize_coords(coords, img.size)
-            if len(bboxes) > 2:
-                width = int(coords[1] - coords[0])
-                height = int(coords[3] - coords[2])
-                if width * height < 20:
-                    continue
             img = self._crop_img(img, coords)
 
             sender_img, receiver_img = self.transform(img), self.transform(img)
@@ -257,13 +220,19 @@ class OpenImages(VisionDataset):
 
             sender_input.append(sender_img)
             receiver_input.append(receiver_img)
-            label.append(label_id)
+            labels.append(label_id)
 
         sender_input = torch.stack(sender_input)
-        label = torch.stack(label)
+        labels = [label.unsqueeze(0) for label in labels]
         receiver_input = torch.stack(receiver_input)
-        num_obj = torch.LongTensor([len(sender_input)])
-        return sender_input, label, receiver_input, num_obj
+        return sender_input, labels, receiver_input
+
+    @staticmethod
+    def is_big_bbox(coords):
+        coords = [float(coord) for coord in coords[1:]]
+        width = coords[1] - coords[0]
+        height = coords[3] - coords[2]
+        return width * height > 0.0005
 
     def __getitem__(self, index: int):
         image_path = self.images[index]
@@ -271,9 +240,12 @@ class OpenImages(VisionDataset):
             image = Image.open(f).convert("RGB")
 
         labels = self.box_labels[image_path.stem]
-        extracted_objects = self._extract_objects_fn(image, labels)
+        labels = list(filter(self.is_big_bbox, labels))
 
-        return extracted_objects
+        if len(labels) <= 1:
+            return self.__getitem__(random.randint(0, len(self) - 1))
+
+        return self._extract_contextual_objects(image, labels)
 
 
 class GaussianBlur:

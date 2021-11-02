@@ -16,14 +16,6 @@ def get_data_opts(parser):
         default="/datasets01/open_images/030119",
         help="Dataset location",
     )
-
-    group.add_argument(
-        "--contextual_distractors",
-        default=False,
-        action="store_true",
-        help="If set distractors will include all the objects in each image",
-    )
-
     group.add_argument("--image_size", type=int, default=64, help="Image size")
 
     group.add_argument(
@@ -39,36 +31,6 @@ def get_gs_opts(parser):
         type=float,
         default=1.0,
         help="gs temperature used in the relaxation layer",
-    )
-    group.add_argument(
-        "--gs_temperature_decay",
-        type=float,
-        default=1.0,
-        help="gs temperature update_factor (default: 1.0)",
-    )
-    group.add_argument(
-        "--train_gs_temperature",
-        default=False,
-        action="store_true",
-        help="train gs temperature used in the relaxation layer",
-    )
-    group.add_argument(
-        "--straight_through",
-        default=False,
-        action="store_true",
-        help="use straight through gumbel softmax estimator",
-    )
-    group.add_argument(
-        "--update_gs_temp_frequency",
-        default=1,
-        type=int,
-        help="update gs temperature frequency (default: 1)",
-    )
-    group.add_argument(
-        "--minimum_gs_temperature",
-        default=1.0,
-        type=float,
-        help="minimum gs temperature when frequency update (default: 1.0)",
     )
 
 
@@ -135,18 +97,6 @@ def get_common_opts(params):
         help="Run the game logging to wandb",
     )
     parser.add_argument("--wandb_tag", help="wandb tag for current run")
-    parser.add_argument(
-        "--eval_only",
-        action="store_true",
-        default=False,
-        help="Only run the evaluation loop",
-    )
-    parser.add_argument(
-        "--gaussian_eval",
-        action="store_true",
-        default=False,
-        help="Perform Gaussian evaluation",
-    )
     parser.add_argument(
         "--pdb",
         action="store_true",
