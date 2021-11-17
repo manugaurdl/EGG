@@ -13,14 +13,10 @@ def get_data_opts(parser):
     group.add_argument(
         "--dataset_dir",
         type=str,
-        default="/datasets01/open_images/030119",
+        default="/datasets01/VisualGenome1.2/061517",
         help="Dataset location",
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
-
-    group.add_argument(
-        "--num_workers", type=int, default=4, help="Workers used in the dataloader"
-    )
     group.add_argument("--use_augmentations", action="store_true", default=False)
 
 
@@ -96,7 +92,9 @@ def get_common_opts(params):
         default=False,
         help="Run the game logging to wandb",
     )
-    parser.add_argument("--wandb_tag", help="wandb tag for current run")
+    parser.add_argument(
+        "--wandb_tag", default="playground", help="wandb tag for current run"
+    )
     parser.add_argument(
         "--pdb",
         action="store_true",

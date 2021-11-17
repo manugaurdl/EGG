@@ -6,8 +6,6 @@
 import argparse
 import json
 
-import torch
-
 from egg.core import (
     Callback,
     ConsoleLogger,
@@ -16,50 +14,6 @@ from egg.core import (
 from egg.core.early_stopping import EarlyStopper
 
 from egg.core.callbacks import WandbLogger
-
-
-class VisionModelSaver(Callback):
-    """A callback that stores vision module(s) in trainer's checkpoint_dir, if any."""
-
-    def __init__(self, shared_vision: bool, checkpoint_freq: int = 1):
-        self.checkpoint_freq = checkpoint_freq
-        self.shared = shared_vision
-
-    def on_train_begin(self, trainer_instance: "Trainer"):  # noqa: F821
-        self.trainer = trainer_instance
-
-        if self.trainer.distributed_context.is_distributed:
-            # if distributed training the model is an instance of
-            # DistributedDataParallel and we need to unpack it from it.
-            self.game = self.trainer.game.module
-        else:
-            self.game = self.trainer.game
-
-    def write_model(self, agent_cnn: torch.nn.Module, model_name: str):
-        torch.save(
-            agent_cnn.state_dict(),
-            self.trainer.checkpoint_path / model_name,
-        )
-
-    def save_vision_model(self, epoch: str = ""):
-        if hasattr(self.trainer, "checkpoint_path") and self.trainer.checkpoint_path:
-            self.trainer.checkpoint_path.mkdir(exist_ok=True, parents=True)
-
-            model_name = f"vision_module_{'shared' if self.shared else 'sender'}_{epoch if epoch else 'final'}.pt"
-            self.write_model(self.game.sender.agent.vision_module, model_name)
-
-            if not self.shared:
-                model_name = f"vision_module_recv_{epoch if epoch else 'final'}.pt"
-                self.write_model(self.game.receiver.agent.vision_module, model_name)
-
-    def on_train_end(self):
-        if self.trainer.distributed_context.is_leader:
-            self.save_vision_model()
-
-    def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int):
-        if self.checkpoint_freq > 0 and (epoch % self.checkpoint_freq == 0):
-            if self.trainer.distributed_context.is_leader:
-                self.save_vision_model(epoch=epoch)
 
 
 class MyWandbLogger(WandbLogger):
@@ -149,7 +103,6 @@ def get_callbacks(opts: argparse.Namespace):
         BestStatsTracker(),
         ConsoleLogger(as_json=True, print_train_loss=True),
         EarlyStopperValidationAccuracy(),
-        # VisionModelSaver(opts.shared_vision, opts.checkpoint_freq),
     ]
 
     if opts.distributed_context.is_distributed:

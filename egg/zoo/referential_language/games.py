@@ -8,8 +8,8 @@ import torch.nn.functional as F
 
 from egg.core.gs_wrappers import GumbelSoftmaxWrapper, SymbolReceiverWrapper
 from egg.core.interaction import LoggingStrategy
-from egg.core.continous_communication import SenderReceiverContinuousCommunication
 from egg.zoo.referential_language.archs import (
+    ContextualCommunicationGame,
     Receiver,
     Sender,
     initialize_vision_module,
@@ -33,7 +33,10 @@ def loss(
 def build_game(opts):
 
     train_logging_strategy = LoggingStrategy.minimal()
-    test_logging_strategy = LoggingStrategy(False, False, True, True, True, True, False)
+    test_logging_strategy = LoggingStrategy(
+        False, False, False, True, False, False, False
+    )
+    # test_logging_strategy = LoggingStrategy(False, False, True, True, True, True, False)
 
     vision_module_sender, input_dim = initialize_vision_module(
         name=opts.vision_model_name
@@ -65,7 +68,7 @@ def build_game(opts):
         opts.recv_output_dim,
     )
 
-    game = SenderReceiverContinuousCommunication(
+    game = ContextualCommunicationGame(
         sender=sender,
         receiver=receiver,
         loss=loss,

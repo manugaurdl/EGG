@@ -3,12 +3,15 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+import torchvision.transforms.functional as vision_F
+
+from egg.core.continous_communication import SenderReceiverContinuousCommunication
 
 
 def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
@@ -33,6 +36,39 @@ def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
     return model, n_features
 
 
+def dot_product_attention(q, v):
+    score = q @ v.t()
+    attn = F.softmax(score, dim=-1)
+    context = attn @ v
+    return context, attn
+
+
+"""
+contexts = []
+for idx, target in enumerate(img_embeddings):
+    distractors = torch.cat([img_embeddings[:idx], img_embeddings[idx + 1 :]])
+    context, _ = self.dot_product_attention(target.unsqueeze(0), distractors)
+    contexts.append(context)
+contexts = torch.cat(contexts)
+output = torch.cat([img_embeddings, contexts], dim=1)
+"""
+
+
+class Cropper(nn.Module):
+    def forward(self, imgs: torch.Tensor, bboxes: Sequence[int]):
+        final = []
+        for img, img_bboxes in zip(imgs, bboxes):
+            objs = []
+            for bbox in img_bboxes:
+                top, left = int(bbox[2]), int(bbox[0])
+                h = max(1, int(bbox[3] - bbox[2]))
+                w = max(1, int(bbox[1] - bbox[0]))
+                crop = vision_F.crop(img, top=top, left=left, height=h, width=w)
+                objs.append(crop)
+            final.append(torch.stack(objs))
+        return final
+
+
 class Sender(nn.Module):
     def __init__(
         self,
@@ -50,34 +86,17 @@ class Sender(nn.Module):
         else:
             raise RuntimeError("Unknown vision module for the Sender")
 
-        self.fc = nn.Sequential(
-            nn.Linear(input_dim * 2, vocab_size, bias=False),
+        self.fc_out = nn.Sequential(
+            nn.Linear(input_dim, vocab_size, bias=False),
             nn.BatchNorm1d(vocab_size),
         )
 
-    @staticmethod
-    def dot_product_attention(q, v):
-        score = q @ v.t()
-        attn = F.softmax(score, dim=-1)
-        context = attn @ v
-        return context, attn
+    def forward(self, all_imgs: List[torch.Tensor], aux_input: Dict[Any] = None):
+        # input: list of tensors each of size n_obj X 3 X H X W
+        # output: list of tensor each of size n_obj X input_dim
+        img_embeddings = [self.vision_module(objs) for objs in all_imgs]
 
-    def forward(self, x, aux_input=None):
-        img_embeddings = self.vision_module(x)
-
-        if img_embeddings.shape[0] == 2:  # we only have to bboxes in the image
-            first_target = img_embeddings.view(-1)
-            second_target = torch.flip(img_embeddings, dims=[0]).view(-1)
-            return self.fc(torch.stack([first_target, second_target], dim=0))
-
-        contexts = []
-        for idx, target in enumerate(img_embeddings):
-            distractors = torch.cat([img_embeddings[:idx], img_embeddings[idx + 1 :]])
-            context, _ = self.dot_product_attention(target.unsqueeze(0), distractors)
-            contexts.append(context)
-        contexts = torch.cat(contexts)
-        output = torch.cat([img_embeddings, contexts], dim=1)
-        return self.fc(output)
+        return self.fc_out(output)
 
 
 class Receiver(nn.Module):
@@ -119,3 +138,8 @@ class Receiver(nn.Module):
         )
 
         return similarity_scores
+
+
+class ContextualCommunicationGame(SenderReceiverContinuousCommunication):
+    def __init__(self):
+        pass

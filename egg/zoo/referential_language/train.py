@@ -3,21 +3,12 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-# import json
 import sys
-
-# from pathlib import Path
 
 import torch
 
-# import wandb
-
 import egg.core as core
 from egg.zoo.referential_language.callbacks import get_callbacks, MyWandbLogger
-
-# from egg.zoo.referential_language.gaussian_noise_data import (
-#    get_gaussian_noise_dataloader,
-# )
 from egg.zoo.referential_language.data import get_dataloader
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils import add_weight_decay, get_common_opts
@@ -31,18 +22,14 @@ def main(params):
         breakpoint()
 
     data_kwargs = {
-        "dataset_dir": "/datasets01/open_images/030119",
+        "dataset_dir": "/datasets01/VisualGenome1.2/061517",
         "batch_size": opts.batch_size,
-        "num_workers": opts.num_workers,
         "image_size": opts.image_size,
         "is_distributed": opts.distributed_context.is_distributed,
+        "use_augmentations": opts.use_augmentations,
         "seed": opts.random_seed,
     }
-
-    # TODO: fix it, training on validation for now
-    train_loader = get_dataloader(
-        split="validation", use_augmentations=opts.use_augmentations, **data_kwargs
-    )
+    train_loader = get_dataloader(**data_kwargs)
 
     game = build_game(opts)
 
@@ -73,6 +60,7 @@ def main(params):
         callbacks=callbacks,
     )
     trainer.train(n_epochs=opts.n_epochs)
+    print("| FINISHED JOB")
 
 
 if __name__ == "__main__":

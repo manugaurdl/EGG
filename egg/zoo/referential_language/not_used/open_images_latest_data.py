@@ -225,7 +225,12 @@ class OpenImages(VisionDataset):
         sender_input = torch.stack(sender_input)
         labels = [label.unsqueeze(0) for label in labels]
         receiver_input = torch.stack(receiver_input)
-        return sender_input, labels, receiver_input
+        return (
+            sender_input,
+            labels,
+            receiver_input,
+            {"chance_level": torch.Tensor([1 / sender_input.shape[0] * 100])},
+        )
 
     @staticmethod
     def is_big_bbox(coords):
