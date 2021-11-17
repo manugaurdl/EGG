@@ -3,6 +3,7 @@
 
 
 import json
+
 import re
 from pathlib import Path
 from PIL import Image
