@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
+import logging
 
 import egg.core as core
 
@@ -35,7 +36,7 @@ def get_vision_module_opts(parser):
     group.add_argument(
         "--vision_model_name",
         type=str,
-        default="resnet50",
+        default="resnet101",
         choices=["resnet50", "resnet101", "resnet152"],
         help="Model name for the encoder",
     )
@@ -78,25 +79,7 @@ def get_game_arch_opts(parser):
 def get_common_opts(params):
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--weight_decay",
-        type=float,
-        default=10e-6,
-        help="Weight decay used for SGD",
-    )
-    parser.add_argument(
-        "--use_larc", action="store_true", default=False, help="Use LARC optimizer"
-    )
-    parser.add_argument(
-        "--wandb",
-        action="store_true",
-        default=False,
-        help="Run the game logging to wandb",
-    )
-    parser.add_argument(
-        "--wandb_tag", default="playground", help="wandb tag for current run"
-    )
-    parser.add_argument(
-        "--pdb",
+        "--debug",
         action="store_true",
         default=False,
         help="Run the game with pdb enabled",
@@ -108,20 +91,10 @@ def get_common_opts(params):
     get_game_arch_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)
+    if opts.debug:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    logging.basicConfig(level=level)
+
     return opts
-
-
-def add_weight_decay(model, weight_decay=1e-5, skip_name=""):
-    decay = []
-    no_decay = []
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            continue
-        if len(param.shape) == 1 or skip_name in name:
-            no_decay.append(param)
-        else:
-            decay.append(param)
-    return [
-        {"params": no_decay, "weight_decay": 0.0},
-        {"params": decay, "weight_decay": weight_decay},
-    ]

@@ -33,17 +33,13 @@ def loss(
 def build_game(opts):
 
     train_logging_strategy = LoggingStrategy.minimal()
-    test_logging_strategy = LoggingStrategy(
-        False, False, False, True, False, False, False
-    )
-    # test_logging_strategy = LoggingStrategy(False, False, True, True, True, True, False)
+    test_logging_strategy = LoggingStrategy.minimal()
 
     vision_module_sender, input_dim = initialize_vision_module(
-        name=opts.vision_model_name
+        name=opts.vision_model_name, pretrained=opts.pretrain_vision
     )
-    if opts.shared_vision:
-        vision_module_receiver = vision_module_sender
-    else:
+    vision_module_receiver = vision_module_sender
+    if not opts.shared_vision:
         vision_module_receiver, _ = initialize_vision_module(
             name=opts.vision_model_name
         )

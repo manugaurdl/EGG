@@ -3,135 +3,168 @@
 
 
 import json
-import re
+import logging
 from pathlib import Path
+from typing import Callable, List
 from PIL import Image
-from typing import List
 
 import torch
 import torchvision
+from torch.nn.utils.rnn import pad_sequence
 from torchvision import transforms
+from torchvision.transforms.functional import crop
 
-
-def resize_bboxes(
-    self, boxes: torch.Tensor, new_size: List[int], original_size: List[int]
-) -> torch.Tensor:
-
-    ratios = [
-        torch.tensor(s, dtype=torch.float32, device=boxes.device)
-        / torch.tensor(s_orig, dtype=torch.float32, device=boxes.device)
-        for s, s_orig in zip(new_size, original_size)
-    ]
-    ratio_height, ratio_width = ratios
-    xmin, ymin, xmax, ymax = boxes.unbind(1)
-
-    xmin = xmin * ratio_width
-    xmax = xmax * ratio_width
-    ymin = ymin * ratio_height
-    ymax = ymax * ratio_height
-    return torch.stack((xmin, ymin, xmax, ymax), dim=1)
+logger = logging.getLogger(__name__)
 
 
 class VisualGenomeDataset(torchvision.datasets.VisionDataset):
-    def __init__(self, dataset_dir, transform=None):
-        super(VisualGenomeDataset, self).__init__(root=dataset_dir, transform=transform)
+    def __init__(self, dataset_dir, transform=None, target_transform=None):
+        super(VisualGenomeDataset, self).__init__(
+            root=dataset_dir, transform=transform, target_transform=target_transform
+        )
+        path = Path(dataset_dir)
+        path_objects, path_image_data = path / "objects.json", path / "image_data.json"
 
-        self.path = Path(dataset_dir)
-        path_objects = self.path / "objects.json"
-        path_image_data = self.path / "image_data.json"
-
-        with open(path_objects) as fin:
-            self.data = json.load(fin)[:1]
         with open(path_image_data) as fin:
-            self.metadata = json.load(fin)[:1]
+            img_data = json.load(fin)
+        with open(path_objects) as fin:
+            obj_data = json.load(fin)
 
-        all_obj_names = []
-        for i in self.data:
-            for j in i["objects"]:
-                if j["synsets"] != []:
-                    all_obj_names.append(j["synsets"][0])
-        else:
-            all_obj_names.append("No synset")
-        dic_names = dict(enumerate(set(all_obj_names)))
-        self.dic_names = {v: k for k, v in dic_names.items()}
+        self.samples = []
+        for img, objs in zip(img_data, obj_data):
+            # transforming url to local path
+            # url is of this form: https://cs.stanford.edu/people/rak248/VG_100K_2/1.jpg
+            # and will become {path_to_vg_folder}VG_100K_2/1.jpg
+            img_path = path / "/".join(img["url"].split("/")[-2:])
+            h, w = img["height"], img["width"]
+            obj_info = [
+                (obj["x"], obj["y"], obj["h"], obj["w"]) for obj in objs["objects"]
+            ]
+            self.samples.append((img_path, h, w, obj_info))
 
     def __len__(self):
-        return len(self.data)
+        return len(self.samples)
 
     def __getitem__(self, index):
-        def pil_loader(path: str) -> Image.Image:
-            with open(path, "rb") as f:
-                img = Image.open(f)
-                return img.convert("RGB")
+        img_path, img_h, img_w, obj_info = self.samples[index]
 
-        zipped1 = [[list(i.values())[0], list(i.values())[1]] for i in self.data]
-        image_id, objects_info = zip(*zipped1)
-
-        zipped2 = [
-            [j["url"], j["width"], j["height"]]
-            for j in self.metadata
-            for i in image_id
-            if j["image_id"] == i
-        ]
-        image_url, image_w, image_h = zip(*zipped2)
-
-        zipped3 = [
-            [
-                j["names"],
-                torch.Tensor([self.dic_names[z] for z in j["synsets"]]).long(),
-                torch.Tensor((j["x"], j["y"], j["w"], j["h"])),
-            ]
-            for j in objects_info[index]
-        ]
-        obj_names, obj_labels, obj_xywh = zip(*zipped3)
-
-        im_path = self.p / "Images" / re.findall("VG_.*.jpg", image_url[index])[0]
-
-        image = pil_loader(im_path)
-
+        image = pil_loader(img_path)
         if self.transform:
             sender_input, receiver_input = self.transform(image), self.transform(image)
 
+        boxes = torch.stack(
+            [torch.IntTensor([x, y, x + w, y + h]) for x, y, h, w in obj_info]
+        )
         if self.target_transform:
-            obj_xywh_t = self.target_transform(obj_xywh, (image.size[1], image.size[0]))
+            boxes = self.target_transform(
+                boxes=boxes, original_size=torch.IntTensor([img_w, img_h])
+            )
 
         return (
             sender_input,
-            torch.cat(obj_labels),
+            torch.LongTensor([1] * len(obj_info)),  # dummy category per object
             receiver_input,
-            torch.cat(obj_xywh_t),
+            {"boxes": boxes, "n_objs": boxes.shape[0]},
         )
+
+
+def crop_and_augment(
+    img: torch.Tensor, coords: torch.Tensor, transform: Callable = None
+):
+    top, left = int(coords[2]), int(coords[0])
+    height = max(1, int(coords[3] - coords[2]))
+    width = max(1, int(coords[1] - coords[0]))
+    return crop(img, top=top, left=left, height=height, width=width)
+
+
+def get_bboxes(
+    img: torch.Tensor, bboxes: torch.Tensor, transform: Callable = None
+) -> torch.Tensor:
+    # returns a Tensor of size n_objs X 3 X H X W
+    return torch.stack([crop_and_augment(img, bbox, transform) for bbox in bboxes])
+
+
+class Collater:
+    def __init__(self, max_objects, transform=None):
+        self.max_objects = max_objects
+        self.transform = transform
+
+    def __call__(self, batch):
+        breakpoint()
+        mask_len = [max(0, self.max_objects - elem[3]["n_objs"]) for elem in batch]
+        mask_len = torch.Tensor(mask_len)
+
+        boxes = pad_sequence(
+            [elem[3]["boxes"][: self.max_objects] for elem in batch], batch_first=True
+        )
+        segments = [
+            get_bboxes(elem[0], elem[3]["n_objs"], transform=self.transform)
+            for elem in batch
+        ]
+
+        sender_input = torch.nn.utils.rnn.pad_sequence(segments, batch_first=True)
+
+        receiver_input = torch.nn.utils.rnn.pad_sequence(sender_input, batch_first=True)
+
+        labels = pad_sequence([elem[1][: self.max_objects] for elem in batch])
+
+        return (
+            sender_input,
+            labels,
+            receiver_input,
+            {"boxes": boxes, "mask_len": mask_len},
+        )
+
+
+def pil_loader(path: str) -> Image.Image:
+    with open(path, "rb") as f:
+        img = Image.open(f)
+        return img.convert("RGB")
 
 
 def get_dataloader(
-    dataset_dir: str,
+    dataset_dir: str = "/datasets01/VisualGenome1.2/061517",
     batch_size: int = 32,
     image_size: int = 32,
-    is_distributed: bool = False,
+    max_objects: int = 20,
     seed: int = 111,
 ):
 
-    simple_transf = transforms.Compose(
-        [
-            transforms.Resize(size=(image_size, image_size)),
-            transforms.ToTensor(),
-            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
+    transformations = [
+        transforms.Resize(size=(image_size, image_size)),
+        transforms.ToTensor(),
+    ]
+
+    dataset = VisualGenomeDataset(
+        dataset_dir=dataset_dir, transform=transforms.Compose(transformations)
     )
 
-    dataset = VisualGenomeDataset(root=dataset_dir, transform=simple_transf)
-
-    if is_distributed:
-        sampler = torch.utils.data.distributed.DistributedSampler(
-            dataset, shuffle=True, drop_last=True, seed=seed
-        )
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=(sampler is None),
-        sampler=sampler,
-        num_workers=4,
+        shuffle=True,
+        collate_fn=Collater(max_objects=max_objects),
+        num_workers=0,  # TODO TO CHANGE THIS
         pin_memory=True,
         drop_last=True,
     )
     return loader
+
+
+class BboxResizer:
+    def __init__(self, new_size: List[int]):
+        self.new_size = torch.IntTensor(new_size)
+
+    def __call__(
+        self, boxes: torch.Tensor, original_size: torch.Tensor
+    ) -> torch.Tensor:
+        ratios = self.new_size / original_size
+
+        xmin, ymin, xmax, ymax = boxes.unbind(1)
+        ratio_width, ratio_height = ratios.unbind(0)
+
+        xmin = xmin * ratio_width
+        xmax = xmax * ratio_width
+        ymin = ymin * ratio_height
+        ymax = ymax * ratio_height
+        return torch.stack((xmin, ymin, xmax, ymax), dim=1)
