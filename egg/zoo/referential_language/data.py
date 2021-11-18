@@ -13,36 +13,32 @@ import torchvision
 from torchvision import transforms
 
 
-class BoxResizer:
-    def __init__(self, new_size: int):
-        self.new_size = new_size
+def resize_bboxes(
+    self, boxes: torch.Tensor, new_size: List[int], original_size: List[int]
+) -> torch.Tensor:
 
-    def __call__(self, boxes, original_size):
-        # type: (torch.Tensor, List[int], List[int]) -> torch.Tensor
-        ratios = [
-            torch.tensor(s, dtype=torch.float32, device=boxes.device)
-            / torch.tensor(s_orig, dtype=torch.float32, device=boxes.device)
-            for s, s_orig in zip(self.new_size, original_size)
-        ]
-        ratio_height, ratio_width = ratios
-        xmin, ymin, xmax, ymax = boxes.unbind(1)
+    ratios = [
+        torch.tensor(s, dtype=torch.float32, device=boxes.device)
+        / torch.tensor(s_orig, dtype=torch.float32, device=boxes.device)
+        for s, s_orig in zip(new_size, original_size)
+    ]
+    ratio_height, ratio_width = ratios
+    xmin, ymin, xmax, ymax = boxes.unbind(1)
 
-        xmin = xmin * ratio_width
-        xmax = xmax * ratio_width
-        ymin = ymin * ratio_height
-        ymax = ymax * ratio_height
-        return torch.stack((xmin, ymin, xmax, ymax), dim=1)
+    xmin = xmin * ratio_width
+    xmax = xmax * ratio_width
+    ymin = ymin * ratio_height
+    ymax = ymax * ratio_height
+    return torch.stack((xmin, ymin, xmax, ymax), dim=1)
 
 
 class VisualGenomeDataset(torchvision.datasets.VisionDataset):
-    def __init__(self, dataset_dir, transform=None, target_transform=None):
-        super(VisualGenomeDataset, self).__init__(
-            root=dataset_dir, transform=transform, target_transform=target_transform
-        )
+    def __init__(self, dataset_dir, transform=None):
+        super(VisualGenomeDataset, self).__init__(root=dataset_dir, transform=transform)
 
-        self.p = Path(dataset_dir)
-        path_objects = self.p / "VG_data/objects.json"
-        path_image_data = self.p / "VG_data/image_data.json"
+        self.path = Path(dataset_dir)
+        path_objects = self.path / "objects.json"
+        path_image_data = self.path / "image_data.json"
 
         with open(path_objects) as fin:
             self.data = json.load(fin)[:1]
@@ -58,6 +54,9 @@ class VisualGenomeDataset(torchvision.datasets.VisionDataset):
             all_obj_names.append("No synset")
         dic_names = dict(enumerate(set(all_obj_names)))
         self.dic_names = {v: k for k, v in dic_names.items()}
+
+    def __len__(self):
+        return len(self.data)
 
     def __getitem__(self, index):
         def pil_loader(path: str) -> Image.Image:
@@ -102,9 +101,6 @@ class VisualGenomeDataset(torchvision.datasets.VisionDataset):
             receiver_input,
             torch.cat(obj_xywh_t),
         )
-
-    def __len__(self):
-        return len(self.data)
 
 
 def get_dataloader(

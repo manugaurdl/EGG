@@ -8,7 +8,7 @@ import sys
 import torch
 
 import egg.core as core
-from egg.zoo.referential_language.callbacks import get_callbacks, MyWandbLogger
+from egg.core import ConsoleLogger
 from egg.zoo.referential_language.data import get_dataloader
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils import add_weight_decay, get_common_opts
@@ -44,14 +44,9 @@ def main(params):
         optimizer, T_max=opts.n_epochs
     )
 
-    callbacks = get_callbacks(opts)
-    if opts.wandb and opts.distributed_context.is_leader:
-        callbacks.append(
-            MyWandbLogger(
-                opts=opts, project="new_contextualized", tags=[opts.wandb_tag]
-            )
-        )
-
+    callbacks = [
+        ConsoleLogger(as_json=True, print_train_loss=True),
+    ]
     trainer = core.Trainer(
         game=game,
         optimizer=optimizer,
