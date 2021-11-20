@@ -24,6 +24,14 @@ def loss(
     _labels,
     _aux_input,
 ):
+
+    """
+    def masked_softmax(x, mask, **kwargs):
+        x_masked = x.clone()
+        x_masked[mask == 0] = -float("inf")
+
+        return torch.softmax(x_masked, **kwargs)
+    """
     labels = torch.arange(receiver_output.shape[0], device=receiver_output.device)
     acc = (receiver_output.argmax(dim=1) == labels).detach().float()
     loss = F.cross_entropy(receiver_output, labels, reduction="none")

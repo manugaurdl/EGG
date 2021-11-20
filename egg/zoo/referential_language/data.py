@@ -6,7 +6,6 @@ import json
 import logging
 import random
 from pathlib import Path
-from typing import List
 from PIL import Image
 
 import torch
@@ -138,31 +137,3 @@ def get_dataloader(
         drop_last=True,
     )
     return loader
-
-
-"""
-def masked_softmax(x, mask, **kwargs):
-    x_masked = x.clone()
-    x_masked[mask == 0] = -float("inf")
-
-    return torch.softmax(x_masked, **kwargs)
-"""
-
-
-class BboxResizer:
-    def __init__(self, new_size: List[int]):
-        self.new_size = torch.IntTensor(new_size)
-
-    def __call__(
-        self, boxes: torch.Tensor, original_size: torch.Tensor
-    ) -> torch.Tensor:
-        ratios = self.new_size / original_size
-
-        xmin, ymin, xmax, ymax = boxes.unbind(1)
-        ratio_width, ratio_height = ratios.unbind(0)
-
-        xmin = xmin * ratio_width
-        xmax = xmax * ratio_width
-        ymin = ymin * ratio_height
-        ymax = ymax * ratio_height
-        return torch.stack((xmin, ymin, xmax, ymax), dim=1)
