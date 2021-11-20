@@ -4,8 +4,9 @@
 
 import json
 import logging
+import random
 from pathlib import Path
-from typing import Callable, List
+from typing import List
 from PIL import Image
 
 import torch
@@ -17,11 +18,15 @@ from torchvision.transforms.functional import crop
 logger = logging.getLogger(__name__)
 
 
+def pil_loader(path: str) -> Image.Image:
+    with open(path, "rb") as f:
+        img = Image.open(f)
+        return img.convert("RGB")
+
+
 class VisualGenomeDataset(torchvision.datasets.VisionDataset):
-    def __init__(self, dataset_dir, transform=None, target_transform=None):
-        super(VisualGenomeDataset, self).__init__(
-            root=dataset_dir, transform=transform, target_transform=target_transform
-        )
+    def __init__(self, dataset_dir, transform=None):
+        super(VisualGenomeDataset, self).__init__(root=dataset_dir, transform=transform)
         path = Path(dataset_dir)
         path_objects, path_image_data = path / "objects.json", path / "image_data.json"
 
@@ -50,76 +55,65 @@ class VisualGenomeDataset(torchvision.datasets.VisionDataset):
 
         image = pil_loader(img_path)
         if self.transform:
-            sender_input, receiver_input = self.transform(image), self.transform(image)
+            image = self.transform(image)
 
-        boxes = torch.stack(
-            [torch.IntTensor([x, y, x + w, y + h]) for x, y, h, w in obj_info]
-        )
-        if self.target_transform:
-            boxes = self.target_transform(
-                boxes=boxes, original_size=torch.IntTensor([img_w, img_h])
+        boxes = []
+        for x, y, h, w in obj_info:
+            if (x + w) * (y + h) / (img_w * img_h) > 0.01:
+                # bboxes format: xmin, ymax, width, height
+                boxes.append(torch.IntTensor([x, y, h, w]))
+
+        if len(boxes) <= 1:
+            return self.__getitem__(random.randint(0, len(self) - 1))
+        else:
+            return (
+                image,
+                torch.LongTensor([1] * len(obj_info)),  # dummy category per object
+                {"bboxes": torch.stack(boxes), "n_objs": torch.Tensor([len(boxes)])},
             )
 
-        return (
-            sender_input,
-            torch.LongTensor([1] * len(obj_info)),  # dummy category per object
-            receiver_input,
-            {"boxes": boxes, "n_objs": boxes.shape[0]},
-        )
 
-
-def crop_and_augment(
-    img: torch.Tensor, coords: torch.Tensor, transform: Callable = None
-):
-    top, left = int(coords[2]), int(coords[0])
-    height = max(1, int(coords[3] - coords[2]))
-    width = max(1, int(coords[1] - coords[0]))
-    return crop(img, top=top, left=left, height=height, width=width)
-
-
-def get_bboxes(
-    img: torch.Tensor, bboxes: torch.Tensor, transform: Callable = None
+def extract_objs(
+    img: torch.Tensor,
+    bboxes: torch.Tensor,
+    image_size: int,
 ) -> torch.Tensor:
     # returns a Tensor of size n_objs X 3 X H X W
-    return torch.stack([crop_and_augment(img, bbox, transform) for bbox in bboxes])
+    resizer = transforms.Resize(size=(image_size, image_size))
+    segments = [resizer(crop(img, bbox[1], bbox[0], *bbox[2:])) for bbox in bboxes]
+    return torch.stack(segments)
 
 
 class Collater:
-    def __init__(self, max_objects, transform=None):
-        self.max_objects = max_objects
-        self.transform = transform
+    def __init__(self, max_objects: int, image_size: int):
+        self.max_objs = max_objects
+        self.image_size = image_size
 
     def __call__(self, batch):
-        breakpoint()
-        mask_len = [max(0, self.max_objects - elem[3]["n_objs"]) for elem in batch]
-        mask_len = torch.Tensor(mask_len)
+        n_objs = self.max_objs - torch.cat([elem[2]["n_objs"] for elem in batch])
+        mask = torch.where(n_objs > 0, n_objs, torch.zeros(len(batch)))
 
-        boxes = pad_sequence(
-            [elem[3]["boxes"][: self.max_objects] for elem in batch], batch_first=True
-        )
-        segments = [
-            get_bboxes(elem[0], elem[3]["n_objs"], transform=self.transform)
-            for elem in batch
-        ]
+        segments, bboxes, labels = [], [], []
+        for elem in batch:
+            bboxes = elem[2]["bboxes"][: self.max_objs]
+            segments.append(
+                extract_objs(img=elem[0], bboxes=bboxes, image_size=self.image_size)
+            )
+            bboxes.append(elem[2]["bboxes"][: self.max_objs])
+            labels.append(elem[1][: self.max_objs])
 
         sender_input = torch.nn.utils.rnn.pad_sequence(segments, batch_first=True)
+        labels = pad_sequence(labels)
+        batched_bboxes = pad_sequence(bboxes, batch_first=True)
+        receiver_input = sender_input
 
-        receiver_input = torch.nn.utils.rnn.pad_sequence(sender_input, batch_first=True)
-
-        labels = pad_sequence([elem[1][: self.max_objects] for elem in batch])
-
+        breakpoint()
         return (
             sender_input,
             labels,
             receiver_input,
-            {"boxes": boxes, "mask_len": mask_len},
+            {"bboxes": batched_bboxes, "mask": mask},
         )
-
-
-def pil_loader(path: str) -> Image.Image:
-    with open(path, "rb") as f:
-        img = Image.open(f)
-        return img.convert("RGB")
 
 
 def get_dataloader(
@@ -129,26 +123,30 @@ def get_dataloader(
     max_objects: int = 20,
     seed: int = 111,
 ):
-
-    transformations = [
-        transforms.Resize(size=(image_size, image_size)),
-        transforms.ToTensor(),
-    ]
-
     dataset = VisualGenomeDataset(
-        dataset_dir=dataset_dir, transform=transforms.Compose(transformations)
+        dataset_dir=dataset_dir, transform=transforms.ToTensor()
     )
 
+    collater = Collater(max_objects=max_objects, image_size=image_size)
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=True,
-        collate_fn=Collater(max_objects=max_objects),
+        collate_fn=collater,
         num_workers=0,  # TODO TO CHANGE THIS
         pin_memory=True,
         drop_last=True,
     )
     return loader
+
+
+"""
+def masked_softmax(x, mask, **kwargs):
+    x_masked = x.clone()
+    x_masked[mask == 0] = -float("inf")
+
+    return torch.softmax(x_masked, **kwargs)
+"""
 
 
 class BboxResizer:
