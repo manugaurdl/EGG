@@ -97,10 +97,12 @@ class Collater:
         extra_objs = max_objs - torch.cat(all_n_objs)
         mask = torch.where(extra_objs > 0, extra_objs, torch.zeros(len(batch)))
 
-        segments, all_bboxes = [], []
+        segments, all_bboxes, baselines = [], [], []
         for elem in batch:
             img, img_bboxes = elem[0], elem[2]["bboxes"][:max_objs]
-            segments.append(extract_objs(img, img_bboxes, self.image_size))
+            objs = extract_objs(img, img_bboxes, self.image_size)
+            baselines.append(1 / objs.shape[0])
+            segments.append(objs)
             all_bboxes.append(img_bboxes)
 
         sender_input = torch.nn.utils.rnn.pad_sequence(segments, batch_first=True)
@@ -111,7 +113,11 @@ class Collater:
             sender_input,
             torch.IntTensor([1]),  # dummy label
             receiver_input,
-            {"bboxes": batched_bboxes, "mask": mask},
+            {
+                "bboxes": batched_bboxes,
+                "mask": mask,
+                "baselines": torch.Tensor(baselines),
+            },
         )
 
 

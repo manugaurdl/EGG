@@ -39,7 +39,7 @@ def loss(
 
     acc = (logits.argmax(dim=1) == labels).detach().float()
     loss = F.cross_entropy(logits, labels, reduction="none")
-    return loss, {"acc": acc}
+    return loss, {"acc": acc, "baseline": aux_input["baselines"]}
 
 
 def build_game(opts):

@@ -1,9 +1,9 @@
 {
     "n_epoch": [10],
-    "batch_size": [64],
+    "batch_size": [32],
     "image_size": [64],
     "max_objects": [20],
-    "lr": [0.0001],
+    "lr": [0.001, 0.0005, 0.0001],
     "random_seed": [111],
     "pretrain_vision": [true],
     "shared_vision": [true],
