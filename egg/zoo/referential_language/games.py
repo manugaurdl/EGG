@@ -8,8 +8,8 @@ import torch.nn.functional as F
 
 from egg.core.gs_wrappers import GumbelSoftmaxWrapper, SymbolReceiverWrapper
 from egg.core.interaction import LoggingStrategy
+from egg.core.continous_communication import SenderReceiverContinuousCommunication
 from egg.zoo.referential_language.archs import (
-    ContextualCommunicationGame,
     Receiver,
     Sender,
     initialize_vision_module,
@@ -18,28 +18,31 @@ from egg.zoo.referential_language.archs import (
 
 def loss(
     _sender_input,
-    _message,
+    message,
     _receiver_input,
     receiver_output,
     _labels,
-    _aux_input,
+    aux_input,
 ):
+    [bsz, max_objs, _] = receiver_output.shape
+    labels = []
+    logits = []
+    for idx, mask_elem in enumerate(aux_input["mask"]):
+        num_elem = max_objs - mask_elem.int().item()
+        unmasked_similarities = receiver_output[idx][:num_elem]
+        unmasked_similarities[:, num_elem:] = -float("inf")
+        logits.append(unmasked_similarities)
+        labels.append(torch.arange(num_elem, device=receiver_output.device))
 
-    """
-    def masked_softmax(x, mask, **kwargs):
-        x_masked = x.clone()
-        x_masked[mask == 0] = -float("inf")
+    logits = torch.cat(logits)
+    labels = torch.cat(labels)
 
-        return torch.softmax(x_masked, **kwargs)
-    """
-    labels = torch.arange(receiver_output.shape[0], device=receiver_output.device)
-    acc = (receiver_output.argmax(dim=1) == labels).detach().float()
-    loss = F.cross_entropy(receiver_output, labels, reduction="none")
+    acc = (logits.argmax(dim=1) == labels).detach().float()
+    loss = F.cross_entropy(logits, labels, reduction="none")
     return loss, {"acc": acc}
 
 
 def build_game(opts):
-
     train_logging_strategy = LoggingStrategy.minimal()
     test_logging_strategy = LoggingStrategy.minimal()
 
@@ -72,7 +75,7 @@ def build_game(opts):
         opts.recv_output_dim,
     )
 
-    game = ContextualCommunicationGame(
+    game = SenderReceiverContinuousCommunication(
         sender=sender,
         receiver=receiver,
         loss=loss,

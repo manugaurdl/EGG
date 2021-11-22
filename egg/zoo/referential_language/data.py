@@ -1,5 +1,7 @@
-#!/usr/bin/env python
-# coding: utf-8
+# Copyright (c) Facebook, Inc. and its affiliates.
+
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 
 import json
@@ -58,8 +60,9 @@ class VisualGenomeDataset(torchvision.datasets.VisionDataset):
 
         boxes = []
         for x, y, h, w in obj_info:
+            if w == 1 or h == 1:
+                continue
             if (x + w) * (y + h) / (img_w * img_h) > 0.01:
-                # bboxes format: xmin, ymax, width, height
                 boxes.append(torch.IntTensor([x, y, h, w]))
 
         if len(boxes) <= 1:
@@ -80,7 +83,7 @@ def extract_objs(
     # returns a Tensor of size n_objs X 3 X H X W
     resizer = transforms.Resize(size=(image_size, image_size))
     segments = [resizer(crop(img, bbox[1], bbox[0], *bbox[2:])) for bbox in bboxes]
-    return torch.stack(segments)
+    return torch.stack(segments)  # between  72064 and 72191
 
 
 class Collater:
@@ -89,27 +92,24 @@ class Collater:
         self.image_size = image_size
 
     def __call__(self, batch):
-        n_objs = self.max_objs - torch.cat([elem[2]["n_objs"] for elem in batch])
-        mask = torch.where(n_objs > 0, n_objs, torch.zeros(len(batch)))
+        all_n_objs = [elem[2]["n_objs"] for elem in batch]
+        max_objs = min(self.max_objs, max(all_n_objs))
+        extra_objs = max_objs - torch.cat(all_n_objs)
+        mask = torch.where(extra_objs > 0, extra_objs, torch.zeros(len(batch)))
 
-        segments, bboxes, labels = [], [], []
+        segments, all_bboxes = [], []
         for elem in batch:
-            bboxes = elem[2]["bboxes"][: self.max_objs]
-            segments.append(
-                extract_objs(img=elem[0], bboxes=bboxes, image_size=self.image_size)
-            )
-            bboxes.append(elem[2]["bboxes"][: self.max_objs])
-            labels.append(elem[1][: self.max_objs])
+            img, img_bboxes = elem[0], elem[2]["bboxes"][:max_objs]
+            segments.append(extract_objs(img, img_bboxes, self.image_size))
+            all_bboxes.append(img_bboxes)
 
         sender_input = torch.nn.utils.rnn.pad_sequence(segments, batch_first=True)
-        labels = pad_sequence(labels)
-        batched_bboxes = pad_sequence(bboxes, batch_first=True)
+        batched_bboxes = pad_sequence(all_bboxes, batch_first=True)
         receiver_input = sender_input
 
-        breakpoint()
         return (
             sender_input,
-            labels,
+            torch.IntTensor([1]),  # dummy label
             receiver_input,
             {"bboxes": batched_bboxes, "mask": mask},
         )

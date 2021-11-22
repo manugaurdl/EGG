@@ -20,6 +20,7 @@ def main(params):
         "dataset_dir": opts.dataset_dir,
         "batch_size": opts.batch_size,
         "image_size": opts.image_size,
+        "max_objects": opts.max_objects,
         "seed": opts.random_seed,
     }
     train_loader = get_dataloader(**data_kwargs)

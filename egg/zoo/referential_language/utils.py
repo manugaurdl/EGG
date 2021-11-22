@@ -17,6 +17,12 @@ def get_data_opts(parser):
         default="/datasets01/VisualGenome1.2/061517",
         help="Dataset location",
     )
+    group.add_argument(
+        "--max_objects",
+        type=int,
+        default=20,
+        help="Max numbeer of bboxes to extract from an image",
+    )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
     group.add_argument("--use_augmentations", action="store_true", default=False)
 
