@@ -44,7 +44,8 @@ def loss(
 
 def build_game(opts):
     train_logging_strategy = LoggingStrategy.minimal()
-    test_logging_strategy = LoggingStrategy.minimal()
+    logging_test_args = [False, False, False, False, True, False, False]
+    test_logging_strategy = LoggingStrategy(*logging_test_args)
 
     vision_module_sender, input_dim = initialize_vision_module(
         name=opts.vision_model_name, pretrained=opts.pretrain_vision
