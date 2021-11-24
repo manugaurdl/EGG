@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
-import logging
 
 import egg.core as core
 
@@ -12,10 +11,16 @@ import egg.core as core
 def get_data_opts(parser):
     group = parser.add_argument_group("data")
     group.add_argument(
-        "--dataset_dir",
+        "--image_dir",
         type=str,
-        default="/datasets01/VisualGenome1.2/061517",
-        help="Dataset location",
+        default="/datasets01/VisualGenome1.2/061517/",
+        help="Path to folder with VG images",
+    )
+    group.add_argument(
+        "--metadata_dir",
+        type=str,
+        default="/private/home/rdessi/visual_genome",
+        help="Path to folder with VG metada",
     )
     group.add_argument(
         "--max_objects",
@@ -24,6 +29,7 @@ def get_data_opts(parser):
         help="Max numbeer of bboxes to extract from an image",
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
+    group.add_argument("--contextual_distractors", action="store_true", default=False)
     group.add_argument("--use_augmentations", action="store_true", default=False)
 
 
@@ -97,10 +103,4 @@ def get_common_opts(params):
     get_game_arch_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)
-    if opts.debug:
-        level = logging.DEBUG
-    else:
-        level = logging.INFO
-    logging.basicConfig(level=level)
-
     return opts

@@ -3,6 +3,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import json
+from pathlib import Path
+import torch
+
 import egg.core as core
 from egg.zoo.referential_language.data import get_dataloader
 from egg.zoo.referential_language.games import build_game
@@ -17,10 +21,13 @@ def main(params):
         breakpoint()
 
     data_kwargs = {
-        "dataset_dir": opts.dataset_dir,
+        "image_dir": opts.image_dir,
+        "metadata_dir": opts.metadata_dir,
+        "split": "train",
         "batch_size": opts.batch_size,
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
+        "contextual_distractors": opts.contextual_distractors,
         "seed": opts.random_seed,
     }
     train_loader = get_dataloader(**data_kwargs)
@@ -37,6 +44,20 @@ def main(params):
         callbacks=callbacks,
     )
     trainer.train(n_epochs=opts.n_epochs)
+
+    data_kwargs.update({"split": "val"})
+    val_loader = get_dataloader(**data_kwargs)
+    _, val_interaction = trainer.eval(val_loader)
+
+    dump = dict((k, v.mean().item()) for k, v in val_interaction.aux.items())
+    dump.update(dict(mode="VALIDATION_I_TEST"))
+    print(json.dumps(dump), flush=True)
+
+    if opts.checkpoint_dir:
+        output_path = Path(opts.checkpoint_dir)
+        output_path.mkdir(exist_ok=True, parents=True)
+        torch.save(val_interaction, output_path / "val_interaction")
+
     print("| FINISHED JOB")
 
 
