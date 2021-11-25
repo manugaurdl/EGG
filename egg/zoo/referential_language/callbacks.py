@@ -23,5 +23,19 @@ class BestStatsTracker(Callback):
         print(json.dumps(best_stats), flush=True)
 
 
+class DistributedSamplerEpochSetter(Callback):
+    def on_epoch_begin(self, epoch: int):
+        if self.trainer.distributed_context.is_distributed:
+            self.trainer.train_data.sampler.set_epoch(epoch)
+
+    def on_validation_begin(self, epoch: int):
+        if self.trainer.distributed_context.is_distributed:
+            self.trainer.validation_data.sampler.set_epoch(epoch)
+
+
 def get_callbacks():
-    return [BestStatsTracker(), ConsoleLogger(as_json=True, print_train_loss=True)]
+    return [
+        BestStatsTracker(),
+        ConsoleLogger(as_json=True, print_train_loss=True),
+        DistributedSamplerEpochSetter(),
+    ]

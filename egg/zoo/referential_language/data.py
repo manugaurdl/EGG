@@ -14,6 +14,7 @@ from PIL import Image
 import torch
 import torchvision
 from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms
 from torchvision.transforms.functional import crop
 
@@ -168,6 +169,7 @@ def get_dataloader(
     image_size: int = 32,
     max_objects: int = 20,
     contextual_distractors: bool = False,
+    is_distributed: bool = False,
     seed: int = 111,
 ):
     to_tensor_fn = transforms.ToTensor()
@@ -182,12 +184,18 @@ def get_dataloader(
         collater = ContextualDistractorsCollater(max_objects, image_size)
     else:
         collater = RandomDistractorsCollater(max_objects, image_size, dataset)
+
+    sampler = None
+    if is_distributed:
+        sampler = DistributedSampler(dataset, shuffle=True, drop_last=True, seed=seed)
+
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=(sampler is None),
         collate_fn=collater,
-        num_workers=0,  # TODO TO CHANGE THIS
+        sampler=sampler,
+        num_workers=4,
         pin_memory=True,
         drop_last=True,
     )

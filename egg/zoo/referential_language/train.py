@@ -30,6 +30,7 @@ def main(params):
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
         "contextual_distractors": opts.contextual_distractors,
+        "is_distributed": opts.distributed_context.is_distributed,
         "seed": opts.random_seed,
     }
     train_loader = get_dataloader(**data_kwargs)

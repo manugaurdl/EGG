@@ -86,6 +86,12 @@ def get_game_arch_opts(parser):
         default=2048,
         help="Output dim of the non-linear projection of the distractors, used to compare with msg embedding",
     )
+    parser.add_argument(
+        "--cosine_similarity",
+        action="store_true",
+        default=False,
+        help="If True Receiver will compute l2-normalized dot product between message and images (default: False)",
+    )
 
 
 def get_common_opts(params):
