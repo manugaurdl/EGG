@@ -35,8 +35,8 @@ def load_data(dataset_dir: str, output_folder: str, train_data: int = 80):
 
     train_obj_list, train_image_data_list = [], []
     val_obj_list, val_image_data_list = [], []
-    for idx in idxs:
-        if idx < train_samples:
+    for i, idx in enumerate(idxs):
+        if i < train_samples:
             train_obj_list.append(obj_data[idx])
             train_image_data_list.append(img_data[idx])
         else:
