@@ -3,44 +3,9 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import argparse
 import json
 
-from egg.core import (
-    Callback,
-    ConsoleLogger,
-    Interaction,
-)
-from egg.core.early_stopping import EarlyStopper
-
-from egg.core.callbacks import WandbLogger
-
-
-class MyWandbLogger(WandbLogger):
-    def on_batch_end(
-        self, logs: Interaction, loss: float, batch_id: int, is_training: bool = True
-    ):
-        if is_training and self.trainer.distributed_context.is_leader:
-            metrics = {"batch_loss": loss, "batch_accuracy": logs.aux["acc"].mean()}
-            self.log_to_wandb(metrics, commit=True)
-
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
-        if self.trainer.distributed_context.is_leader:
-            metrics = {
-                "train_loss": loss,
-                "train_accuracy": logs.aux["acc"].mean().item(),
-                "epoch": epoch,
-            }
-            self.log_to_wandb(metrics, commit=True)
-
-    def on_validation_end(self, loss: float, logs: Interaction, epoch: int):
-        if self.trainer.distributed_context.is_leader:
-            metrics = {
-                "validation_loss": loss,
-                "validation_accuracy": logs.aux["acc"].mean().item(),
-                "epoch": epoch,
-            }
-            self.log_to_wandb(metrics, commit=True)
+from egg.core import Callback, ConsoleLogger, Interaction
 
 
 class BestStatsTracker(Callback):
@@ -58,54 +23,5 @@ class BestStatsTracker(Callback):
         print(json.dumps(best_stats), flush=True)
 
 
-class DistributedSamplerEpochSetter(Callback):
-    """A callback that sets the right epoch of a DistributedSampler instance."""
-
-    def on_epoch_begin(self, epoch: int):
-        if self.trainer.distributed_context.is_distributed:
-            self.trainer.train_data.sampler.set_epoch(epoch)
-
-    def on_validation_begin(self, epoch: int):
-        if self.trainer.distributed_context.is_distributed:
-            self.trainer.validation_data.sampler.set_epoch(epoch)
-
-
-class EarlyStopperValidationAccuracy(EarlyStopper):
-    def __init__(self, field_name: str = "acc", validation: bool = True):
-        super(EarlyStopperValidationAccuracy, self).__init__(validation)
-        self.field_name = field_name
-
-    def should_stop(self) -> bool:
-        if self.validation and len(self.validation_stats) > 3:
-            assert (
-                self.validation_stats
-            ), "Validation data must be provided for early stooping to work"
-
-            conds = [
-                self.validation_stats[-i][1].aux[self.field_name].mean()
-                - self.validation_stats[-i + 1][1].aux[self.field_name].mean()
-                > 0
-                for i in [3, 2]
-            ]  # stopping if val accuracy decreases for two consecutives epochs
-            conds.append(
-                self.validation_stats[-2][1].aux[self.field_name].mean()
-                - self.validation_stats[-1][1].aux[self.field_name].mean()
-                > 0.10
-            )  # stopping if validation accuracy drops by more than 10%
-            if all(conds):
-                print("Stopped for excess of decrease in validation accuracy")
-                return True
-            return False
-
-
-def get_callbacks(opts: argparse.Namespace):
-    callbacks = [
-        BestStatsTracker(),
-        ConsoleLogger(as_json=True, print_train_loss=True),
-        EarlyStopperValidationAccuracy(),
-    ]
-
-    if opts.distributed_context.is_distributed:
-        callbacks.append(DistributedSamplerEpochSetter())
-
-    return callbacks
+def get_callbacks():
+    return [BestStatsTracker(), ConsoleLogger(as_json=True, print_train_loss=True)]
