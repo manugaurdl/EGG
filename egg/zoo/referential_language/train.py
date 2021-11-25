@@ -47,7 +47,8 @@ def main(params):
     trainer.train(n_epochs=opts.n_epochs)
 
     val_data_kwargs = dict(data_kwargs)
-    val_loader = get_dataloader(**val_data_kwargs.update({"split": "val"}))
+    val_data_kwargs.update({"split": "val"})
+    val_loader = get_dataloader(**val_data_kwargs)
     _, val_interaction = trainer.eval(val_loader)
 
     dump = dict((k, v.mean().item()) for k, v in val_interaction.aux.items())
