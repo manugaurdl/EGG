@@ -30,6 +30,7 @@ def main(params):
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
         "contextual_distractors": opts.contextual_distractors,
+        "use_augmentations": opts.use_augmentations,
         "is_distributed": opts.distributed_context.is_distributed,
         "seed": opts.random_seed,
     }
@@ -48,7 +49,7 @@ def main(params):
     trainer.train(n_epochs=opts.n_epochs)
 
     val_data_kwargs = dict(data_kwargs)
-    val_data_kwargs.update({"split": "val"})
+    val_data_kwargs.update({"split": "val", "use_augmentations": False})
     val_loader = get_dataloader(**val_data_kwargs)
     _, val_interaction = trainer.eval(val_loader)
 

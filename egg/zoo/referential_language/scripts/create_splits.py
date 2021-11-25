@@ -3,13 +3,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+
+# example usage:
+#    $ python create_splits.py --dataset_folder="/private/home/rdessi/visual_genome" --train_data=80
+
 import argparse
-import logging
 import json
 import random
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
 
 
 def load_data(dataset_dir: str, output_folder: str, train_data: int = 80):
@@ -28,8 +29,8 @@ def load_data(dataset_dir: str, output_folder: str, train_data: int = 80):
 
     train_samples = int(len(img_data) * train_data / 100)
     validation_samples = len(img_data) - train_samples
-    logger.info(f"Train samples: {train_samples}")
-    logger.info(f"Validation samples: {validation_samples}")
+    print(f"Train samples: {train_samples}")
+    print(f"Validation samples: {validation_samples}")
 
     idxs = random.sample(range(len(img_data)), k=len(img_data))
 
@@ -43,15 +44,13 @@ def load_data(dataset_dir: str, output_folder: str, train_data: int = 80):
             val_obj_list.append(obj_data[idx])
             val_image_data_list.append(img_data[idx])
 
-    with open(train_objs, "w") as fout:
-        json.dump(train_obj_list, fout)
-    with open(train_imgs, "w") as fout:
-        json.dump(train_image_data_list, fout)
+    with open(train_objs, "w") as fout_obj, open(train_imgs, "w") as fout_img:
+        json.dump(train_obj_list, fout_obj)
+        json.dump(train_image_data_list, fout_img)
 
-    with open(val_imgs, "w") as fout:
-        json.dump(val_image_data_list, fout)
-    with open(val_objs, "w") as fout:
-        json.dump(val_obj_list, fout)
+    with open(val_objs, "w") as fout_obj, open(val_imgs, "w") as fout_img:
+        json.dump(val_obj_list, fout_obj)
+        json.dump(val_image_data_list, fout_img)
 
 
 def main():
@@ -60,7 +59,9 @@ def main():
         "--dataset_folder", required=True, help="Path to a folder with VG data"
     )
     parser.add_argument(
-        "--output_folder", default=None, help="Optional, if None, default is path"
+        "--output_folder",
+        default=None,
+        help="Optional, if None, default is dataset_folder",
     )
     parser.add_argument(
         "--train_data",
@@ -71,7 +72,6 @@ def main():
     parser.add_argument("--seed", default=111)
     opts = parser.parse_args()
     random.seed(opts.seed)
-    logging.basicConfig(level=logging.INFO)
     if not opts.output_folder:
         opts.output_folder = opts.dataset_folder
 

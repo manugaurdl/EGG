@@ -8,8 +8,8 @@ import json
 import random
 from pathlib import Path
 from random import sample
-from typing import Iterable
-from PIL import Image
+from typing import Callable, Iterable
+from PIL import Image, ImageFilter
 
 import torch
 import torchvision
@@ -89,33 +89,56 @@ def extract_objs(
 
 
 class BaseCollater:
-    def __init__(self, max_objects: int, image_size: int):
+    def __init__(
+        self, max_objects: int, image_size: int, augmentations: Callable = None
+    ):
         self.max_objs = max_objects
         self.image_size = image_size
+        self.augmentations = augmentations
 
     def __call__(self, batch):
         raise NotImplementedError
 
 
 class RandomDistractorsCollater(BaseCollater):
-    def __init__(self, max_objects: int, image_size: int, dataset: Iterable = None):
-        super(RandomDistractorsCollater, self).__init__(max_objects, image_size)
+    def __init__(
+        self,
+        max_objects: int,
+        image_size: int,
+        augmentations: Callable = None,
+        dataset: Iterable = None,
+    ):
+        super(RandomDistractorsCollater, self).__init__(
+            max_objects, image_size, augmentations
+        )
         self.dataset = dataset
 
     def __call__(self, batch):
-        segments = []
+        sender_segments, recv_segments = [], []
         data_len, n_dis = len(self.dataset), self.max_objs - 1
         for elem in batch:
-            batch_elem = []
+            batch_elem_sender, batch_elem_recv = [], []
             distractors = [self.dataset[i] for i in sample(range(data_len), k=n_dis)]
             for x in [elem] + distractors:
                 img, img_bboxes = x[0], random.choice(x[2]["bboxes"]).unsqueeze(0)
-                objs = extract_objs(img, img_bboxes, self.image_size)
-                batch_elem.append(objs)
-            segments.append(torch.cat(batch_elem))
 
-        sender_input = torch.stack(segments)
+                img_sender = self.augmentations(img) if self.augmentations else img
+                objs = extract_objs(img_sender, img_bboxes, self.image_size)
+                batch_elem_sender.append(objs)
+
+                if self.augmentations:
+                    img_recv = self.augmentasion(img)
+                    objs_recv = extract_objs(img_recv, img_bboxes, self.image_size)
+                    batch_elem_recv.append(objs_recv)
+
+            sender_segments.append(torch.cat(batch_elem_sender))
+            if batch_elem_recv:
+                recv_segments.append(torch.cat(batch_elem_recv))
+
+        sender_input = torch.stack(sender_segments)
         receiver_input = sender_input
+        if recv_segments:
+            receiver_input = torch.stack(recv_segments)
 
         return (
             sender_input,
@@ -135,19 +158,30 @@ class ContextualDistractorsCollater(BaseCollater):
         extra_objs = max_objs - torch.cat(all_n_objs)
         mask = torch.where(extra_objs > 0, extra_objs, torch.zeros(len(batch)))
 
-        segments, all_bboxes, baselines = [], [], []
+        segments_sender, segments_recv = [], []
+        all_bboxes, baselines = [], []
         for elem in batch:
             bboxes = elem[2]["bboxes"]
             bboxes_idx = sample(range(len(bboxes)), k=min(len(bboxes), max_objs))
+
             img, img_bboxes = elem[0], bboxes[bboxes_idx]
-            objs = extract_objs(img, img_bboxes, self.image_size)
+            img_sender = self.augmentations(img) if self.augmentations else img
+            objs = extract_objs(img_sender, img_bboxes, self.image_size)
+            segments_sender.append(objs)
+
+            if self.augmentations:
+                img_recv = self.augmentations(img)
+                objs_recv = extract_objs(img_recv, img_bboxes, self.image_size)
+                segments_recv.append(objs_recv)
+
             baselines.append(1 / objs.shape[0])
-            segments.append(objs)
             all_bboxes.append(img_bboxes)
 
-        sender_input = torch.nn.utils.rnn.pad_sequence(segments, batch_first=True)
-        batched_bboxes = pad_sequence(all_bboxes, batch_first=True)
+        sender_input = pad_sequence(segments_sender, batch_first=True)
         receiver_input = sender_input
+        if segments_recv:
+            receiver_input = pad_sequence(segments_recv, batch_first=True)
+        batched_bboxes = pad_sequence(all_bboxes, batch_first=True)
 
         return (
             sender_input,
@@ -161,6 +195,15 @@ class ContextualDistractorsCollater(BaseCollater):
         )
 
 
+class GaussianBlur:
+    def __init__(self, sigma=[0.1, 2.0]):
+        self.sigma = sigma
+
+    def __call__(self, x):
+        sigma = random.uniform(self.sigma[0], self.sigma[1])
+        return x.filter(ImageFilter.GaussianBlur(radius=sigma))
+
+
 def get_dataloader(
     image_dir: str = "/private/home/rdessi/visual_genome",
     metadata_dir: str = "/datasets01/VisualGenome1.2/061517/",
@@ -169,6 +212,7 @@ def get_dataloader(
     image_size: int = 32,
     max_objects: int = 20,
     contextual_distractors: bool = False,
+    use_augmentations: bool = False,
     is_distributed: bool = False,
     seed: int = 111,
 ):
@@ -180,10 +224,24 @@ def get_dataloader(
         transform=to_tensor_fn,
     )
 
+    augmentations = None
+    if use_augmentations:
+        color_jitter = transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)
+        transformations = [
+            transforms.RandomApply([color_jitter], p=0.8),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.RandomApply([GaussianBlur([0.1, 2.0])], p=0.5),
+        ]
+        augmentations = transforms.Compose(transformations)
+
     if contextual_distractors:
-        collater = ContextualDistractorsCollater(max_objects, image_size)
+        collater = ContextualDistractorsCollater(
+            max_objects, image_size, augmentations=augmentations
+        )
     else:
-        collater = RandomDistractorsCollater(max_objects, image_size, dataset)
+        collater = RandomDistractorsCollater(
+            max_objects, image_size, dataset, augmentations=augmentations
+        )
 
     sampler = None
     if is_distributed:
