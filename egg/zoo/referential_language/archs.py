@@ -8,6 +8,7 @@ from typing import Optional, Union
 import torch
 import torch.nn as nn
 import torchvision
+from torch.nn.functional import cosine_similarity as cosine_sim
 
 
 def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
@@ -68,8 +69,8 @@ class Receiver(nn.Module):
         hidden_dim: int = 2048,
         output_dim: int = 2048,
         temperature: float = 1.0,
+        cosine_similarity: bool = False,
     ):
-
         super(Receiver, self).__init__()
 
         if isinstance(vision_module, nn.Module):
@@ -87,12 +88,15 @@ class Receiver(nn.Module):
             nn.Linear(hidden_dim, output_dim),
         )
         self.temperature = temperature
+        self.cosine_sim = cosine_sim
 
     def forward(self, messages, images, aux_input=None):
         [bsz, max_objs, _, h, w] = images.shape
         images = self.vision_module(images.view(-1, 3, h, w)).view(bsz * max_objs, -1)
         images = self.fc(images).view(bsz, max_objs, -1)
         messages = messages.view(bsz, max_objs, -1)
-        # TODO implement cosine similarity
-        similarity_scores = torch.bmm(messages, images.transpose(1, 2))
-        return similarity_scores
+        if self.cosine_sim:
+            scores = cosine_sim(messages.unsqueeze(2), images.unsqueeze(1), 3)
+        else:
+            scores = torch.bmm(messages, images.transpose(1, 2))  # dot product sim
+        return scores
