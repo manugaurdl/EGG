@@ -111,6 +111,8 @@ class RandomDistractorsCollater(BaseCollater):
         super(RandomDistractorsCollater, self).__init__(
             max_objects, image_size, augmentations
         )
+        if self.max_objects <= 2:
+            raise RuntimeError(f"Max_objs <=2 is not supporte. Found {max_objects}")
         self.dataset = dataset
 
     def __call__(self, batch):

@@ -27,9 +27,8 @@ def loss(
     _labels,
     aux_input,
 ):
-    [bsz, max_objs, _] = receiver_output.shape
-    labels = []
-    logits = []
+    max_objs = receiver_output.shape[1]
+    labels, logits = [], []
     for idx, mask_elem in enumerate(aux_input["mask"]):
         num_elem = max_objs - mask_elem.int().item()
         unmasked_similarities = receiver_output[idx][:num_elem]
