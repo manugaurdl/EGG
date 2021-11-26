@@ -9,7 +9,7 @@ import random
 from pathlib import Path
 from random import sample
 from typing import Callable, Iterable
-from PIL import Image, ImageFilter
+from PIL import Image
 
 import torch
 import torchvision
@@ -105,14 +105,14 @@ class RandomDistractorsCollater(BaseCollater):
         self,
         max_objects: int,
         image_size: int,
-        augmentations: Callable = None,
         dataset: Iterable = None,
+        augmentations: Callable = None,
     ):
         super(RandomDistractorsCollater, self).__init__(
             max_objects, image_size, augmentations
         )
-        if self.max_objects <= 2:
-            raise RuntimeError(f"Max_objs <=2 is not supporte. Found {max_objects}")
+        if self.max_objs <= 2:
+            raise RuntimeError(f"Max_objs <=2 is not supporte. Found {self.max_objs}")
         self.dataset = dataset
 
     def __call__(self, batch):
@@ -129,7 +129,7 @@ class RandomDistractorsCollater(BaseCollater):
                 batch_elem_sender.append(objs)
 
                 if self.augmentations:
-                    img_recv = self.augmentasion(img)
+                    img_recv = self.augmentations(img)
                     objs_recv = extract_objs(img_recv, img_bboxes, self.image_size)
                     batch_elem_recv.append(objs_recv)
 
@@ -197,15 +197,6 @@ class ContextualDistractorsCollater(BaseCollater):
         )
 
 
-class GaussianBlur:
-    def __init__(self, sigma=[0.1, 2.0]):
-        self.sigma = sigma
-
-    def __call__(self, x):
-        sigma = random.uniform(self.sigma[0], self.sigma[1])
-        return x.filter(ImageFilter.GaussianBlur(radius=sigma))
-
-
 def get_dataloader(
     image_dir: str = "/private/home/rdessi/visual_genome",
     metadata_dir: str = "/datasets01/VisualGenome1.2/061517/",
@@ -226,24 +217,19 @@ def get_dataloader(
         transform=to_tensor_fn,
     )
 
-    augmentations = None
+    augms = None
     if use_augmentations:
         color_jitter = transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)
         transformations = [
             transforms.RandomApply([color_jitter], p=0.8),
             transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([GaussianBlur([0.1, 2.0])], p=0.5),
         ]
-        augmentations = transforms.Compose(transformations)
+        augms = transforms.Compose(transformations)
 
     if contextual_distractors:
-        collater = ContextualDistractorsCollater(
-            max_objects, image_size, augmentations=augmentations
-        )
+        collater = ContextualDistractorsCollater(max_objects, image_size, augms)
     else:
-        collater = RandomDistractorsCollater(
-            max_objects, image_size, dataset, augmentations=augmentations
-        )
+        collater = RandomDistractorsCollater(max_objects, image_size, dataset, augms)
 
     sampler = None
     if is_distributed:
