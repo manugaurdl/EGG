@@ -9,8 +9,8 @@ from pathlib import Path
 import torch
 
 import egg.core as core
+import egg.zoo.referential_language.data_utils as data
 from egg.zoo.referential_language.callbacks import get_callbacks
-from egg.zoo.referential_language.data import get_dataloader
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils import get_common_opts
 
@@ -34,7 +34,7 @@ def main(params):
         "is_distributed": opts.distributed_context.is_distributed,
         "seed": opts.random_seed,
     }
-    train_loader = get_dataloader(**data_kwargs)
+    train_loader = data.get_dataloader(**data_kwargs)
 
     game = build_game(opts)
 
@@ -48,9 +48,10 @@ def main(params):
     )
     trainer.train(n_epochs=opts.n_epochs)
 
+    # VALIDATION LOOP
     val_data_kwargs = dict(data_kwargs)
     val_data_kwargs.update({"split": "val", "use_augmentations": False})
-    val_loader = get_dataloader(**val_data_kwargs)
+    val_loader = data.get_dataloader(**val_data_kwargs)
     _, val_interaction = trainer.eval(val_loader)
 
     dump = dict((k, v.mean().item()) for k, v in val_interaction.aux.items())
@@ -61,6 +62,14 @@ def main(params):
         output_path = Path(opts.checkpoint_dir)
         output_path.mkdir(exist_ok=True, parents=True)
         torch.save(val_interaction, output_path / "val_interaction")
+
+    # GAUSSIAN TEST
+    gaussian_data = data.get_gaussian_dataloader(**data_kwargs)
+    _, gaussian_interaction = trainer.eval(gaussian_data)
+
+    dump = dict((k, v.mean().item()) for k, v in gaussian_interaction.aux.items())
+    dump.update(dict(mode="GAUSSIAN_SET"))
+    print(json.dumps(dump), flush=True)
 
     print("| FINISHED JOB")
 
