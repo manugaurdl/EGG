@@ -92,7 +92,8 @@ class Receiver(nn.Module):
 
     def forward(self, messages, images, aux_input=None):
         [bsz, max_objs, _, h, w] = images.shape
-        images = self.vision_module(images.view(-1, 3, h, w)).view(bsz * max_objs, -1)
+        images = self.vision_module(images.view(-1, 3, h, w))
+        aux_input.update({"recv_img_feats": images})
         images = self.fc(images).view(bsz, max_objs, -1)
         messages = messages.view(bsz, max_objs, -1)
         if self.cosine_sim:
