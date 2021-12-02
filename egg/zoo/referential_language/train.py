@@ -53,6 +53,8 @@ def main(params):
     val_data_kwargs.update({"split": "val", "use_augmentations": False})
     val_loader = data.get_dataloader(**val_data_kwargs)
     _, val_interaction = trainer.eval(val_loader)
+    if val_interaction.aux_input:
+        val_interaction.aux_input.update(val_data_kwargs)
 
     dump = dict((k, v.mean().item()) for k, v in val_interaction.aux.items())
     dump.update(dict(mode="VALIDATION_SET"))

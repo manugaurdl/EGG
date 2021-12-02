@@ -147,10 +147,10 @@ class ContextualDistractorsCollater(BaseCollater):
         receiver_input = sender_input
         if segments_recv:
             receiver_input = pad_sequence(segments_recv, batch_first=True)
-        labels = pad_sequence(obj_labels, batch_first=True)
+        labels = pad_sequence(obj_labels, batch_first=True, padding_value=-1.0)
 
         img_ids = torch.cat(img_ids)
-        obj_ids = pad_sequence(obj_ids, batch_first=True)
+        obj_ids = pad_sequence(obj_ids, batch_first=True, padding_value=-1.0).squeeze()
         original_imgs = torch.stack(original_imgs)
 
         return (

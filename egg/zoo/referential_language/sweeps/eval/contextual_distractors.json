@@ -2,6 +2,7 @@
     "n_epoch": [10],
     "image_dir": ["/datasets01/VisualGenome1.2/061517/"],
     "metadata_dir": ["/private/home/rdessi/visual_genome/"],
+    "load_from_checkpoint": ["/private/home/rdessi/contextual_emcomm/exps/contextual_distractors/49937320_0/final.tar"],
     "batch_size": [64],
     "image_size": [64],
     "max_objects": [20],
@@ -10,5 +11,6 @@
     "pretrain_vision": [true],
     "shared_vision": [true],
     "gs_temperature": [5.0],
-    "vocab_size": [1000]
+    "vocab_size": [1000],
+    "contextual_distractors": [true]
 }

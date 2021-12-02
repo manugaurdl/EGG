@@ -66,6 +66,8 @@ class VisualGenomeDataset(torchvision.datasets.VisionDataset):
             img_id = img["image_id"]
             h, w = img["height"], img["width"]
 
+            if len(objs["objects"]) < 2:
+                continue
             obj_info = []
             for obj in objs["objects"]:
                 for idx, name in enumerate(obj["names"]):
@@ -81,9 +83,6 @@ class VisualGenomeDataset(torchvision.datasets.VisionDataset):
                             )
                         )
                         break
-            # NOTE: 47703 obj have > 1 string in obj["names"] taking the first for now
-            # if we check and tak only the first name we have 86461 imgs and 2578322 objs
-            # 2570528 if we only check and pick the first name for each object
             self.samples.append((img_path, img_id, h, w, obj_info))
 
     def __len__(self):
