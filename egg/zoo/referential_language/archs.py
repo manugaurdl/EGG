@@ -69,7 +69,7 @@ class Receiver(nn.Module):
         hidden_dim: int = 2048,
         output_dim: int = 2048,
         temperature: float = 1.0,
-        cosine_similarity: bool = False,
+        use_cosine_sim: bool = False,
     ):
         super(Receiver, self).__init__()
 
@@ -88,7 +88,7 @@ class Receiver(nn.Module):
             nn.Linear(hidden_dim, output_dim),
         )
         self.temperature = temperature
-        self.cosine_sim = cosine_sim
+        self.use_cosine_sim = use_cosine_sim
 
     def forward(self, messages, images, aux_input=None):
         [bsz, max_objs, _, h, w] = images.shape
@@ -96,7 +96,7 @@ class Receiver(nn.Module):
         aux_input.update({"recv_img_feats": images})
         images = self.fc(images).view(bsz, max_objs, -1)
         messages = messages.view(bsz, max_objs, -1)
-        if self.cosine_sim:
+        if self.use_cosine_sim:
             scores = cosine_sim(messages.unsqueeze(2), images.unsqueeze(1), 3)
         else:
             scores = torch.bmm(messages, images.transpose(1, 2))  # dot product sim

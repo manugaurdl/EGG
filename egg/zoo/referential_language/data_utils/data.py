@@ -120,8 +120,8 @@ class VisualGenomeDataset(torchvision.datasets.VisionDataset):
 
 
 def get_dataloader(
-    image_dir: str = "/private/home/rdessi/visual_genome",
-    metadata_dir: str = "/datasets01/VisualGenome1.2/061517/",
+    image_dir: str = "/datasets01/VisualGenome1.2/061517/",
+    metadata_dir: str = "/private/home/rdessi/visual_genome",
     split: str = "train",
     batch_size: int = 32,
     image_size: int = 32,
