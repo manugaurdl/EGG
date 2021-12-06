@@ -73,7 +73,7 @@ def build_game(opts):
             hidden_dim=opts.recv_hidden_dim,
             output_dim=opts.recv_output_dim,
             temperature=opts.recv_temperature,
-            cosine_similarity=opts.cosine_similarity,
+            use_cosine_sim=opts.cosine_similarity,
         ),
         opts.vocab_size,
         opts.recv_output_dim,

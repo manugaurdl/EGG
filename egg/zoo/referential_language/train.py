@@ -46,7 +46,7 @@ def main(params):
         train_data=train_loader,
         callbacks=get_callbacks(),
     )
-    trainer.train(n_epochs=opts.n_epochs)
+    # trainer.train(n_epochs=opts.n_epochs)
 
     # VALIDATION LOOP
     val_data_kwargs = dict(data_kwargs)
@@ -54,7 +54,7 @@ def main(params):
     val_loader = data.get_dataloader(**val_data_kwargs)
     _, val_interaction = trainer.eval(val_loader)
     if val_interaction.aux_input:
-        val_interaction.aux_input.update(val_data_kwargs)
+        val_interaction.aux_input.update({"args": val_data_kwargs})
 
     dump = dict((k, v.mean().item()) for k, v in val_interaction.aux.items())
     dump.update(dict(mode="VALIDATION_SET"))
