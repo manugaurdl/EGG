@@ -63,6 +63,9 @@ def build_game(opts):
             vision_module=vision_module_sender,
             input_dim=input_dim,
             vocab_size=opts.vocab_size,
+            attention=opts.attention,
+            num_heads=opts.num_heads,
+            context_integration=opts.context_integration,
         ),
         temperature=opts.gs_temperature,
     )

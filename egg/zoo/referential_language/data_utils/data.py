@@ -131,7 +131,10 @@ def get_dataloader(
     is_distributed: bool = False,
     seed: int = 111,
 ):
-    to_tensor_fn = transforms.ToTensor()
+    m, std = [0.4529, 0.4170, 0.3804], [0.1830, 0.1779, 0.1745]
+    to_tensor_fn = transforms.Compose(
+        [transforms.ToTensor(), transforms.Normalize(mean=m, std=std)]
+    )
     dataset = VisualGenomeDataset(
         image_dir=image_dir,
         metadata_dir=metadata_dir,

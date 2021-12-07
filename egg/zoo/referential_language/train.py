@@ -63,7 +63,11 @@ def main(params):
     if opts.checkpoint_dir:
         output_path = Path(opts.checkpoint_dir)
         output_path.mkdir(exist_ok=True, parents=True)
-        torch.save(val_interaction, output_path / "val_interaction")
+        interaction_name = (
+            f"val_interaction_voc_{opts.vocab_size}_attn_{opts.attention}_"
+            f"ctx_integration_{opts.context_integration}"
+        )
+        torch.save(val_interaction, output_path / interaction_name)
 
     # GAUSSIAN TEST
     gaussian_data = data.get_gaussian_dataloader(**data_kwargs)

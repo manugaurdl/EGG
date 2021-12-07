@@ -69,6 +69,24 @@ def get_vision_module_opts(parser):
 def get_game_arch_opts(parser):
     group = parser.add_argument_group("game architecture")
     group.add_argument(
+        "--context_integration",
+        default="cat",
+        choices=["cat", "gate"],
+        help="Cat concatenates visual context with object features gate uses context to gate object features",
+    )
+    group.add_argument(
+        "--attention",
+        default=False,
+        action="store_true",
+        help="If set, visual context will be integrated by means of a self attention module",
+    )
+    group.add_argument(
+        "--num_heads",
+        type=int,
+        default=1,
+        help="Number of heads use in teh self attention to integrate context with objects (default: 1)",
+    )
+    group.add_argument(
         "--recv_temperature",
         type=float,
         default=0.1,
