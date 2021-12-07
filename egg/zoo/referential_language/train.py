@@ -60,7 +60,7 @@ def main(params):
     dump.update(dict(mode="VALIDATION_SET"))
     print(json.dumps(dump), flush=True)
 
-    if opts.checkpoint_dir:
+    if opts.checkpoint_dir and opts.distributed_context.is_leader:
         output_path = Path(opts.checkpoint_dir)
         output_path.mkdir(exist_ok=True, parents=True)
         interaction_name = (

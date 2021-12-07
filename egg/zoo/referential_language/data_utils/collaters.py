@@ -48,19 +48,22 @@ class RandomDistractorsCollater(BaseCollater):
             max_objects, image_size, augmentations
         )
         if self.max_objs <= 2:
-            raise RuntimeError(f"Max_objs <=2 is not supported. Found {self.max_objs}")
+            raise RuntimeError(f"Max objs <=2 is not supported. Found {self.max_objs}")
         self.dataset = dataset
+        self.data_len = len(self.dataset)
 
     def __call__(self, batch):
         sender_segments, recv_segments, labels = [], [], []
         original_imgs, obj_ids, img_ids = [], [], []
-        data_len, n_dis = len(self.dataset), self.max_objs - 1
 
         for elem in batch:
             batch_elem_sender, batch_elem_recv = [], []
             batch_labels, batch_obj_ids, batch_img_ids = [], [], []
 
-            distractors = [self.dataset[i] for i in sample(range(data_len), k=n_dis)]
+            distractors = [
+                self.dataset[i]
+                for i in sample(range(self.data_len), k=self.max_objs - 1)
+            ]
             for x in [elem] + distractors:
                 img = x[0]
                 idx = random.choice(range(len(x[2]["bboxes"])))
