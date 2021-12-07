@@ -68,9 +68,10 @@ class Sender(nn.Module):
         )
 
     def expand_mask(self, mask: torch.Tensor, max_objs: int) -> torch.Tensor:
-        """Expand a 1D into a 2D mask of size bsz X max_objs."""
+        """Expand a 1D with num of padded objs into a boolean 2D mask of size bsz X max_objs."""
         bsz = mask.shape[0]
-        expanded_mask = torch.zeros(bsz, max_objs, device=mask.device)
+        # ones mean masking for the purpose of (self) attention
+        expanded_mask = torch.ones(bsz, max_objs, device=mask.device)
         for idx, num_elems in enumerate(mask):
             if num_elems > 0:
                 not_padded_idx = int(max_objs - num_elems)
