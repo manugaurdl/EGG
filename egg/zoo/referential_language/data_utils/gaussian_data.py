@@ -22,14 +22,6 @@ class GaussianDataset:
         return tnsr, torch.ones(self.max_objects)
 
 
-def collate_fn(batch):
-    inp_tnsr = torch.stack([elem[0] for elem in batch])
-    labels = torch.stack([elem[1] for elem in batch])
-    baseline = torch.Tensor([1 / inp_tnsr.shape[1]] * len(batch))
-    mask = torch.zeros(len(batch))
-    return inp_tnsr, labels, inp_tnsr, {"baselines": baseline, "mask": mask}
-
-
 def get_gaussian_dataloader(
     batch_size: int = 32,
     image_size: int = 32,
@@ -43,6 +35,13 @@ def get_gaussian_dataloader(
     sampler = None
     if is_distributed:
         sampler = DistributedSampler(dataset, shuffle=True, drop_last=True, seed=seed)
+
+    def collate_fn(batch):
+        inp_tnsr = torch.stack([elem[0] for elem in batch])
+        labels = torch.stack([elem[1] for elem in batch])
+        baseline = torch.Tensor([1 / inp_tnsr.shape[1]] * len(batch))
+        mask = torch.zeros(len(batch), max_objects)
+        return inp_tnsr, labels, inp_tnsr, {"baselines": baseline, "mask": mask}
 
     loader = torch.utils.data.DataLoader(
         dataset,

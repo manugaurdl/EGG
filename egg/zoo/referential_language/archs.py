@@ -33,6 +33,36 @@ def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
     return model, n_features
 
 
+class ContextAttention(nn.Module):
+    def __init__(
+        self, embed_dim: int, num_heads: int, context_integration: str = "cat"
+    ):
+        super(ContextAttention, self).__init__()
+        self.attn_fn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads)
+        self.context_integration = context_integration
+
+    def forward(self, img_feats, mask):
+        context_vectors, attn_weights = self.attn_fn(
+            query=img_feats,
+            key=img_feats,
+            value=img_feats,
+            key_padding_mask=mask,
+        )
+        img_feats = torch.transpose(img_feats, 1, 0)
+        context_vectors = torch.transpose(context_vectors, 1, 0)
+
+        if self.context_integration == "cat":
+            contextualized_objs = torch.cat([img_feats, context_vectors], dim=-1)
+        elif self.context_integration == "gate":
+            obj_w_context = img_feats * context_vectors
+            context_gate = 1 - torch.sigmoid(obj_w_context)
+            contextualized_objs = img_feats * context_gate
+        else:
+            raise RuntimeError(f"{self.context_integration} not supported")
+
+        return contextualized_objs, attn_weights
+
+
 class Sender(nn.Module):
     def __init__(
         self,
@@ -53,60 +83,27 @@ class Sender(nn.Module):
         else:
             raise RuntimeError("Unknown vision module for the Sender")
 
-        fc_out_dim = input_dim
         self.attention = attention
         if self.attention:
-            self.attn_fn = nn.MultiheadAttention(
-                embed_dim=input_dim, num_heads=num_heads
-            )
-            fc_out_dim = input_dim * 2 if context_integration == "cat" else fc_out_dim
-        self.context_integration = context_integration
+            self.attn_fn = ContextAttention(input_dim, num_heads, context_integration)
+            input_dim = input_dim * 2 if context_integration == "cat" else input_dim
 
         self.fc_out = nn.Sequential(
-            nn.Linear(fc_out_dim, vocab_size, bias=False),
+            nn.Linear(input_dim, vocab_size, bias=False),
             nn.BatchNorm1d(vocab_size),
         )
 
-    def expand_mask(self, mask: torch.Tensor, max_objs: int) -> torch.Tensor:
-        """Expand a 1D with num of padded objs into a boolean 2D mask of size bsz X max_objs."""
-        bsz = mask.shape[0]
-        # ones mean masking for the purpose of (self) attention
-        expanded_mask = torch.ones(bsz, max_objs, device=mask.device)
-        for idx, num_elems in enumerate(mask):
-            if num_elems > 0:
-                not_padded_idx = int(max_objs - num_elems)
-                expanded_mask[idx][:not_padded_idx] = 0
-        return expanded_mask.bool()
-
     def forward(self, x, aux_input=None):
         [bsz, max_objs, _, h, w] = x.shape
-        all_img_feats = self.vision_module(x.view(-1, 3, h, w))
+        img_feats = self.vision_module(x.view(-1, 3, h, w))
 
         if self.attention:
-            expanded_mask = self.expand_mask(aux_input["mask"], max_objs)
-            all_img_feats = torch.transpose(all_img_feats.view(bsz, max_objs, -1), 0, 1)
-            context_vectors, attn_weights = self.attn_fn(
-                query=all_img_feats,
-                key=all_img_feats,
-                value=all_img_feats,
-                key_padding_mask=expanded_mask,
-            )
-            all_img_feats = torch.transpose(all_img_feats, 1, 0)
-            context_vectors = torch.transpose(context_vectors, 1, 0)
-            if aux_input:
-                aux_input["attn_weights"] = attn_weights
-            else:
-                aux_input = {"attn_weights": attn_weights}
-            if self.context_integration == "cat":
-                all_img_feats = torch.cat([all_img_feats, context_vectors], dim=-1)
-            elif self.context_integration == "gate":
-                obj_w_context = all_img_feats * context_vectors
-                context_gate = 1 - torch.sigmoid(obj_w_context)
-                all_img_feats = all_img_feats * context_gate
-            else:
-                raise RuntimeError(f"{self.context_integration} not supported")
-        out = self.fc_out(all_img_feats.view(bsz * max_objs, -1))
-        return out
+            # MultiHead attn takes tensor in seq X batch X embedding format
+            img_feats = torch.transpose(img_feats.view(bsz, max_objs, -1), 0, 1)
+            img_feats, attn_weights = self.attn_fn(img_feats, aux_input["mask"].bool())
+            aux_input["attn_weights"] = attn_weights
+
+        return self.fc_out(img_feats.view(bsz * max_objs, -1))
 
 
 class Receiver(nn.Module):

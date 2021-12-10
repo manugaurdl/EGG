@@ -95,27 +95,22 @@ class VisualGenomeDataset(torchvision.datasets.VisionDataset):
         if self.transform:
             image = self.transform(image)
 
-        boxes, labels, obj_ids = [], [], []
+        bboxes, labels, obj_ids = [], [], []
         for x, y, h, w, obj_id, class_id in obj_info:
             if w == 1 or h == 1:
                 continue
             if (x + w) * (y + h) / (img_w * img_h) > 0.01:
-                boxes.append(torch.IntTensor([x, y, h, w]))
-                labels.append(torch.Tensor([class_id]))
-                obj_ids.append(torch.Tensor([obj_id]))
+                bboxes.append([x, y, h, w])
+                labels.append(class_id)
+                obj_ids.append(obj_id)
 
-        if len(boxes) <= 1:
+        if len(bboxes) <= 1:
             return self.__getitem__(random.randint(0, len(self) - 1))
         else:
             return (
                 image,
-                torch.stack(labels),
-                {
-                    "bboxes": torch.stack(boxes),
-                    "n_objs": torch.Tensor([len(boxes)]),
-                    "obj_ids": torch.stack(obj_ids),
-                    "img_id": torch.IntTensor([img_id]),
-                },
+                labels,
+                {"bboxes": bboxes, "obj_ids": obj_ids, "img_id": img_id},
             )
 
 
@@ -132,14 +127,15 @@ def get_dataloader(
     seed: int = 111,
 ):
     m, std = [0.4529, 0.4170, 0.3804], [0.1830, 0.1779, 0.1745]
-    to_tensor_fn = transforms.Compose(
+    transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize(mean=m, std=std)]
     )
+    assert batch_size >= max_objects
     dataset = VisualGenomeDataset(
         image_dir=image_dir,
         metadata_dir=metadata_dir,
         split=split,
-        transform=to_tensor_fn,
+        transform=transform,
     )
 
     augms = None
@@ -154,7 +150,7 @@ def get_dataloader(
     if contextual_distractors:
         collater = ContextualDistractorsCollater(max_objects, image_size, augms)
     else:
-        collater = RandomDistractorsCollater(max_objects, image_size, dataset, augms)
+        collater = RandomDistractorsCollater(max_objects, image_size, augms)
 
     sampler = None
     if is_distributed:
@@ -166,7 +162,7 @@ def get_dataloader(
         shuffle=(sampler is None),
         collate_fn=collater,
         sampler=sampler,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True,
         drop_last=True,
     )

@@ -27,14 +27,21 @@ def loss(
     _labels,
     aux_input,
 ):
-    max_objs = receiver_output.shape[1]
     labels, logits = [], []
     for idx, mask_elem in enumerate(aux_input["mask"]):
-        num_elem = max_objs - mask_elem.int().item()
-        unmasked_similarities = receiver_output[idx][:num_elem]
-        unmasked_similarities[:, num_elem:] = -float("inf")
+        # idx of first nonzero elem is when masking/padding starts
+        pad_idxs = torch.nonzero(mask_elem)
+        unmasked_similarities = receiver_output[idx]
+        label_size = receiver_output.shape[1]
+
+        if pad_idxs.numel() != 0:
+            begin_pad = pad_idxs[0].item()
+            unmasked_similarities = receiver_output[idx][:begin_pad]
+            unmasked_similarities[:, begin_pad:] = -float("inf")
+
+        label_size = unmasked_similarities.shape[0]
         logits.append(unmasked_similarities)
-        labels.append(torch.arange(num_elem, device=receiver_output.device))
+        labels.append(torch.arange(label_size, device=receiver_output.device))
 
     logits = torch.cat(logits)
     labels = torch.cat(labels)
