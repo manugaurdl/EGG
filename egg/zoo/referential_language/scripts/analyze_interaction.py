@@ -7,8 +7,36 @@ import argparse
 from collections import defaultdict
 from typing import List
 
+import numpy as np
 import torch
 from torch.nn.functional import cosine_similarity
+
+
+def _hashable_tensor(t):
+    if torch.is_tensor(t) and t.numel() > 1:
+        t = tuple(t.tolist())
+    elif torch.is_tensor(t) and t.numel() == 1:
+        t = t.item()
+    return t
+
+
+def entropy_dict(freq_table):
+    t = torch.tensor([v for v in freq_table.values()]).float()
+    if (t < 0.0).any():
+        raise RuntimeError("Encountered negative probabilities")
+
+    t /= t.sum()
+    return -(torch.where(t > 0, t.log(), t) * t).sum().item() / np.log(2)
+
+
+def calc_entropy(messages):
+    freq_table = defaultdict(float)
+
+    for m in messages:
+        m = _hashable_tensor(m)
+        freq_table[m] += 1.0
+
+    return entropy_dict(freq_table)
 
 
 def get_correctly_shaped_acc(
@@ -139,7 +167,6 @@ def main():
     _ = aux_input["img_ids"].view(-1, bsz)
     _ = aux_input["obj_ids"].view(-1, bsz, max_objs)
     # We assume original images are always at 224^2 resolution
-    _ = aux_input["original_imgs"].view(-1, bsz, 3, 224, 224)
     recv_img_feats = aux_input["recv_img_feats"].view(n_batches, bsz, max_objs, -1)
     mask = aux_input["mask"].view(n_batches, bsz)
 
