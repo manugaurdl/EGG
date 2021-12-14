@@ -46,35 +46,40 @@ def main(params):
         train_data=train_loader,
         callbacks=get_callbacks(),
     )
-    trainer.train(n_epochs=opts.n_epochs)
+    # trainer.train(n_epochs=opts.n_epochs)
 
     # VALIDATION LOOP
+    def log_stats(interaction, mode):
+        dump = dict((k, v.mean().item()) for k, v in interaction.aux.items())
+        dump.update(dict(mode=mode))
+        print(json.dumps(dump), flush=True)
+
     val_data_kwargs = dict(data_kwargs)
     val_data_kwargs.update({"split": "val", "use_augmentations": False})
     val_loader = data.get_dataloader(**val_data_kwargs)
     _, val_interaction = trainer.eval(val_loader)
     val_interaction.aux_input.update({"args": val_data_kwargs})
-
-    dump = dict((k, v.mean().item()) for k, v in val_interaction.aux.items())
-    dump.update(dict(mode="VALIDATION_SET"))
-    print(json.dumps(dump), flush=True)
+    log_stats(val_interaction, "VALIDATION SET")
 
     if opts.checkpoint_dir and opts.distributed_context.is_leader:
         output_path = Path(opts.checkpoint_dir)
         output_path.mkdir(exist_ok=True, parents=True)
         interaction_name = (
             f"val_interaction_voc_{opts.vocab_size}_attn_{opts.attention}_"
-            f"ctx_integration_{opts.context_integration}"
+            f"ctx_integration_{opts.context_integration}_bsz_{opts.batch_size}"
         )
         torch.save(val_interaction, output_path / interaction_name)
+
+    val_data_kwargs = dict(val_data_kwargs)
+    val_data_kwargs.update({"contextual_distractors": not opts.contextual_distractors})
+    val_loader = data.get_dataloader(**val_data_kwargs)
+    _, swapped_val_interaction = trainer.eval(val_loader)
+    log_stats(swapped_val_interaction, "SWAPPED VALIDATION SET")
 
     # GAUSSIAN TEST
     gaussian_data = data.get_gaussian_dataloader(**data_kwargs)
     _, gaussian_interaction = trainer.eval(gaussian_data)
-
-    dump = dict((k, v.mean().item()) for k, v in gaussian_interaction.aux.items())
-    dump.update(dict(mode="GAUSSIAN_SET"))
-    print(json.dumps(dump), flush=True)
+    log_stats(gaussian_interaction, "GAUSSIAN TEST")
 
     print("| FINISHED JOB")
 

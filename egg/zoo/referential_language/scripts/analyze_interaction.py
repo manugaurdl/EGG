@@ -3,21 +3,15 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+"""Compute number of distinct names with contextual distractors compared to random distractors."""
+
 import argparse
 from collections import defaultdict
-from typing import List
+from typing import Optional
 
 import numpy as np
 import torch
 from torch.nn.functional import cosine_similarity
-
-
-def _hashable_tensor(t):
-    if torch.is_tensor(t) and t.numel() > 1:
-        t = tuple(t.tolist())
-    elif torch.is_tensor(t) and t.numel() == 1:
-        t = t.item()
-    return t
 
 
 def entropy_dict(freq_table):
@@ -29,113 +23,63 @@ def entropy_dict(freq_table):
     return -(torch.where(t > 0, t.log(), t) * t).sum().item() / np.log(2)
 
 
-def calc_entropy(messages):
-    freq_table = defaultdict(float)
-
-    for m in messages:
-        m = _hashable_tensor(m)
-        freq_table[m] += 1.0
-
-    return entropy_dict(freq_table)
-
-
-def get_correctly_shaped_acc(
-    acc: torch.Tensor, mask: torch.Tensor, max_objs: int, n_batches: int, bsz: int
-) -> List[List[torch.Tensor]]:
-    """Transform a 1-D tensor of flattened binary accuracies into a list of list of Tensors.
-
-    This in order to account for the variably sized tensor given by the variable number of objects in each image.
-    We are basically removing padding/masking by turning the (flatten) tensor into a list of list of tensors.
-    Each element is 1 if that object was correctly discriminated, else 0.
-
-    The first list is of len = n_batches and contains lists each of len = batch_size.
-    Each of this nested list has a tensor of variable size depending on the number of objects but alwyas <= max_objs
-    """
-    acc_list = []
-    start_index = 0
-    for batch_id, batch_mask in enumerate(mask):
-        acc_list.append([])
-        for mask_elem in batch_mask:
-            end_index = start_index + (mask_elem == 1).numel()
-            acc_list[batch_id].append(acc[start_index:end_index])
-            start_index = end_index
-    assert len(acc_list) == n_batches
-    assert [len(elem) for elem in acc_list] == [bsz] * n_batches
-    return acc_list
-
-
-def print_errors(
+# a.masked_select(~torch.eye(n, dtype=bool)).view(n, n - 1)
+def get_errors(
+    accs: torch.Tensor,
     labels: torch.Tensor,
     receiver_output: torch.Tensor,
-    acc_list: List[List[torch.Tensor]],
-    recv_img_feats: torch.Tensor,
+    img_feats: torch.Tensor,
+    mask: Optional[torch.Tensor] = None,
 ):
-    same_class_error, wrong_class_error = 0, 0
-    total_errors, total_guesses = 0, 0
-    visual_errors = 0
+    cosine_sims = cosine_similarity(img_feats.unsqueeze(2), img_feats.unsqueeze(3), 4)
+    top_visual_similarities = torch.argsort(cosine_sims, descending=True)[:, :, :, 1]
+    top_model_guesses = torch.argsort(receiver_output, descending=True)[:, :, :, 0]
+
+    total_errors = 0
+    label_errors, visual_errors = 0, 0
     both_errors = 0
+    for batch_id, _ in enumerate(accs):
+        for batch_elem_id, _ in enumerate(accs[batch_id]):
+            for obj_id, model_guess in enumerate(accs[batch_id, batch_elem_id]):
+                wrong_guess = model_guess.item() == 0
+                not_masked = mask[batch_id, batch_elem_id, obj_id].item() == 0
+                if not_masked and wrong_guess:
+                    total_errors += 1
+                    idx = top_model_guesses[batch_id, batch_elem_id, obj_id]
+                    chosen_label = labels[batch_id, batch_elem_id, idx]
+                    correct_label = labels[batch_id, batch_elem_id, obj_id]
 
-    cosine_sim = cosine_similarity(
-        recv_img_feats.unsqueeze(2), recv_img_feats.unsqueeze(3), 4
-    )
-    # a.masked_select(~torch.eye(n, dtype=bool)).view(n, n - 1)
+                    label_err = chosen_label == correct_label
+                    if label_err:
+                        label_errors += 1
+                    visual_err = (
+                        idx == top_visual_similarities[batch_id, batch_elem_id, obj_id]
+                    )
+                    if visual_err:
+                        visual_errors += 1
 
-    # Each tensor in acc_list  has the same number of elements as the number of objects in each img max (<= max_objects)
-    #   and each element is 1 if that object was correctly discriminated, else 0.
-    for batch_id, batch in enumerate(acc_list):
-        for img_id, img_accs in enumerate(batch):
-            # dim: max_objects X max_objects
-            model_guesses = receiver_output[batch_id, img_id]
-            total_guesses += img_accs.shape[0]
-
-            # dim: max_objects
-            # we get only the first choice of the receiver for each object
-            sorted_idx_accs = torch.argsort(model_guesses, descending=True)[:, 0]
-
-            sorted_sims = torch.argsort(cosine_sim[batch_id, img_id], descending=True)
-
-            wrong_guesses = torch.nonzero((img_accs == 0)).squeeze(-1).tolist()
-            for guess_id in wrong_guesses:
-                total_errors += 1
-
-                right_guess_label = labels[batch_id, img_id, guess_id]
-                wrong_guess_label = labels[batch_id, img_id, sorted_idx_accs[guess_id]]
-
-                if sorted_idx_accs[guess_id] == sorted_sims[guess_id, 1]:
-                    visual_errors += 1
-                if right_guess_label == wrong_guess_label:
-                    same_class_error += 1
-                else:
-                    wrong_class_error += 1
-
-                if (
-                    sorted_idx_accs[guess_id] == sorted_sims[guess_id, 1]
-                    and right_guess_label == wrong_guess_label
-                ):
-                    both_errors += 1
-
-    assert same_class_error + wrong_class_error == total_errors
-    print(f"Total errors: {total_errors}")
-    print(f"Visual_errors: {visual_errors / total_errors * 100:.2f}%")
-    print(f"Same error perc: {same_class_error / total_errors * 100:.2f}%")
-    print(
-        f"Both errors (visually similar and same class): {both_errors / total_errors * 100:.2f}%"
-    )
-    print(f"Errors: {total_errors / total_guesses * 100:.2f}%")
+                    if visual_err and label_err:
+                        both_errors += 1
+    return visual_errors, label_errors, both_errors, total_errors
 
 
 def get_distinct_message_counter(
-    labels: torch.Tensor, messages: torch.Tensor, acc_list: List[List[torch.Tensor]]
+    labels: torch.Tensor,
+    messages: torch.Tensor,
+    accs: torch.Tensor,
+    mask: torch.Tensor,
 ):
     # defaultdict of default dict of int
     # from labels to messages to count of those messages
     labels2message = defaultdict(lambda: defaultdict(int))
-    for batch_id, batch_accs in enumerate(acc_list):
-        for img_id, accs in enumerate(batch_accs):
-            for elem_id, elem in enumerate(accs):
-                label = labels[batch_id, img_id, elem_id].int().item()
-                message = torch.argmax(messages[batch_id, img_id, elem_id]).item()
-                labels2message[label][message] += 1
+    for batch_id, _ in enumerate(accs):
+        for batch_elem_id, _ in enumerate(accs[batch_id]):
+            for obj_id, model_guess in enumerate(accs[batch_id, batch_elem_id]):
+                not_masked = mask[batch_id, batch_elem_id, obj_id].item() == 0
+                if not_masked:
+                    label = labels[batch_id, batch_elem_id, obj_id].int().item()
+                    message = messages[batch_id, batch_elem_id, obj_id].item()
+                    labels2message[label][message] += 1
     return labels2message
 
 
@@ -146,7 +90,6 @@ def get_opts():
 
 
 def main():
-    # Compute number of distinct names with contextual distractors compared to random distractors
     opts = get_opts()
     interaction = torch.load(opts.interaction_path)
 
@@ -154,27 +97,43 @@ def main():
     run_args = interaction.aux_input["args"]
     print(run_args)
     bsz, max_objs = run_args["batch_size"], run_args["max_objects"]
-    labels = interaction.labels.view(-1, bsz, max_objs)
+
     receiver_output = interaction.receiver_output.view(-1, bsz, max_objs, max_objs)
     n_batches = receiver_output.shape[0]
-    # messages = interaction.message.view(n_batches, bsz, max_objs, -1)
-    acc = interaction.aux["acc"]
-    total_errors = sum(acc == 0)
-    total_guesses = len(acc)  # it's a flatten vector of accuracies
+    messages = torch.argmax(interaction.message.view(n_batches, bsz, max_objs, -1), -1)
+    labels = interaction.labels.view(-1, bsz, max_objs)
+    acc = interaction.aux["acc"].view(-1, bsz, max_objs)
 
     # Extracting values from aux_input
     aux_input = interaction.aux_input
     recv_img_feats = aux_input["recv_img_feats"].view(n_batches, bsz, max_objs, -1)
     mask = aux_input["mask"].view(n_batches, bsz, max_objs)
 
-    acc_list = get_correctly_shaped_acc(acc, mask, max_objs, n_batches, bsz)
+    visual_errors, label_errors, both_errors, total_errors = get_errors(
+        acc, labels, receiver_output, recv_img_feats, mask
+    )
+    print(f"Visual errs: {visual_errors / total_errors * 100:.2f}%")
+    print(f"Label errs: {label_errors / total_errors * 100:.2f}%")
+    print(f"Both errs: {both_errors / total_errors * 100:.2f}%")
 
-    print_errors(labels, receiver_output, acc_list, recv_img_feats)
-    # labels2message = get_distinct_message_counter(labels, messages, acc_list)
+    labels2messages = get_distinct_message_counter(labels, messages, acc, mask)
+    messages_per_label = 0
+    prop_entropy_per_label = 0
+    labels_with_syn = 0
+    for label, message_table in labels2messages.items():
+        messages_per_label += len(message_table)
+        if len(message_table) > 1:
+            max_ent = np.log2(len(message_table))
+            prop_entropy_per_label += entropy_dict(message_table) / max_ent
+            labels_with_syn += 1
 
-    err_perc = total_errors / total_guesses
-    print(f"Accuracy: {(1 - err_perc) * 100:.2f}%")
-    print(f"Total guesses: {total_guesses}")
+    nb_labels = len(labels2messages)
+    print(f"Avg messages per label: {messages_per_label / nb_labels:.2f}")
+    print(
+        f"Avg proportional ent per label: {prop_entropy_per_label / labels_with_syn:.2f}"
+    )
+
+    print(f"Accuracy = {torch.sum(acc == 1).int() / acc.numel() * 100:.2f}%")
 
 
 if __name__ == "__main__":
