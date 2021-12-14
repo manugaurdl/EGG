@@ -15,10 +15,7 @@ import torchvision
 from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms
 
-from egg.zoo.referential_language.data_utils.collaters import (
-    ContextualDistractorsCollater,
-    RandomDistractorsCollater,
-)
+from egg.zoo.referential_language.data_utils.collaters import Collater
 
 
 def pil_loader(path: str) -> Image.Image:
@@ -124,6 +121,28 @@ class GaussianBlur:
         return x
 
 
+class ImageTransformation:
+    def __init__(self, augmentations: bool):
+        transformations = []
+        if augmentations:
+            color_jitter = transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)
+            transformations.extend(
+                [
+                    transforms.RandomApply([color_jitter], p=0.8),
+                    # transforms.RandomApply([GaussianBlur([0.1, 2.0])], p=0.5),
+                    transforms.RandomGrayscale(p=0.2),
+                    transforms.RandomHorizontalFlip(),  # with 0.5 probability
+                ]
+            )
+        m, std = [0.4529, 0.4170, 0.3804], [0.1830, 0.1779, 0.1745]
+        transformations.append(transforms.ToTensor())
+        transformations.append(transforms.Normalize(mean=m, std=std))
+        self.transform = transforms.Compose(transformations)
+
+    def __call__(self, img):
+        return self.transform(img)
+
+
 def get_dataloader(
     image_dir: str = "/datasets01/VisualGenome1.2/061517/",
     metadata_dir: str = "/private/home/rdessi/visual_genome",
@@ -136,37 +155,18 @@ def get_dataloader(
     is_distributed: bool = False,
     seed: int = 111,
 ):
-    m, std = [0.4529, 0.4170, 0.3804], [0.1830, 0.1779, 0.1745]
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize(mean=m, std=std)]
-    )
     assert batch_size >= max_objects
-    dataset = VisualGenomeDataset(
-        image_dir=image_dir,
-        metadata_dir=metadata_dir,
-        split=split,
-        transform=transform,
+    dataset = VisualGenomeDataset(image_dir, metadata_dir, split=split)
+    augms = ImageTransformation(use_augmentations)
+    collater = Collater(
+        max_objects, image_size, contextual_distractors, use_augmentations, augms
     )
-
-    augms = None
-    if use_augmentations:
-        color_jitter = transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)
-        transformations = [
-            transforms.RandomApply([color_jitter], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([GaussianBlur([0.1, 2.0])], p=0.5),
-            transforms.RandomHorizontalFlip(),  # with 0.5 probability
-        ]
-        augms = transforms.Compose(transformations)
-
-    if contextual_distractors:
-        collater = ContextualDistractorsCollater(max_objects, image_size, augms)
-    else:
-        collater = RandomDistractorsCollater(max_objects, image_size, augms)
 
     sampler = None
     if is_distributed:
-        sampler = DistributedSampler(dataset, shuffle=True, drop_last=True, seed=seed)
+        sampler = DistributedSampler(
+            dataset, shuffle=(split == "train"), drop_last=True, seed=seed
+        )
 
     loader = torch.utils.data.DataLoader(
         dataset,
@@ -174,7 +174,7 @@ def get_dataloader(
         shuffle=(sampler is None),
         collate_fn=collater,
         sampler=sampler,
-        num_workers=0,
+        num_workers=4,
         pin_memory=True,
         drop_last=True,
     )

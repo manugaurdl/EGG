@@ -169,11 +169,7 @@ class Trainer:
         validation_data = self.validation_data if data is None else data
         self.game.eval()
         with torch.no_grad():
-            idx = 0
             for batch in validation_data:
-                if idx % 100 == 0:
-                    print(f"Batch {idx}")
-                idx += 1
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
