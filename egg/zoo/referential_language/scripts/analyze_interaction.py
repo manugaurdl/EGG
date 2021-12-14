@@ -56,7 +56,7 @@ def get_correctly_shaped_acc(
     for batch_id, batch_mask in enumerate(mask):
         acc_list.append([])
         for mask_elem in batch_mask:
-            end_index = start_index + max_objs - int(mask_elem.item())
+            end_index = start_index + (mask_elem == 1).numel()
             acc_list[batch_id].append(acc[start_index:end_index])
             start_index = end_index
     assert len(acc_list) == n_batches
@@ -157,30 +157,24 @@ def main():
     labels = interaction.labels.view(-1, bsz, max_objs)
     receiver_output = interaction.receiver_output.view(-1, bsz, max_objs, max_objs)
     n_batches = receiver_output.shape[0]
-    messages = interaction.message.view(n_batches, bsz, max_objs, -1)
+    # messages = interaction.message.view(n_batches, bsz, max_objs, -1)
     acc = interaction.aux["acc"]
     total_errors = sum(acc == 0)
     total_guesses = len(acc)  # it's a flatten vector of accuracies
 
     # Extracting values from aux_input
     aux_input = interaction.aux_input
-    _ = aux_input["img_ids"].view(-1, bsz)
-    _ = aux_input["obj_ids"].view(-1, bsz, max_objs)
-    # We assume original images are always at 224^2 resolution
     recv_img_feats = aux_input["recv_img_feats"].view(n_batches, bsz, max_objs, -1)
-    mask = aux_input["mask"].view(n_batches, bsz)
+    mask = aux_input["mask"].view(n_batches, bsz, max_objs)
 
     acc_list = get_correctly_shaped_acc(acc, mask, max_objs, n_batches, bsz)
 
     print_errors(labels, receiver_output, acc_list, recv_img_feats)
-    labels2message = get_distinct_message_counter(labels, messages, acc_list)
-    messages_per_class = 0
-    for k, v in labels2message.items():
-        messages_per_class += len(v)
-    print(f"Average messages per class: {messages_per_class / len(labels2message):.2f}")
+    # labels2message = get_distinct_message_counter(labels, messages, acc_list)
 
     err_perc = total_errors / total_guesses
     print(f"Accuracy: {(1 - err_perc) * 100:.2f}%")
+    print(f"Total guesses: {total_guesses}")
 
 
 if __name__ == "__main__":

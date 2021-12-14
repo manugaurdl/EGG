@@ -174,7 +174,7 @@ def get_dataloader(
         shuffle=(sampler is None),
         collate_fn=collater,
         sampler=sampler,
-        num_workers=4,
+        num_workers=6,
         pin_memory=True,
         drop_last=True,
     )

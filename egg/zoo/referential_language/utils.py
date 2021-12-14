@@ -84,7 +84,7 @@ def get_game_arch_opts(parser):
         "--num_heads",
         type=int,
         default=1,
-        help="Number of heads use in teh self attention to integrate context with objects (default: 1)",
+        help="Number of heads use in the self attention to integrate context with objects (default: 1)",
     )
     group.add_argument(
         "--recv_temperature",
