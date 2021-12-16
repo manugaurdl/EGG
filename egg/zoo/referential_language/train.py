@@ -46,7 +46,7 @@ def main(params):
         train_data=train_loader,
         callbacks=get_callbacks(),
     )
-    # trainer.train(n_epochs=opts.n_epochs)
+    trainer.train(n_epochs=opts.n_epochs)
 
     # VALIDATION LOOP
     def log_stats(interaction, mode):

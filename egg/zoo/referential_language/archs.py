@@ -68,9 +68,8 @@ class Sender(nn.Module):
         self,
         vision_module: Union[nn.Module, str],
         input_dim: Optional[int],
-        vocab_size: int = 2048,
-        attention: bool = False,
-        num_heads: int = 1,
+        output_dim: int = 2048,
+        num_heads: int = 0,
         context_integration: str = "cat",
     ):
         super(Sender, self).__init__()
@@ -83,14 +82,15 @@ class Sender(nn.Module):
         else:
             raise RuntimeError("Unknown vision module for the Sender")
 
-        self.attention = attention
+        assert num_heads >= 0
+        self.attention = num_heads > 0
         if self.attention:
             self.attn_fn = ContextAttention(input_dim, num_heads, context_integration)
             input_dim = input_dim * 2 if context_integration == "cat" else input_dim
 
         self.fc_out = nn.Sequential(
-            nn.Linear(input_dim, vocab_size, bias=False),
-            nn.BatchNorm1d(vocab_size),
+            nn.Linear(input_dim, output_dim, bias=False),
+            nn.BatchNorm1d(output_dim),
         )
 
     def forward(self, x, aux_input=None):
@@ -135,14 +135,15 @@ class Receiver(nn.Module):
         self.temperature = temperature
         self.use_cosine_sim = use_cosine_sim
 
+    def compute_sim_scores(self, messages, images):
+        if self.use_cosine_sim:
+            return cosine_sim(messages.unsqueeze(2), images.unsqueeze(1), 3)
+        return torch.bmm(messages, images.transpose(1, 2))  # dot product sim
+
     def forward(self, messages, images, aux_input=None):
         [bsz, max_objs, _, h, w] = images.shape
         images = self.vision_module(images.view(-1, 3, h, w))
         aux_input.update({"recv_img_feats": images})
         images = self.fc(images).view(bsz, max_objs, -1)
         messages = messages.view(bsz, max_objs, -1)
-        if self.use_cosine_sim:
-            scores = cosine_sim(messages.unsqueeze(2), images.unsqueeze(1), 3)
-        else:
-            scores = torch.bmm(messages, images.transpose(1, 2))  # dot product sim
-        return scores
+        return self.compute_sim_scores(messages, images)
