@@ -6,7 +6,7 @@
 """Compute number of distinct names with contextual distractors compared to random distractors."""
 
 import argparse
-from collections import defaultdict
+from collections import defaultdict, Counter
 from typing import Optional
 
 import numpy as np
@@ -37,9 +37,11 @@ def get_errors(
 
     total_errors = 0
     label_errors, visual_errors = 0, 0
+    potential_label_errors = 0
     both_errors = 0
     for batch_id, _ in enumerate(accs):
         for batch_elem_id, _ in enumerate(accs[batch_id]):
+            counter = Counter(labels[batch_id, batch_elem_id].tolist())
             for obj_id, model_guess in enumerate(accs[batch_id, batch_elem_id]):
                 wrong_guess = model_guess.item() == 0
                 not_masked = mask[batch_id, batch_elem_id, obj_id].item() == 0
@@ -49,18 +51,24 @@ def get_errors(
                     chosen_label = labels[batch_id, batch_elem_id, idx]
                     correct_label = labels[batch_id, batch_elem_id, obj_id]
 
+                    if counter[correct_label.item()] > 1:
+                        potential_label_errors += 1
+
                     label_err = chosen_label == correct_label
-                    if label_err:
-                        label_errors += 1
+                    label_errors += 1 if label_err else 0
                     visual_err = (
                         idx == top_visual_similarities[batch_id, batch_elem_id, obj_id]
                     )
-                    if visual_err:
-                        visual_errors += 1
+                    visual_errors += 1 if visual_err else 0
+                    both_errors += 1 if visual_err and label_err else 0
 
-                    if visual_err and label_err:
-                        both_errors += 1
-    return visual_errors, label_errors, both_errors, total_errors
+    return (
+        visual_errors,
+        label_errors,
+        both_errors,
+        potential_label_errors,
+        total_errors,
+    )
 
 
 def get_distinct_message_counter(
@@ -94,9 +102,13 @@ def main():
     interaction = torch.load(opts.interaction_path)
 
     # Extracting standard-ish fields from the interaction
-    run_args = interaction.aux_input["args"]
-    print(run_args)
-    bsz, max_objs = run_args["batch_size"], run_args["max_objects"]
+    try:
+        run_args = interaction.aux_input["args"]
+        print(run_args)
+        bsz, max_objs = run_args["batch_size"], run_args["max_objects"]
+    except KeyError:
+        print("WARNING: FALLING BACK TO STANDARD BSZ AND N_OBJS")
+        bsz, max_objs = 128, 20
 
     receiver_output = interaction.receiver_output.view(-1, bsz, max_objs, max_objs)
     n_batches = receiver_output.shape[0]
@@ -109,11 +121,16 @@ def main():
     recv_img_feats = aux_input["recv_img_feats"].view(n_batches, bsz, max_objs, -1)
     mask = aux_input["mask"].view(n_batches, bsz, max_objs)
 
-    visual_errors, label_errors, both_errors, total_errors = get_errors(
-        acc, labels, receiver_output, recv_img_feats, mask
-    )
+    (
+        visual_errors,
+        label_errors,
+        both_errors,
+        potential_label_errors,
+        total_errors,
+    ) = get_errors(acc, labels, receiver_output, recv_img_feats, mask)
     print(f"Visual errs: {visual_errors / total_errors * 100:.2f}%")
     print(f"Label errs: {label_errors / total_errors * 100:.2f}%")
+    print(f"Potential Label errs: {potential_label_errors / total_errors * 100:.2f}%")
     print(f"Both errs: {both_errors / total_errors * 100:.2f}%")
 
     labels2messages = get_distinct_message_counter(labels, messages, acc, mask)

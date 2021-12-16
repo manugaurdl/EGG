@@ -61,6 +61,14 @@ def main(params):
     val_interaction.aux_input.update({"args": val_data_kwargs})
     log_stats(val_interaction, "VALIDATION SET")
 
+    swapped_val_data_kwargs = dict(val_data_kwargs)
+    swapped_ctx_distractors = not opts.contextual_distractors
+    swapped_val_data_kwargs.update({"contextual_distractors": swapped_ctx_distractors})
+    swapped_val_loader = data.get_dataloader(**swapped_val_data_kwargs)
+    _, swapped_val_interaction = trainer.eval(swapped_val_loader)
+    swapped_val_interaction.aux_input.update({"args": swapped_val_data_kwargs})
+    log_stats(swapped_val_interaction, "SWAPPED VALIDATION SET")
+
     if opts.checkpoint_dir and opts.distributed_context.is_leader:
         output_path = Path(opts.checkpoint_dir)
         output_path.mkdir(exist_ok=True, parents=True)
@@ -69,12 +77,7 @@ def main(params):
             f"ctx_integration_{opts.context_integration}_bsz_{opts.batch_size}"
         )
         torch.save(val_interaction, output_path / interaction_name)
-
-    val_data_kwargs = dict(val_data_kwargs)
-    val_data_kwargs.update({"contextual_distractors": not opts.contextual_distractors})
-    val_loader = data.get_dataloader(**val_data_kwargs)
-    _, swapped_val_interaction = trainer.eval(val_loader)
-    log_stats(swapped_val_interaction, "SWAPPED VALIDATION SET")
+        torch.save(swapped_val_interaction, output_path / f"{interaction_name}_swapped")
 
     # GAUSSIAN TEST
     gaussian_data = data.get_gaussian_dataloader(**data_kwargs)
