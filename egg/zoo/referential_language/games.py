@@ -10,21 +10,22 @@ from egg.core.gs_wrappers import (
     GumbelSoftmaxWrapper,
     RnnSenderGS,
     RnnReceiverGS,
-    SenderReceiverRnnGS,
     SymbolGameGS,
     SymbolReceiverWrapper,
 )
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.referential_language.archs import (
+    PlusOneWrapper,
     Receiver,
     Sender,
+    SenderReceiverRnnFixedLengthGS,
     initialize_vision_module,
 )
 
 
 def loss(
     _sender_input,
-    message,
+    _message,
     _receiver_input,
     receiver_output,
     _labels,
@@ -49,7 +50,8 @@ def loss(
     logits = torch.cat(logits)
     labels = torch.cat(labels)
 
-    acc = (logits.argmax(dim=1) == labels).detach().float()
+    [bsz, max_objs] = aux_input["mask"].shape
+    acc = (logits.argmax(dim=1) == labels).detach().float().view(bsz, max_objs)
     loss = F.cross_entropy(logits, labels, reduction="none")
     return loss, {"acc": acc, "baseline": aux_input["baselines"]}
 
@@ -86,6 +88,7 @@ def build_gs_game(opts):
             num_heads=opts.num_heads,
             context_integration=opts.context_integration,
         )
+        sender = PlusOneWrapper(sender)
         receiver = Receiver(
             vision_module=vision_module_receiver,
             input_dim=sender_input_dim,
@@ -110,7 +113,7 @@ def build_gs_game(opts):
             hidden_size=opts.recv_cell_dim,
             cell=opts.recv_cell,
         )
-        game = SenderReceiverRnnGS(
+        game = SenderReceiverRnnFixedLengthGS(
             sender=sender,
             receiver=receiver,
             loss=loss,

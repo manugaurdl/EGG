@@ -10,6 +10,8 @@ import torch.nn as nn
 import torchvision
 from torch.nn.functional import cosine_similarity as cosine_sim
 
+from egg.core.interaction import LoggingStrategy
+
 
 def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
     modules = {
@@ -61,6 +63,15 @@ class ContextAttention(nn.Module):
             raise RuntimeError(f"{self.context_integration} not supported")
 
         return contextualized_objs, attn_weights
+
+
+class PlusOneWrapper(nn.Module):
+    def __init__(self, wrapped):
+        super().__init__()
+        self.wrapped = wrapped
+
+    def forward(self, *input):
+        return self.wrapped(*input) + 1
 
 
 class Sender(nn.Module):
@@ -147,3 +158,59 @@ class Receiver(nn.Module):
         images = self.fc(images).view(bsz, max_objs, -1)
         messages = messages.view(bsz, max_objs, -1)
         return self.compute_sim_scores(messages, images)
+
+
+class SenderReceiverRnnFixedLengthGS(nn.Module):
+    def __init__(
+        self,
+        sender,
+        receiver,
+        loss,
+        length_cost=0.0,
+        train_logging_strategy: Optional[LoggingStrategy] = None,
+        test_logging_strategy: Optional[LoggingStrategy] = None,
+    ):
+        super(SenderReceiverRnnFixedLengthGS, self).__init__()
+        self.sender = sender
+        self.receiver = receiver
+        self.loss = loss
+        self.length_cost = length_cost
+        self.train_logging_strategy = (
+            LoggingStrategy()
+            if train_logging_strategy is None
+            else train_logging_strategy
+        )
+        self.test_logging_strategy = (
+            LoggingStrategy()
+            if test_logging_strategy is None
+            else test_logging_strategy
+        )
+
+    def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
+        message = self.sender(sender_input, aux_input)
+        receiver_output = self.receiver(message, receiver_input, aux_input)
+
+        loss, aux_info = self.loss(
+            sender_input,
+            message[:, -1, ...],
+            receiver_input,
+            receiver_output[:, -1, ...],
+            labels,
+            aux_input,
+        )
+
+        logging_strategy = (
+            self.train_logging_strategy if self.training else self.test_logging_strategy
+        )
+        interaction = logging_strategy.filtered_interaction(
+            sender_input=sender_input,
+            receiver_input=receiver_input,
+            labels=labels,
+            aux_input=aux_input,
+            receiver_output=receiver_output.detach(),
+            message=message.detach(),
+            message_length=torch.Tensor([receiver_output.size(1)] * len(sender_input)),
+            aux=aux_info,
+        )
+
+        return loss.mean(), interaction
