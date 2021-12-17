@@ -156,7 +156,6 @@ class Interaction:
         if has_aux_input:
             aux_input = {}
             for k in interactions[0].aux_input:
-                print(k)
                 aux_input[k] = _check_stack([x.aux_input[k] for x in interactions])
         aux = {}
         for k in interactions[0].aux:
