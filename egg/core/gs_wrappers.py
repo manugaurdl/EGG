@@ -410,7 +410,7 @@ class RnnReceiverGS(nn.Module):
             outputs.append(self.agent(h_t, input, aux_input))
             prev_hidden = h_t
 
-        outputs = torch.stack(outputs).permute(1, 0, 2)
+        outputs = torch.stack(outputs).transpose(1, 0)  # , 2)
 
         return outputs
 
