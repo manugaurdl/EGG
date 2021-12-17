@@ -54,30 +54,33 @@ def main(params):
         dump.update(dict(mode=mode))
         print(json.dumps(dump), flush=True)
 
+    def log_interaction(interaction, name):
+        if opts.checkpoint_dir and opts.distributed_context.is_leader:
+            output_path = Path(opts.checkpoint_dir)
+            output_path.mkdir(exist_ok=True, parents=True)
+            interaction_prefix = (
+                f"val_interaction_voc_{opts.vocab_size}_heads_{opts.num_heads}_"
+                f"ctx_integration_{opts.context_integration}_bsz_{opts.batch_size}"
+            )
+            torch.save(interaction, output_path / f"{interaction_prefix}_{name}")
+
+    def eval_and_log_interaction(data_kwargs, interaction_name, log_name, dump=True):
+        val_loader = data.get_dataloader(**val_data_kwargs)
+        _, val_interaction = trainer.eval(val_loader)
+        val_interaction.aux_input.update({"args": data_kwargs})
+        log_stats(val_interaction, log_name)
+        if dump:
+            log_interaction(val_interaction, interaction_name)
+
     val_data_kwargs = dict(data_kwargs)
     val_data_kwargs.update({"split": "val", "use_augmentations": False})
-    val_loader = data.get_dataloader(**val_data_kwargs)
-    _, val_interaction = trainer.eval(val_loader)
-    val_interaction.aux_input.update({"args": val_data_kwargs})
-    log_stats(val_interaction, "VALIDATION SET")
 
     swapped_val_data_kwargs = dict(val_data_kwargs)
     swapped_ctx_distractors = not opts.contextual_distractors
     swapped_val_data_kwargs.update({"contextual_distractors": swapped_ctx_distractors})
-    swapped_val_loader = data.get_dataloader(**swapped_val_data_kwargs)
-    _, swapped_val_interaction = trainer.eval(swapped_val_loader)
-    swapped_val_interaction.aux_input.update({"args": swapped_val_data_kwargs})
-    log_stats(swapped_val_interaction, "SWAPPED VALIDATION SET")
 
-    if opts.checkpoint_dir and opts.distributed_context.is_leader:
-        output_path = Path(opts.checkpoint_dir)
-        output_path.mkdir(exist_ok=True, parents=True)
-        interaction_name = (
-            f"val_interaction_voc_{opts.vocab_size}_heads_{opts.num_heads}_"
-            f"ctx_integration_{opts.context_integration}_bsz_{opts.batch_size}"
-        )
-        torch.save(val_interaction, output_path / interaction_name)
-        torch.save(swapped_val_interaction, output_path / f"{interaction_name}_swapped")
+    eval_and_log_interaction(val_data_kwargs, "", "VALIDATION SET")
+    eval_and_log_interaction(val_data_kwargs, "swapped", "SWAPPED_VALIDATION SET")
 
     # GAUSSIAN TEST
     gaussian_data = data.get_gaussian_dataloader(**data_kwargs)
