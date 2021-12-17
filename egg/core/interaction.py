@@ -128,7 +128,7 @@ class Interaction:
         RuntimeError: Appending empty and non-empty interactions logs. Normally this shouldn't happen!
         """
 
-        def _check_cat(lst):
+        def _check_stack(lst):
             if all(x is None for x in lst):
                 return None
             # if some but not all are None: not good
@@ -137,7 +137,7 @@ class Interaction:
                     "Appending empty and non-empty interactions logs. "
                     "Normally this shouldn't happen!"
                 )
-            return torch.cat(lst, dim=0)
+            return torch.stack(lst, dim=0)
 
         assert interactions, "interaction list must not be empty"
         has_aux_input = interactions[0].aux_input is not None
@@ -156,19 +156,20 @@ class Interaction:
         if has_aux_input:
             aux_input = {}
             for k in interactions[0].aux_input:
-                aux_input[k] = _check_cat([x.aux_input[k] for x in interactions])
+                print(k)
+                aux_input[k] = _check_stack([x.aux_input[k] for x in interactions])
         aux = {}
         for k in interactions[0].aux:
-            aux[k] = _check_cat([x.aux[k] for x in interactions])
+            aux[k] = _check_stack([x.aux[k] for x in interactions])
 
         return Interaction(
-            sender_input=_check_cat([x.sender_input for x in interactions]),
-            receiver_input=_check_cat([x.receiver_input for x in interactions]),
-            labels=_check_cat([x.labels for x in interactions]),
+            sender_input=_check_stack([x.sender_input for x in interactions]),
+            receiver_input=_check_stack([x.receiver_input for x in interactions]),
+            labels=_check_stack([x.labels for x in interactions]),
             aux_input=aux_input,
-            message=_check_cat([x.message for x in interactions]),
-            message_length=_check_cat([x.message_length for x in interactions]),
-            receiver_output=_check_cat([x.receiver_output for x in interactions]),
+            message=_check_stack([x.message for x in interactions]),
+            message_length=_check_stack([x.message_length for x in interactions]),
+            receiver_output=_check_stack([x.receiver_output for x in interactions]),
             aux=aux,
         )
 
