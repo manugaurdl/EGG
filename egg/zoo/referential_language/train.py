@@ -73,7 +73,7 @@ def main(params):
         output_path = Path(opts.checkpoint_dir)
         output_path.mkdir(exist_ok=True, parents=True)
         interaction_name = (
-            f"val_interaction_voc_{opts.vocab_size}_attn_{opts.attention}_"
+            f"val_interaction_voc_{opts.vocab_size}_heads_{opts.num_heads}_"
             f"ctx_integration_{opts.context_integration}_bsz_{opts.batch_size}"
         )
         torch.save(val_interaction, output_path / interaction_name)

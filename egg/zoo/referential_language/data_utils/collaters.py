@@ -82,7 +82,7 @@ class Collater:
         img_id = item[2]["img_id"]
         bbox = item[2]["bboxes"][obj_idx]
         obj_id = item[2]["obj_ids"][obj_idx]
-        return BatchElem(img, bbox, label, img_id, obj_id)
+        return BatchElem(img, bbox, label, obj_id, img_id)
 
     def _pack_agent_input(
         self,
@@ -101,7 +101,7 @@ class Collater:
 
         labels = pad_sequence(labels, batch_first=True, padding_value=-1.0)
         obj_ids = pad_sequence(obj_ids, batch_first=True, padding_value=-1.0).squeeze()
-        img_ids = torch.cat(img_ids)
+        img_ids = pad_sequence(img_ids, batch_first=True, padding_value=-1.0).squeeze()
 
         aux_input = {
             "baselines": torch.cat(baselines),
