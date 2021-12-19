@@ -9,14 +9,14 @@ import torch.nn.functional as F
 from egg.core.gs_wrappers import (
     GumbelSoftmaxWrapper,
     RnnSenderGS,
-    RnnReceiverGS,
     SymbolGameGS,
     SymbolReceiverWrapper,
 )
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.referential_language.archs import (
-    PlusOneWrapper,
+    PlusOneWrapperGS,
     Receiver,
+    RnnReceiverFixedLengthGS,
     Sender,
     SenderReceiverRnnFixedLengthGS,
     initialize_vision_module,
@@ -88,7 +88,7 @@ def build_gs_game(opts):
             num_heads=opts.num_heads,
             context_integration=opts.context_integration,
         )
-        sender = PlusOneWrapper(sender)
+        sender = PlusOneWrapperGS(sender)
         receiver = Receiver(
             vision_module=vision_module_receiver,
             input_dim=sender_input_dim,
@@ -106,7 +106,7 @@ def build_gs_game(opts):
             temperature=opts.gs_temperature,
             cell=opts.sender_cell,
         )
-        receiver = RnnReceiverGS(
+        receiver = RnnReceiverFixedLengthGS(
             agent=receiver,
             vocab_size=opts.vocab_size,
             embed_dim=opts.recv_embed_dim,

@@ -65,7 +65,7 @@ class ContextAttention(nn.Module):
         return contextualized_objs, attn_weights
 
 
-class PlusOneWrapper(nn.Module):
+class PlusOneWrapperGS(nn.Module):
     def __init__(self, wrapped):
         super().__init__()
         self.wrapped = wrapped
@@ -160,13 +160,53 @@ class Receiver(nn.Module):
         return self.compute_sim_scores(messages, images)
 
 
+class RnnReceiverFixedLengthGS(nn.Module):
+    def __init__(self, agent, vocab_size, embed_dim, hidden_size, cell="rnn"):
+        super(RnnReceiverFixedLengthGS, self).__init__()
+        self.agent = agent
+
+        self.cell = None
+        cell = cell.lower()
+        if cell == "rnn":
+            self.cell = nn.RNNCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "gru":
+            self.cell = nn.GRUCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "lstm":
+            self.cell = nn.LSTMCell(input_size=embed_dim, hidden_size=hidden_size)
+        else:
+            raise ValueError(f"Unknown RNN Cell: {cell}")
+
+        self.embedding = nn.Linear(vocab_size, embed_dim)
+
+    def forward(self, message, input=None, aux_input=None):
+        emb = self.embedding(message)
+
+        prev_hidden = None
+        prev_c = None
+
+        # to get an access to the hidden states, we have to unroll the cell ourselves
+        for step in range(message.size(1) - 1):
+            e_t = emb[:, step, ...]
+            if isinstance(self.cell, nn.LSTMCell):
+                h_t, prev_c = (
+                    self.cell(e_t, (prev_hidden, prev_c))
+                    if prev_hidden is not None
+                    else self.cell(e_t)
+                )
+            else:
+                h_t = self.cell(e_t, prev_hidden)
+
+            prev_hidden = h_t
+
+        return self.agent(h_t, input, aux_input)
+
+
 class SenderReceiverRnnFixedLengthGS(nn.Module):
     def __init__(
         self,
         sender,
         receiver,
         loss,
-        length_cost=0.0,
         train_logging_strategy: Optional[LoggingStrategy] = None,
         test_logging_strategy: Optional[LoggingStrategy] = None,
     ):
@@ -174,7 +214,6 @@ class SenderReceiverRnnFixedLengthGS(nn.Module):
         self.sender = sender
         self.receiver = receiver
         self.loss = loss
-        self.length_cost = length_cost
         self.train_logging_strategy = (
             LoggingStrategy()
             if train_logging_strategy is None
@@ -192,9 +231,9 @@ class SenderReceiverRnnFixedLengthGS(nn.Module):
 
         loss, aux_info = self.loss(
             sender_input,
-            message[:, -1, ...],
+            message,
             receiver_input,
-            receiver_output[:, -1, ...],
+            receiver_output,
             labels,
             aux_input,
         )
@@ -209,7 +248,7 @@ class SenderReceiverRnnFixedLengthGS(nn.Module):
             aux_input=aux_input,
             receiver_output=receiver_output.detach(),
             message=message.detach(),
-            message_length=torch.Tensor([receiver_output.size(1)] * len(sender_input)),
+            message_length=None,
             aux=aux_info,
         )
 
