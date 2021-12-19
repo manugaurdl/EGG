@@ -18,7 +18,7 @@ class GaussianDataset:
         return self.nb_samples
 
     def __getitem__(self, index):
-        tnsr = torch.rand(self.max_objects, 3, self.image_size, self.image_size)
+        tnsr = torch.rand(self.max_objects, 3, self.image_size, self.image_size) * 255
         return tnsr, torch.ones(self.max_objects)
 
 
@@ -49,7 +49,7 @@ def get_gaussian_dataloader(
         shuffle=(sampler is None),
         collate_fn=collate_fn,
         sampler=sampler,
-        num_workers=4,
+        num_workers=6,
         pin_memory=True,
         drop_last=True,
     )

@@ -129,14 +129,14 @@ class ImageTransformation:
             transformations.extend(
                 [
                     transforms.RandomApply([color_jitter], p=0.8),
-                    # transforms.RandomApply([GaussianBlur([0.1, 2.0])], p=0.5),
+                    transforms.RandomApply([GaussianBlur([0.1, 2.0])], p=0.5),
                     transforms.RandomGrayscale(p=0.2),
                     transforms.RandomHorizontalFlip(),  # with 0.5 probability
                 ]
             )
-        m, std = [0.4529, 0.4170, 0.3804], [0.1830, 0.1779, 0.1745]
         transformations.append(transforms.ToTensor())
-        transformations.append(transforms.Normalize(mean=m, std=std))
+        # m, std = [0.4529, 0.4170, 0.3804], [0.1830, 0.1779, 0.1745]
+        # transformations.append(transforms.Normalize(mean=m, std=std))
         self.transform = transforms.Compose(transformations)
 
     def __call__(self, img):
