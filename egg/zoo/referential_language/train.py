@@ -14,6 +14,7 @@ import egg.core as core
 import egg.zoo.referential_language.data_utils as data
 from egg.zoo.referential_language.callbacks import get_callbacks
 from egg.zoo.referential_language.games import build_game
+from egg.zoo.referential_language.scripts.analyze_interaction import analyze_interaction
 from egg.zoo.referential_language.utils import get_common_opts
 
 
@@ -71,20 +72,21 @@ def main(params):
 
             torch.save(interaction, output_path / interaction_name)
 
-    def eval_and_log_interaction(data_kwargs, interaction_name, log_name):
-        val_loader = data.get_dataloader(**val_data_kwargs)
+    def process_interaction(loader_kwargs, interaction_name, log_name):
+        val_loader = data.get_dataloader(**loader_kwargs)
         _, val_interaction = trainer.eval(val_loader)
         val_interaction.aux_input.update({"args": opts})
         log_stats(val_interaction, log_name)
         log_interaction(val_interaction, interaction_name)
+        analyze_interaction(val_interaction)
 
     val_data_kwargs = dict(data_kwargs)
     val_data_kwargs.update({"split": "val", "use_augmentations": False})
     swap_kwargs = dict(val_data_kwargs)
     swap_kwargs.update({"contextual_distractors": not opts.contextual_distractors})
 
-    eval_and_log_interaction(val_data_kwargs, "", "VALIDATION SET")
-    eval_and_log_interaction(swap_kwargs, "swapped", "SWAPPED_VALIDATION SET")
+    process_interaction(val_data_kwargs, "", "VALIDATION SET")
+    process_interaction(swap_kwargs, "swapped", "SWAPPED_VALIDATION SET")
 
     # GAUSSIAN TEST
     gaussian_data = data.get_gaussian_dataloader(**data_kwargs)

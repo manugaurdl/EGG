@@ -71,7 +71,7 @@ def get_errors(
     )
 
 
-def get_distinct_message_counter(
+def get_message_info(
     labels: torch.Tensor,
     messages: torch.Tensor,
     accs: torch.Tensor,
@@ -80,15 +80,19 @@ def get_distinct_message_counter(
     # defaultdict of default dict of int
     # from labels to messages to count of those messages
     labels2message = defaultdict(lambda: defaultdict(int))
+    all_messages = defaultdict(bool)
     for batch_id, _ in enumerate(accs):
         for batch_elem_id, _ in enumerate(accs[batch_id]):
             for obj_id, model_guess in enumerate(accs[batch_id, batch_elem_id]):
                 not_masked = mask[batch_id, batch_elem_id, obj_id].item() == 0
                 if not_masked:
                     label = labels[batch_id, batch_elem_id, obj_id].int().item()
-                    message = messages[batch_id, batch_elem_id, obj_id].item()
+                    message = messages[batch_id, batch_elem_id, obj_id]
+                    message = tuple(message.tolist())
+                    if message not in all_messages:
+                        all_messages[messages] = True
                     labels2message[label][message] += 1
-    return labels2message
+    return labels2message, all_messages
 
 
 def get_opts():
@@ -97,22 +101,17 @@ def get_opts():
     return parser.parse_args()
 
 
-def main():
-    opts = get_opts()
-    interaction = torch.load(opts.interaction_path)
-
+def analyze_interaction(interaction):
     # Extracting standard-ish fields from the interaction
-    try:
-        run_args = interaction.aux_input["args"]
-        print(run_args)
-        bsz, max_objs = run_args["batch_size"], run_args["max_objects"]
-    except KeyError:
-        print("WARNING: FALLING BACK TO STANDARD BSZ AND N_OBJS")
-        bsz, max_objs = 128, 20
+    run_args = interaction.aux_input["args"]
+    print(run_args)
+    bsz, max_objs = run_args.batch_size, run_args.max_objects
+    msg_len = run_args.max_len + 1 if run_args.max_len > 1 else run_args.max_len
 
     receiver_output = interaction.receiver_output.view(-1, bsz, max_objs, max_objs)
     n_batches = receiver_output.shape[0]
-    messages = torch.argmax(interaction.message.view(n_batches, bsz, max_objs, -1), -1)
+    messages = interaction.message.view(n_batches, bsz, max_objs, msg_len, -1).squeeze()
+    messages = torch.argmax(messages, -1)
     labels = interaction.labels.view(-1, bsz, max_objs)
     acc = interaction.aux["acc"].view(-1, bsz, max_objs)
 
@@ -133,7 +132,8 @@ def main():
     print(f"Potential Label errs: {potential_label_errors / total_errors * 100:.2f}%")
     print(f"Both errs: {both_errors / total_errors * 100:.2f}%")
 
-    labels2messages = get_distinct_message_counter(labels, messages, acc, mask)
+    labels2messages, all_messages = get_message_info(labels, messages, acc, mask)
+    print(f"Number of distinct messages = {len(all_messages)}")
     messages_per_label = 0
     prop_entropy_per_label = 0
     labels_with_syn = 0
@@ -151,6 +151,12 @@ def main():
     )
 
     print(f"Accuracy = {torch.sum(acc == 1).int() / acc.numel() * 100:.2f}%")
+
+
+def main():
+    opts = get_opts()
+    interaction = torch.load(opts.interaction_path)
+    analyze_interaction(interaction)
 
 
 if __name__ == "__main__":
