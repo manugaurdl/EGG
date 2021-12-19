@@ -10,5 +10,6 @@
     "pretrain_vision": [true],
     "shared_vision": [true],
     "gs_temperature": [5.0],
+    "vocab_size": [2000],
     "vocab_size": [2, 10, 100, 500, 1000, 2000, 3000, 5000]
 }

@@ -58,7 +58,7 @@ def main(params):
 
     def log_interaction(interaction, name):
         if opts.checkpoint_dir and opts.distributed_context.is_leader:
-            output_path = Path(opts.checkpoint_dir)
+            output_path = Path(opts.checkpoint_dir) / "interactions"
             output_path.mkdir(exist_ok=True, parents=True)
 
             job_id = os.environ.get("SLURM_ARRAY_JOB_ID", None)
