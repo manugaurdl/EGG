@@ -4,6 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import json
+import os
+import uuid
 from pathlib import Path
 
 import torch
@@ -58,29 +60,31 @@ def main(params):
         if opts.checkpoint_dir and opts.distributed_context.is_leader:
             output_path = Path(opts.checkpoint_dir)
             output_path.mkdir(exist_ok=True, parents=True)
-            interaction_prefix = (
-                f"val_interaction_voc_{opts.vocab_size}_heads_{opts.num_heads}_"
-                f"ctx_integration_{opts.context_integration}_bsz_{opts.batch_size}"
-            )
-            torch.save(interaction, output_path / f"{interaction_prefix}_{name}")
 
-    def eval_and_log_interaction(data_kwargs, interaction_name, log_name, dump=True):
+            job_id = os.environ.get("SLURM_ARRAY_JOB_ID", None)
+            task_id = os.environ.get("SLURM_ARRAY_TASK_ID", None)
+            if job_id is None or task_id is None:
+                job_id = os.environ.get("SLURM_JOB_ID", uuid.uuid4())
+                task_id = os.environ.get("SLURM_PROCID", 0)
+                name = f"_{name}" if name else ""
+                interaction_name = f"val_interaction_{job_id}_{task_id}{name}"
+
+            torch.save(interaction, output_path / interaction_name)
+
+    def eval_and_log_interaction(data_kwargs, interaction_name, log_name):
         val_loader = data.get_dataloader(**val_data_kwargs)
         _, val_interaction = trainer.eval(val_loader)
-        val_interaction.aux_input.update({"args": data_kwargs})
+        val_interaction.aux_input.update({"args": opts})
         log_stats(val_interaction, log_name)
-        if dump:
-            log_interaction(val_interaction, interaction_name)
+        log_interaction(val_interaction, interaction_name)
 
     val_data_kwargs = dict(data_kwargs)
     val_data_kwargs.update({"split": "val", "use_augmentations": False})
-
-    swapped_val_data_kwargs = dict(val_data_kwargs)
-    swapped_ctx_distractors = not opts.contextual_distractors
-    swapped_val_data_kwargs.update({"contextual_distractors": swapped_ctx_distractors})
+    swap_kwargs = dict(val_data_kwargs)
+    swap_kwargs.update({"contextual_distractors": not opts.contextual_distractors})
 
     eval_and_log_interaction(val_data_kwargs, "", "VALIDATION SET")
-    eval_and_log_interaction(val_data_kwargs, "swapped", "SWAPPED_VALIDATION SET")
+    eval_and_log_interaction(swap_kwargs, "swapped", "SWAPPED_VALIDATION SET")
 
     # GAUSSIAN TEST
     gaussian_data = data.get_gaussian_dataloader(**data_kwargs)
