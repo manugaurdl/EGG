@@ -90,7 +90,7 @@ def get_message_info(
                     message = messages[batch_id, batch_elem_id, obj_id]
                     message = tuple(message.tolist())
                     if message not in all_messages:
-                        all_messages[messages] = True
+                        all_messages[message] = True
                     labels2message[label][message] += 1
     return labels2message, all_messages
 
@@ -106,7 +106,7 @@ def analyze_interaction(interaction):
     run_args = interaction.aux_input["args"]
     print(run_args)
     bsz, max_objs = run_args.batch_size, run_args.max_objects
-    msg_len = run_args.max_len + 1 if run_args.max_len > 1 else run_args.max_len
+    msg_len = run_args.max_len
 
     receiver_output = interaction.receiver_output.view(-1, bsz, max_objs, max_objs)
     n_batches = receiver_output.shape[0]

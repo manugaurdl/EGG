@@ -14,7 +14,6 @@ from egg.core.gs_wrappers import (
 )
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.referential_language.archs import (
-    PlusOneWrapperGS,
     Receiver,
     RnnReceiverFixedLengthGS,
     Sender,
@@ -88,7 +87,6 @@ def build_gs_game(opts):
             num_heads=opts.num_heads,
             context_integration=opts.context_integration,
         )
-        sender = PlusOneWrapperGS(sender)
         receiver = Receiver(
             vision_module=vision_module_receiver,
             input_dim=sender_input_dim,
@@ -102,7 +100,7 @@ def build_gs_game(opts):
             vocab_size=opts.vocab_size,
             embed_dim=opts.sender_embed_dim,
             hidden_size=opts.sender_cell_dim,
-            max_len=opts.max_len,
+            max_len=opts.max_len - 1,
             temperature=opts.gs_temperature,
             cell=opts.sender_cell,
         )

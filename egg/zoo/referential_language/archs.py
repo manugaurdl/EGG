@@ -65,15 +65,6 @@ class ContextAttention(nn.Module):
         return contextualized_objs, attn_weights
 
 
-class PlusOneWrapperGS(nn.Module):
-    def __init__(self, wrapped):
-        super().__init__()
-        self.wrapped = wrapped
-
-    def forward(self, *input):
-        return self.wrapped(*input) + 1
-
-
 class Sender(nn.Module):
     def __init__(
         self,
@@ -93,7 +84,6 @@ class Sender(nn.Module):
         else:
             raise RuntimeError("Unknown vision module for the Sender")
 
-        assert num_heads >= 0
         self.attention = num_heads > 0
         if self.attention:
             self.attn_fn = ContextAttention(input_dim, num_heads, context_integration)
