@@ -37,13 +37,18 @@ def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
 
 class ContextAttention(nn.Module):
     def __init__(
-        self, embed_dim: int, num_heads: int, context_integration: str = "cat"
+        self,
+        embed_dim: int,
+        num_heads: int,
+        context_integration: str = "cat",
+        residual: bool = False,
     ):
         super(ContextAttention, self).__init__()
         self.attn_fn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads)
         self.context_integration = context_integration
+        self.residual_connection = residual
 
-    def forward(self, img_feats, mask):
+    def forward(self, img_feats, mask, aux_input=None):
         context_vectors, attn_weights = self.attn_fn(
             query=img_feats,
             key=img_feats,
@@ -53,12 +58,16 @@ class ContextAttention(nn.Module):
         img_feats = torch.transpose(img_feats, 1, 0)
         context_vectors = torch.transpose(context_vectors, 1, 0)
 
+        residual = img_feats
         if self.context_integration == "cat":
             contextualized_objs = torch.cat([img_feats, context_vectors], dim=-1)
         elif self.context_integration == "gate":
             obj_w_context = img_feats * context_vectors
             context_gate = 1 - torch.sigmoid(obj_w_context)
+            aux_input["context_gate"] = context_gate
             contextualized_objs = img_feats * context_gate
+            if self.residual_connection:
+                contextualized_objs += residual
         else:
             raise RuntimeError(f"{self.context_integration} not supported")
 
@@ -101,7 +110,9 @@ class Sender(nn.Module):
         if self.attention:
             # MultiHead attn takes tensor in seq X batch X embedding format
             img_feats = torch.transpose(img_feats.view(bsz, max_objs, -1), 0, 1)
-            img_feats, attn_weights = self.attn_fn(img_feats, aux_input["mask"].bool())
+            img_feats, attn_weights = self.attn_fn(
+                img_feats, aux_input["mask"].bool(), aux_input
+            )
             aux_input["attn_weights"] = attn_weights
 
         return self.fc_out(img_feats.view(bsz * max_objs, -1))

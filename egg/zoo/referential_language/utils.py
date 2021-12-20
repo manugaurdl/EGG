@@ -77,6 +77,12 @@ def get_game_arch_opts(parser):
         help="Temperature for similarity computation in the loss fn. Ignored when similarity is 'dot'",
     )
     group.add_argument(
+        "--residual",
+        action="store_true",
+        default=False,
+        help="If set, it will add a residual connection when calculating attention with gate ctx integration",
+    )
+    group.add_argument(
         "--cosine_similarity",
         action="store_true",
         default=False,
