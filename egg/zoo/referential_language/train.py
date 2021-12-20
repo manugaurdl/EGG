@@ -68,7 +68,7 @@ def main(params):
                 job_id = os.environ.get("SLURM_JOB_ID", uuid.uuid4())
                 task_id = os.environ.get("SLURM_PROCID", 0)
                 name = f"_{name}" if name else ""
-                interaction_name = f"val_interaction_{job_id}_{task_id}{name}"
+            interaction_name = f"val_interaction_{job_id}_{task_id}{name}"
 
             torch.save(interaction, output_path / interaction_name)
 
