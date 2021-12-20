@@ -86,7 +86,7 @@ def main(params):
     swap_kwargs.update({"contextual_distractors": not opts.contextual_distractors})
 
     process_interaction(val_data_kwargs, "", "VALIDATION SET")
-    process_interaction(swap_kwargs, "swapped", "SWAPPED_VALIDATION SET")
+    process_interaction(swap_kwargs, "_swapped", "SWAPPED_VALIDATION SET")
 
     # GAUSSIAN TEST
     gaussian_data = data.get_gaussian_dataloader(**data_kwargs)

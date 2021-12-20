@@ -23,7 +23,6 @@ def entropy_dict(freq_table):
     return -(torch.where(t > 0, t.log(), t) * t).sum().item() / np.log(2)
 
 
-# a.masked_select(~torch.eye(n, dtype=bool)).view(n, n - 1)
 def get_errors(
     accs: torch.Tensor,
     labels: torch.Tensor,
@@ -53,6 +52,7 @@ def get_errors(
 
                     if counter[correct_label.item()] > 1:
                         potential_label_errors += 1
+                        # TODO fix this!
 
                     label_err = chosen_label == correct_label
                     label_errors += 1 if label_err else 0
@@ -80,22 +80,20 @@ def get_message_info(
     # defaultdict of default dict of int
     # from labels to messages to count of those messages
     labels2message = defaultdict(lambda: defaultdict(int))
-    all_messages = defaultdict(bool)
+    all_message_counter = Counter()
     for batch_id, _ in enumerate(accs):
         for batch_elem_id, _ in enumerate(accs[batch_id]):
             for obj_id, model_guess in enumerate(accs[batch_id, batch_elem_id]):
                 not_masked = mask[batch_id, batch_elem_id, obj_id].item() == 0
                 if not_masked:
                     label = labels[batch_id, batch_elem_id, obj_id].int().item()
-                    message = messages[batch_id, batch_elem_id, obj_id]
-                    message = message.tolist()
+                    message = messages[batch_id, batch_elem_id, obj_id].tolist()
                     if isinstance(message, int):
                         message = [message]
                     message = tuple(message)
-                    if message not in all_messages:
-                        all_messages[message] = True
+                    all_message_counter[message] += 1
                     labels2message[label][message] += 1
-    return labels2message, all_messages
+    return labels2message, all_message_counter
 
 
 def get_opts():
