@@ -88,7 +88,10 @@ def get_message_info(
                 if not_masked:
                     label = labels[batch_id, batch_elem_id, obj_id].int().item()
                     message = messages[batch_id, batch_elem_id, obj_id]
-                    message = tuple(message.tolist())
+                    message = message.tolist()
+                    if isinstance(message, int):
+                        message = [message]
+                    message = tuple(message)
                     if message not in all_messages:
                         all_messages[message] = True
                     labels2message[label][message] += 1
