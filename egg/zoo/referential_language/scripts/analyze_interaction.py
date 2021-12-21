@@ -40,7 +40,7 @@ def get_errors(
     both_errors = 0
     for batch_id, _ in enumerate(accs):
         for batch_elem_id, _ in enumerate(accs[batch_id]):
-            counter = Counter(labels[batch_id, batch_elem_id].tolist())
+            counter = Counter()
             for obj_id, model_guess in enumerate(accs[batch_id, batch_elem_id]):
                 wrong_guess = model_guess.item() == 0
                 not_masked = mask[batch_id, batch_elem_id, obj_id].item() == 0
@@ -50,9 +50,7 @@ def get_errors(
                     chosen_label = labels[batch_id, batch_elem_id, idx]
                     correct_label = labels[batch_id, batch_elem_id, obj_id]
 
-                    if counter[correct_label.item()] > 1:
-                        potential_label_errors += 1
-                        # TODO fix this!
+                    counter[correct_label.item()] += 1
 
                     label_err = chosen_label == correct_label
                     label_errors += 1 if label_err else 0
@@ -61,6 +59,8 @@ def get_errors(
                     )
                     visual_errors += 1 if visual_err else 0
                     both_errors += 1 if visual_err and label_err else 0
+            for _, v in counter.items():
+                potential_label_errors += v if v > 1 else 0
 
     return (
         visual_errors,

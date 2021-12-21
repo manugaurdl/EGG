@@ -7,8 +7,10 @@
     "max_objects": [20],
     "lr": [0.0005],
     "random_seed": [111],
+    "shared_vision": [true, false],
+    "residual": [false, true],
     "gs_temperature": [5.0],
     "vocab_size": [2000],
-    "num_heads": [1, 2, 4, 8],
-    "context_integration": ["cat", "gate"]
+    "context_integration": ["cat", "gate"],
+    "num_heads": [1, 2, 4, 8]
 }
