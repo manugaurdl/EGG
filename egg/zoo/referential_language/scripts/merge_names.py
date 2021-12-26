@@ -5,21 +5,30 @@ Created on Sun Dec 19 11:30:49 2021
 
 @author: eleonora
 """
+import argparse
 import json
 
 
-file_path = "/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/objects.json" # objects file of one name version
-file_image_data12 = "/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/image_data12.json" # multi names version
-file_path_12 = "/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/objects12.json" # multi names version
+def get_opts():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--path_objects_1_name", help="objects file with one name", default = "/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/objects.json")
+    parser.add_argument("--path_objects_multinames", help="objects file with multiple names", default = "/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/objects12.json" )
+    parser.add_argument("--path_val_set_to_clean", help="validation set where we want to remove names", default = "/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/splits/val_objects.json")
+    parser.add_argument("--path_save_new_val", help="directory to save the new validation set", default = '/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/splits/new_val_objects.json')
+    return parser.parse_args()
 
 
-with open (file_path) as f:
+
+opts = get_opts()
+with open(opts.path_objects_1_name) as f:
     objects1 = json.load(f)
-with open (file_path_12) as f:
-    objects12 = json.load(f)
-with open(file_image_data12) as f:
-    image_data12 = json.load(f)    
-    
+with open(opts.path_objects_multinames) as f:
+    objects12 = json.load(f) 
+with open(opts.path_val_set_to_clean) as f:
+    val_objects = json.load(f)
+
+
+   
 # check how many objects have 2 names for each file
 # for objects1 we should find 0 cases 
 counter_objects1 = 0
@@ -62,7 +71,8 @@ for item in objects12:
 print(len(more_names))
 
 
-# does their object in appear in the objects1 file? NO
+# TO CHECK
+# does their object-id appear in the objects1 file? NO
 ids = [i['object_id'] for i in more_names]
 for i in objects1:
     for obj in i['objects']:
@@ -93,22 +103,20 @@ for item in objects12:
         if len(obj['names']) > 1:
             more_names.append(obj)
 print(len(more_names))
-
+# 0
 
 
 
 # CREATE a VALIDATION SET based on previous
 
-val_objects_small = "/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/splits/val_objects_small.json" # validation set for which we want to clean the names
-with open(val_objects_small) as f:
-    val_objects_small = json.load(f)
 
-val_image_ids = [i['image_id'] for i in val_objects_small]
+val_image_ids = [i['image_id'] for i in val_objects]
 len(val_image_ids)
+
 
 val_idx = []
 counter = 0
-for idx, i in enumerate(image_data12):
+for idx, i in enumerate(objects12):
     if i['image_id'] in val_image_ids:
         counter += 1
         val_idx.append(idx)
@@ -126,14 +134,11 @@ for item in new_val_objects:
         if len(obj['names']) > 1:
             more_names.append(obj)
 print(len(more_names))
+# 0
 
-len(new_val_objects)
 
-new_val_objects[0]
 
-with open('/Users/eleonora/OneDrive/PhD/EmeComm/VG_data/splits/new_val_objects_small.json', 'w') as outfile:
-    json.dump(new_val_objects, outfile)
-    
-    
-    
+with open(opts.path_save_new_val, 'w') as outfile:
+        json.dump(new_val_objects, outfile)
+
 
