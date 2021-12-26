@@ -113,19 +113,14 @@ print(len(more_names))
 val_image_ids = [i['image_id'] for i in val_objects]
 len(val_image_ids)
 
-
-val_idx = []
 counter = 0
-for idx, i in enumerate(objects12):
+new_val_objects = []
+for i in objects12:
     if i['image_id'] in val_image_ids:
         counter += 1
-        val_idx.append(idx)
+        new_val_objects.append(i)
         print(counter)
-        
 
-new_val_objects = []
-for idx in val_idx:  
-    new_val_objects.append(objects12[idx])
 
 
 more_names = []               
@@ -140,5 +135,4 @@ print(len(more_names))
 
 with open(opts.path_save_new_val, 'w') as outfile:
         json.dump(new_val_objects, outfile)
-
 
