@@ -82,6 +82,7 @@ class Sender(nn.Module):
         output_dim: int = 2048,
         num_heads: int = 0,
         context_integration: str = "cat",
+        residual: bool = False,
     ):
         super(Sender, self).__init__()
 
@@ -95,7 +96,9 @@ class Sender(nn.Module):
 
         self.attention = num_heads > 0
         if self.attention:
-            self.attn_fn = ContextAttention(input_dim, num_heads, context_integration)
+            self.attn_fn = ContextAttention(
+                input_dim, num_heads, context_integration, residual
+            )
             input_dim = input_dim * 2 if context_integration == "cat" else input_dim
 
         self.fc_out = nn.Sequential(

@@ -126,6 +126,7 @@ def build_gs_game(opts):
             output_dim=opts.vocab_size,
             num_heads=opts.num_heads,
             context_integration=opts.context_integration,
+            residual=opts.residual,
         )
         receiver = Receiver(
             vision_module=vision_module_receiver,
