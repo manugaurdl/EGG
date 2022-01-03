@@ -120,6 +120,24 @@ def analyze_interaction(interaction):
     aux_input = interaction.aux_input
     recv_img_feats = aux_input["recv_img_feats"].view(n_batches, bsz, max_objs, -1)
     mask = aux_input["mask"].view(n_batches, bsz, max_objs)
+    if "context_gate" in aux_input:
+        print("CONTEXT GATE")
+        context_gate = aux_input["context_gate"]
+        n_elems = context_gate.numel()
+        print(f"Mean = {torch.mean(context_gate):.2f}")
+        print(f"Avg var is {torch.mean(torch.var(context_gate, dim=-1)):.4f}")
+        print(f"Var of means {torch.var(torch.mean(context_gate, dim=-1)):.4f}")
+        print(f"Elem set to 1: {torch.sum(context_gate == 1) / n_elems:.4f}")
+        print(f"Elem set to 0: {torch.sum(context_gate == 0) / n_elems:.4f}")
+        print(f"Elem set to 0.5: {torch.sum(context_gate == 0.5) / n_elems:.4f}")
+
+    if "attn_weights" in aux_input:
+        print("ATTN WEIGHTS")
+        attn_weights = aux_input["attn_weights"]
+        print(f"Var attn weights: {torch.var(attn_weights)}")
+        ones = torch.sum((attn_weights == 1))
+        print(f"Ones {ones}")
+        print(f"All elems divided by ones {torch.numel(attn_weights) / ones}")
 
     (
         visual_errors,

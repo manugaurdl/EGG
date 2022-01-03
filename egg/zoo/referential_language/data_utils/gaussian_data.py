@@ -30,7 +30,7 @@ def get_gaussian_dataloader(
     seed: int = 111,
     **kwargs,
 ):
-    dataset = GaussianDataset(image_size, max_objects, nb_samples=20_000)
+    dataset = GaussianDataset(image_size, max_objects, nb_samples=2_000)
 
     sampler = None
     if is_distributed:
