@@ -118,7 +118,7 @@ def analyze_interaction(interaction):
 
     # Extracting values from aux_input
     aux_input = interaction.aux_input
-    recv_img_feats = aux_input["recv_img_feats"].view(n_batches, bsz, max_objs, -1)
+    recv_img_feats = interaction.receiver_input.view(n_batches, bsz, max_objs, -1)
     mask = aux_input["mask"].view(n_batches, bsz, max_objs)
     if "context_gate" in aux_input:
         print("CONTEXT GATE")
@@ -135,9 +135,6 @@ def analyze_interaction(interaction):
         print("ATTN WEIGHTS")
         attn_weights = aux_input["attn_weights"]
         print(f"Var attn weights: {torch.var(attn_weights)}")
-        ones = torch.sum((attn_weights == 1))
-        print(f"Ones {ones}")
-        print(f"All elems divided by ones {torch.numel(attn_weights) / ones}")
 
     (
         visual_errors,
