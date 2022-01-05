@@ -19,14 +19,14 @@ def get_data_opts(parser):
     group.add_argument(
         "--metadata_dir",
         type=str,
-        default="/private/home/rdessi/visual_genome",
+        default="/private/home/rdessi/visual_genome/train_set_98_2_split/",
         help="Path to folder with VG metada",
     )
     group.add_argument(
         "--max_objects",
         type=int,
         default=20,
-        help="Max numbeer of bboxes to extract from an image",
+        help="Max number of bboxes to extract from an image",
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
     group.add_argument("--contextual_distractors", action="store_true", default=False)
@@ -56,8 +56,14 @@ def get_vision_module_opts(parser):
     )
 
 
-def get_game_arch_opts(parser):
-    group = parser.add_argument_group("game architecture options")
+def get_attention_opts(parser):
+    group = parser.add_argument_group("attn and ctx integration options")
+    group.add_argument(
+        "--attention_type",
+        default="none",
+        choices=["self", "simple", "none"],
+        help="Type of attention fn used to compute visual context",
+    )
     group.add_argument(
         "--context_integration",
         default="cat",
@@ -67,26 +73,30 @@ def get_game_arch_opts(parser):
     group.add_argument(
         "--num_heads",
         type=int,
-        default=0,
+        default=1,
         help="Number of heads in the self attention to integrate context with objects (default: 0 means no attention)",
     )
+
+
+def get_game_arch_opts(parser):
+    group = parser.add_argument_group("game architecture options")
     group.add_argument(
         "--recv_temperature",
         type=float,
-        default=0.1,
+        default=1.0,
         help="Temperature for similarity computation in the loss fn. Ignored when similarity is 'dot'",
     )
     group.add_argument(
-        "--residual",
+        "--use_cosine_similarity",
         action="store_true",
         default=False,
-        help="If set, it will add a residual connection when calculating attention with gate ctx integration",
+        help="If True, Receiver will compute l2-normalized dot product between message and images (default: False)",
     )
     group.add_argument(
-        "--cosine_similarity",
-        action="store_true",
-        default=False,
-        help="If True Receiver will compute l2-normalized dot product between message and images (default: False)",
+        "--game_mode",
+        default="gs",
+        choices=["gs"],
+        help="Choose between gumbel-based and reinforce-based training (default: gs)",
     )
 
 
@@ -98,12 +108,6 @@ def get_gs_opts(parser):
         default=1.0,
         help="gs temperature used in the relaxation layer",
     )
-
-
-def get_rf_opts(parser):
-    pass
-    # group = parser.add_argument_group("reinforce training options")
-    # group.add_argument("--", type=float, default=None, help="")
 
 
 def get_single_symbol_opts(parser):
@@ -122,46 +126,6 @@ def get_single_symbol_opts(parser):
     )
 
 
-def get_multi_symbol_opts(parser):
-    group = parser.add_argument_group("multi symbol options")
-    group.add_argument(
-        "--sender_cell_dim",
-        default=256,
-        type=int,
-        help="Size of sender hidden unit in recurrent network",
-    )
-    group.add_argument(
-        "--recv_cell_dim",
-        default=256,
-        type=int,
-        help="Size of recv hidden unit in recurrent network",
-    )
-    group.add_argument(
-        "--sender_embed_dim",
-        default=512,
-        type=int,
-        help="Size of sender embeddings in recurrent network",
-    )
-    group.add_argument(
-        "--recv_embed_dim",
-        default=512,
-        type=int,
-        help="Size of sender embeddings in recurrent network",
-    )
-    group.add_argument(
-        "--sender_cell",
-        default="rnn",
-        choices=["rnn", "gru", "lstm"],
-        help="Type of recurrent unit for generating a message in sender agent",
-    )
-    group.add_argument(
-        "--recv_cell",
-        default="rnn",
-        choices=["rnn", "gru", "lstm"],
-        help="Type of recurrent unit for generating a message in receiver agent",
-    )
-
-
 def get_common_opts(params):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -171,10 +135,10 @@ def get_common_opts(params):
         help="Run the game with pdb enabled",
     )
     parser.add_argument(
-        "--game_mode",
-        default="gs",
-        choices=["gs", "rf"],
-        help="Choose between gumbel-based and reinforce-based training (default: gs)",
+        "--wandb",
+        action="store_true",
+        default=False,
+        help="Run the game logging to wandb",
     )
 
     get_data_opts(parser)
@@ -182,8 +146,7 @@ def get_common_opts(params):
     get_vision_module_opts(parser)
     get_game_arch_opts(parser)
     get_single_symbol_opts(parser)
-    get_multi_symbol_opts(parser)
-    get_rf_opts(parser)
+    get_attention_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)
     return opts

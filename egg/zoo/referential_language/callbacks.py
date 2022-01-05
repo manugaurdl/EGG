@@ -5,6 +5,8 @@
 
 import json
 
+import wandb
+
 from egg.core import Callback, ConsoleLogger, Interaction
 
 
@@ -33,9 +35,34 @@ class DistributedSamplerEpochSetter(Callback):
             self.trainer.validation_data.sampler.set_epoch(epoch)
 
 
-def get_callbacks():
-    return [
+class WandbLogger(Callback):
+    def log(self, values):
+        if self.trainer.distributed_context.is_leader:
+            wandb.log(values)
+
+    def on_batch_end(
+        self, logs: Interaction, loss: float, batch_id: int, is_training: bool = True
+    ):
+        values = {"batch_loss": loss, "batch_acc": logs.aux["acc"].mean()}
+        self.log(values)
+
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
+        acc = logs.aux["acc"].mean()
+        values = {"epoch_loss": loss, "epoch_acc": acc, "epoch": epoch}
+        self.log(values)
+
+    def on_validation_end(self, loss: float, logs: Interaction, epoch: int):
+        acc = logs.aux["acc"].mean().item()
+        values = {"test_loss": loss, "test_acc": acc, "epoch": epoch}
+        self.log(values)
+
+
+def get_callbacks(opts):
+    callbacks = [
         BestStatsTracker(),
         ConsoleLogger(as_json=True, print_train_loss=True),
         DistributedSamplerEpochSetter(),
     ]
+    if opts.wandb:
+        return callbacks + [WandbLogger()]
+    return callbacks

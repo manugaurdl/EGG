@@ -18,7 +18,7 @@ class GaussianDataset:
         return self.nb_samples
 
     def __getitem__(self, index):
-        tnsr = torch.rand(self.max_objects, 3, self.image_size, self.image_size) * 255
+        tnsr = torch.rand(self.max_objects, 3, self.image_size, self.image_size)
         return tnsr, torch.ones(self.max_objects)
 
 

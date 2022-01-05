@@ -8,16 +8,14 @@ import torch.nn.functional as F
 
 from egg.core.gs_wrappers import (
     GumbelSoftmaxWrapper,
-    RnnSenderGS,
     SymbolGameGS,
     SymbolReceiverWrapper,
 )
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.referential_language.archs import (
     Receiver,
-    RnnReceiverFixedLengthGS,
     Sender,
-    SenderReceiverRnnFixedLengthGS,
+    VisionWrapper,
     initialize_vision_module,
 )
 
@@ -59,7 +57,7 @@ def get_vision_modules(opts):
     vision_module_sender, input_dim = initialize_vision_module(
         name=opts.vision_model_name, pretrained=opts.pretrain_vision
     )
-    vision_module_receiver = vision_module_sender
+    vision_module_receiver = None
     if not opts.shared_vision:
         vision_module_receiver, _ = initialize_vision_module(
             name=opts.vision_model_name
@@ -69,7 +67,7 @@ def get_vision_modules(opts):
 
 def get_logging_strategies():
     train_logging_strategy = LoggingStrategy.minimal()
-    logging_test_args = [False, False, True, True, True, True, False]
+    logging_test_args = [False, True, True, True, True, True, False]
     test_logging_strategy = LoggingStrategy(*logging_test_args)
     return train_logging_strategy, test_logging_strategy
 
@@ -79,97 +77,44 @@ def build_gs_game(opts):
     vision_module_sender, vision_module_receiver, sender_input_dim = get_vision_modules(
         opts
     )
-    if opts.max_len > 1:
-        sender = Sender(
-            vision_module=vision_module_sender,
-            input_dim=sender_input_dim,
-            output_dim=opts.sender_cell_dim,
-            num_heads=opts.num_heads,
-            context_integration=opts.context_integration,
-            residual=opts.residual,
-        )
-        receiver = Receiver(
-            vision_module=vision_module_receiver,
-            input_dim=sender_input_dim,
-            hidden_dim=opts.recv_hidden_dim,
-            output_dim=opts.recv_cell_dim,
-            temperature=opts.recv_temperature,
-            use_cosine_sim=opts.cosine_similarity,
-        )
-        sender = RnnSenderGS(
-            agent=sender,
-            vocab_size=opts.vocab_size,
-            embed_dim=opts.sender_embed_dim,
-            hidden_size=opts.sender_cell_dim,
-            max_len=opts.max_len - 1,
-            temperature=opts.gs_temperature,
-            cell=opts.sender_cell,
-        )
-        receiver = RnnReceiverFixedLengthGS(
-            agent=receiver,
-            vocab_size=opts.vocab_size,
-            embed_dim=opts.recv_embed_dim,
-            hidden_size=opts.recv_cell_dim,
-            cell=opts.recv_cell,
-        )
-        game = SenderReceiverRnnFixedLengthGS(
-            sender=sender,
-            receiver=receiver,
-            loss=loss,
-            train_logging_strategy=train_logging_strategy,
-            test_logging_strategy=test_logging_strategy,
-        )
-    else:
-        sender = Sender(
-            vision_module=vision_module_sender,
-            input_dim=sender_input_dim,
-            output_dim=opts.vocab_size,
-            num_heads=opts.num_heads,
-            context_integration=opts.context_integration,
-            residual=opts.residual,
-        )
-        receiver = Receiver(
-            vision_module=vision_module_receiver,
-            input_dim=sender_input_dim,
-            hidden_dim=opts.recv_hidden_dim,
-            output_dim=opts.recv_output_dim,
-            temperature=opts.recv_temperature,
-            use_cosine_sim=opts.cosine_similarity,
-        )
-        sender = GumbelSoftmaxWrapper(
-            agent=sender,
-            temperature=opts.gs_temperature,
-        )
-        receiver = SymbolReceiverWrapper(
-            receiver,
-            opts.vocab_size,
-            opts.recv_output_dim,
-        )
-        game = SymbolGameGS(
-            sender=sender,
-            receiver=receiver,
-            loss=loss,
-            train_logging_strategy=train_logging_strategy,
-            test_logging_strategy=test_logging_strategy,
-        )
-    return game
-
-
-def build_rf_game(opts):
-    raise NotImplementedError
+    sender = Sender(
+        input_dim=sender_input_dim,
+        output_dim=opts.vocab_size,
+        num_heads=opts.num_heads,
+        attention_type=opts.attention_type,
+        context_integration=opts.context_integration,
+    )
+    receiver = Receiver(
+        input_dim=sender_input_dim,
+        hidden_dim=opts.recv_hidden_dim,
+        output_dim=opts.recv_output_dim,
+        temperature=opts.recv_temperature,
+        use_cosine_sim=opts.use_cosine_similarity,
+    )
+    sender = GumbelSoftmaxWrapper(
+        agent=sender,
+        temperature=opts.gs_temperature,
+    )
+    receiver = SymbolReceiverWrapper(
+        receiver,
+        opts.vocab_size,
+        opts.recv_output_dim,
+    )
+    game = SymbolGameGS(
+        sender=sender,
+        receiver=receiver,
+        loss=loss,
+        train_logging_strategy=train_logging_strategy,
+        test_logging_strategy=test_logging_strategy,
+    )
+    return VisionWrapper(game, vision_module_sender, vision_module_receiver)
 
 
 def build_game(opts):
-    game_mode2game_fn = {
-        "gs": build_gs_game,
-        "rf": build_rf_game,
-    }
+    game_mode2game_fn = {"gs": build_gs_game}
+    assert opts.game_mode in ["gs"], f"Cannot recognize {opts.game_mode}"
 
-    try:
-        game = game_mode2game_fn[opts.game_mode](opts)
-    except KeyError:
-        raise RuntimeError(f"Cannot recognize {opts.game_mode}")
-
+    game = game_mode2game_fn[opts.game_mode](opts)
     if opts.distributed_context.is_distributed:
         return torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
     return game

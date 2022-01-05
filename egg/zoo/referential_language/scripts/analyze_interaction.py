@@ -134,7 +134,8 @@ def analyze_interaction(interaction):
     if "attn_weights" in aux_input:
         print("ATTN WEIGHTS")
         attn_weights = aux_input["attn_weights"]
-        print(f"Var attn weights: {torch.var(attn_weights)}")
+        print(f"Var means attn weights: {torch.var(torch.mean(attn_weights, dim=-1))}")
+        print(f"Mean attn weights: {torch.mean(attn_weights)}")
 
     (
         visual_errors,
