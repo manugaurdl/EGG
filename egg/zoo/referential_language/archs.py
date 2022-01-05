@@ -108,6 +108,8 @@ class Sender(nn.Module):
         if self.context_integration == "cat":
             # random_idxs = torch.randperm(context.size(2))
             # context = context[:, :, random_idxs]
+            # random_idxs = torch.randperm(img_feats.size(2))
+            # img_feats = img_feats[:, :, random_idxs]
             contextualized_objs = torch.cat([img_feats, context], dim=-1)
         elif self.context_integration == "gate":
             obj_w_context = img_feats * context

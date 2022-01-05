@@ -3,21 +3,19 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import json
 import os
 import uuid
-from pathlib import Path
 
-import torch
 import wandb
 
 import egg.core as core
 import egg.zoo.referential_language.data_utils as data
 from egg.zoo.referential_language.callbacks import get_callbacks
+from egg.zoo.referential_language.eval import perform_gaussian_test, run_evaluation_loop
 from egg.zoo.referential_language.games import build_game
+from egg.zoo.referential_language.utils import get_common_opts
 
 # from egg.zoo.referential_language.scripts.analyze_interaction import analyze_interaction
-from egg.zoo.referential_language.utils import get_common_opts
 
 
 def get_job_and_task_id(opts):
@@ -50,7 +48,6 @@ def main(params):
                 opts.attention_type,
                 opts.context_integration,
                 f"pretrain={opts.pretrain_vision}",
-                f"2_layers={opts.two_layers_recv}",
             ],
         )
         wandb.config.update(opts)
@@ -79,45 +76,9 @@ def main(params):
         train_data=train_loader,
         callbacks=get_callbacks(opts),
     )
-    # trainer.train(n_epochs=opts.n_epochs)
-
-    # VALIDATION LOOP
-    def log_wandb(value, name):
-        if opts.wandb and opts.distributed_context.is_leader:
-            wandb.log({name: value})
-
-    def log_stats(interaction, mode):
-        dump = dict((k, v.mean().item()) for k, v in interaction.aux.items())
-        dump.update(dict(mode=mode))
-        print(json.dumps(dump), flush=True)
-
-    def dump_interaction(interaction):
-        if opts.checkpoint_dir and opts.distributed_context.is_leader:
-            output_path = Path(opts.checkpoint_dir) / "interactions"
-            output_path.mkdir(exist_ok=True, parents=True)
-            interaction_name = f"val_interaction_{job_id}_{task_id}"
-            torch.save(interaction, output_path / interaction_name)
-
-    def process_interaction(loader_kwargs, log_name):
-        val_loader = data.get_dataloader(**loader_kwargs)
-        _, val_interaction = trainer.eval(val_loader)
-        val_interaction.aux_input.update({"args": opts})
-        log_stats(val_interaction, log_name)
-        log_wandb(val_interaction.aux["acc"].mean().item(), "val_acc")
-        # dump_interaction(val_interaction, interaction_name)
-        # analyze_interaction(val_interaction)
-
-    val_data_kwargs = dict(data_kwargs)
-    val_data_kwargs.update({"split": "val", "use_augmentations": False})
-
-    process_interaction(val_data_kwargs, "VALIDATION SET")
-
-    # GAUSSIAN TEST
-    gaussian_data = data.get_gaussian_dataloader(**data_kwargs)
-    _, gaussian_interaction = trainer.eval(gaussian_data)
-    log_stats(gaussian_interaction, "GAUSSIAN TEST")
-    log_wandb(gaussian_interaction.aux["acc"].mean(), "Gaussian acc")
-
+    trainer.train(n_epochs=opts.n_epochs)
+    run_evaluation_loop(trainer, opts, data_kwargs)
+    perform_gaussian_test(trainer, data_kwargs)
     print("| FINISHED JOB")
 
 
