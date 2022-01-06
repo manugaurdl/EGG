@@ -7,9 +7,8 @@
     "random_seed": [111],
     "shared_vision": [true],
     "pretrain_vision": [true],
-    "two_layers_recv": [true, false],
     "gs_temperature": [5.0],
     "vocab_size": [2000],
-    "use_cosine_similarity": [true],
+    "use_cosine_similarity": [true, false],
     "wandb": [true]
 }
