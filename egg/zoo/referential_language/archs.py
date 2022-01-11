@@ -12,7 +12,7 @@ import torchvision
 from torch.nn.functional import cosine_similarity as cosine_sim
 
 
-def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
+def get_cnn(name: str = "resnet50", pretrained: bool = False):
     modules = {
         "resnet50": torchvision.models.resnet50(pretrained=pretrained),
         "resnet101": torchvision.models.resnet101(pretrained=pretrained),
@@ -38,15 +38,12 @@ class SimpleAttention(nn.Module):
     def forward(self, img_feats, aux_input=None):
         # img_feats = nn.functional.normalize(img_feats, dim=-1)
         img_feats = img_feats / math.sqrt(img_feats.shape[-1])
-        sims = torch.bmm(img_feats, img_feats.transpose(1, 2))
-        bsz, max_objs = sims.shape[:2]
-        self_mask = torch.eye(max_objs, device=img_feats.device)
-        self_mask.fill_diagonal_(float("-inf")).repeat(bsz, 1, 1)
-        sims += self_mask
+        sims = img_feats @ img_feats.t()
+        self_mask = torch.eye(sims.shape[0], device=img_feats.device)
+        sims += self_mask.fill_diagonal_(float("-inf"))
         attn = nn.functional.softmax(sims, dim=-1)
-        output = torch.bmm(attn, img_feats)
         aux_input["attn_weights"] = attn
-        return output
+        return attn @ img_feats.t()
 
 
 class SelfAttention(nn.Module):
@@ -60,16 +57,15 @@ class SelfAttention(nn.Module):
 
     def forward(self, img_feats, aux_input=None):
         # MultiHead attn takes tensor in seq X batch X embedding format
+        img_feats = img_feats.unsqueeze(1)
         img_feats = torch.transpose(img_feats, 0, 1)
         attn, attn_weights = self.attn_fn(
             query=img_feats,
             key=img_feats,
             value=img_feats,
-            key_padding_mask=aux_input["mask"].bool(),
         )
-        ctx_vector = torch.transpose(attn, 1, 0)
         aux_input["attn_weights"] = attn_weights
-        return ctx_vector
+        return torch.transpose(attn, 1, 0).squeeze()
 
 
 class Sender(nn.Module):
@@ -119,9 +115,8 @@ class Sender(nn.Module):
         return contextualized_objs
 
     def forward(self, x, aux_input=None):
-        [bsz, max_objs, _] = x.shape
         x = self._integrate_ctx(x, aux_input)
-        return self.fc_out(x.view(bsz * max_objs, -1))
+        return self.fc_out(x)
 
 
 class Receiver(nn.Module):
@@ -141,16 +136,11 @@ class Receiver(nn.Module):
         self.temperature = temperature
         self.use_cosine_sim = use_cosine_sim
 
-    def compute_sim_scores(self, messages, images):
-        if self.use_cosine_sim:
-            sims = cosine_sim(messages.unsqueeze(2), images.unsqueeze(1), 3)
-            return sims / self.temperature
-        return torch.bmm(messages, images.transpose(1, 2))  # dot product sim
-
     def forward(self, messages, images, aux_input=None):
-        [bsz, max_objs, _] = images.shape
-        messages = messages.view(bsz, max_objs, -1)
-        return self.compute_sim_scores(messages, images)
+        if self.use_cosine_sim:
+            sims = cosine_sim(messages.unsqueeze(1), images.unsqueeze(0), 2)
+            return sims / self.temperature
+        return messages @ images.t()
 
 
 class VisionWrapper(nn.Module):
@@ -168,12 +158,19 @@ class VisionWrapper(nn.Module):
             self.encoder_recv = recv_vision_module
 
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
-        [bsz, max_objs, _, h, w] = sender_input.shape
-        sender_input = self.encoder_sender(sender_input.view(-1, 3, h, w))
-        sender_input = sender_input.view(bsz, max_objs, -1)
+        sender_input = self.encoder_sender(sender_input.squeeze())
+
         if self.shared:
             receiver_input = sender_input
+            if aux_input is not None:
+                aux_input.update({"recv_img_feats": receiver_input})
+            else:
+                aux_input = {"recv_img_feats": receiver_input}
+            return self.game(sender_input, labels, receiver_input, aux_input)
+
+        receiver_input = self.encoder_recv(receiver_input.squeeze())
+        if aux_input is not None:
+            aux_input.update({"recv_img_feats": receiver_input})
         else:
-            receiver_input = self.encoder_recv(receiver_input.view(-1, 3, h, w))
-            receiver_input = receiver_input.view(bsz, max_objs, -1)
+            aux_input = {"recv_img_feats": receiver_input}
         return self.game(sender_input, labels, receiver_input, aux_input)

@@ -19,7 +19,7 @@ def get_data_opts(parser):
     group.add_argument(
         "--metadata_dir",
         type=str,
-        default="/private/home/rdessi/visual_genome/train_set_98_2_split/",
+        default="/private/home/rdessi/visual_genome/train_val_test_split",
         help="Path to folder with VG metada",
     )
     group.add_argument(
@@ -30,7 +30,6 @@ def get_data_opts(parser):
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
     group.add_argument("--contextual_distractors", action="store_true", default=False)
-    group.add_argument("--use_augmentations", action="store_true", default=False)
 
 
 def get_vision_module_opts(parser):
@@ -74,7 +73,7 @@ def get_attention_opts(parser):
         "--num_heads",
         type=int,
         default=1,
-        help="Number of heads in the self attention to integrate context with objects (default: 0 means no attention)",
+        help="Number of heads in the self attention to integrate context with objects",
     )
 
 
@@ -91,12 +90,6 @@ def get_game_arch_opts(parser):
         action="store_true",
         default=False,
         help="If True, Receiver will compute l2-normalized dot product between message and images (default: False)",
-    )
-    group.add_argument(
-        "--game_mode",
-        default="gs",
-        choices=["gs"],
-        help="Choose between gumbel-based and reinforce-based training (default: gs)",
     )
 
 

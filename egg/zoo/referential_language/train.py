@@ -43,12 +43,7 @@ def main(params):
         wandb.init(
             project="contexualized_emcomm",
             id=f"{job_id}_{task_id}",
-            tags=[
-                f"ctx_dist={opts.contextual_distractors}",
-                opts.attention_type,
-                opts.context_integration,
-                f"pretrain={opts.pretrain_vision}",
-            ],
+            tags=[f"att={opts.attention_type, opts.context_integration}"],
         )
         wandb.config.update(opts)
 
@@ -56,15 +51,13 @@ def main(params):
         "image_dir": opts.image_dir,
         "metadata_dir": opts.metadata_dir,
         "split": "train",
-        "batch_size": opts.batch_size,
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
-        "contextual_distractors": opts.contextual_distractors,
-        "use_augmentations": opts.use_augmentations,
-        "is_distributed": opts.distributed_context.is_distributed,
-        "seed": opts.random_seed,
     }
+
     train_loader = data.get_dataloader(**data_kwargs)
+    data_kwargs.update({"split": "val"})
+    val_loader = data.get_dataloader(**data_kwargs)
 
     game = build_game(opts)
 
@@ -74,7 +67,9 @@ def main(params):
         game=game,
         optimizer=optimizer,
         train_data=train_loader,
+        validation_data=val_loader,
         callbacks=get_callbacks(opts),
+        debug=opts.debug,
     )
     trainer.train(n_epochs=opts.n_epochs)
     run_evaluation_loop(trainer, opts, data_kwargs)

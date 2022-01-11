@@ -8,13 +8,14 @@ import json
 import wandb
 
 from egg.core import Callback, ConsoleLogger, Interaction
+from egg.core.early_stopping import EarlyStopper
 
 
 class BestStatsTracker(Callback):
     def __init__(self):
         self.best = {"acc": -float("inf"), "loss": float("inf"), "epoch": -1}
 
-    def on_epoch_end(self, loss, logs: Interaction, epoch: int):
+    def on_validation_end(self, loss, logs: Interaction, epoch: int):
         if logs.aux["acc"].mean().item() > self.best["acc"]:
             self.best["acc"] = logs.aux["acc"].mean().item()
             self.best["loss"] = loss
@@ -23,16 +24,6 @@ class BestStatsTracker(Callback):
     def on_train_end(self):
         best_stats = dict(mode="best_stats", **self.best)
         print(json.dumps(best_stats), flush=True)
-
-
-class DistributedSamplerEpochSetter(Callback):
-    def on_epoch_begin(self, epoch: int):
-        if self.trainer.distributed_context.is_distributed:
-            self.trainer.train_data.sampler.set_epoch(epoch)
-
-    def on_validation_begin(self, epoch: int):
-        if self.trainer.distributed_context.is_distributed:
-            self.trainer.validation_data.sampler.set_epoch(epoch)
 
 
 class WandbLogger(Callback):
@@ -57,11 +48,21 @@ class WandbLogger(Callback):
         self.log(values)
 
 
+class EarlyStopperAcc(EarlyStopper):
+    def should_stop(self) -> bool:
+        if len(self.validation_stats) > 2:
+            past_acc = self.validation_stats[-2][1].aux["acc"].mean().item()
+            last = self.validation_stats[-1][1].aux["acc"].mean().item()
+            if (last - past_acc.item()) * 100 > 0.001:
+                return False
+            return True
+
+
 def get_callbacks(opts):
     callbacks = [
         BestStatsTracker(),
         ConsoleLogger(as_json=True, print_train_loss=True),
-        DistributedSamplerEpochSetter(),
+        EarlyStopperAcc(),
     ]
     if opts.wandb:
         return callbacks + [WandbLogger()]

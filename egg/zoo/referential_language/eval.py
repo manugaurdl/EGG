@@ -25,18 +25,17 @@ def perform_gaussian_test(trainer, data_kwargs):
 
 
 def run_evaluation_loop(trainer, opts, data_kwargs):
-    val_data_kwargs = dict(data_kwargs)
-    val_data_kwargs.update({"split": "val", "use_augmentations": False})
-    val_loader = data.get_dataloader(**val_data_kwargs)
-    _, val_interaction = trainer.eval(val_loader)
-    val_interaction.aux_input.update({"args": opts})
-    log_stats(val_interaction, "VALIDATION SET")
+    data_kwargs.update({"split": "test"})
+    test_loader = data.get_dataloader(**data_kwargs)
+    _, test_interaction = trainer.eval(test_loader)
+    test_interaction.aux_input.update({"args": opts})
+    log_stats(test_interaction, "TEST SET")
 
     if opts.distributed_context.is_leader:
         if opts.checkpoint_dir:
             output_path = Path(opts.checkpoint_dir) / "interactions"
             output_path.mkdir(exist_ok=True, parents=True)
-            interaction_name = f"val_interaction_{opts.job_id}_{opts.task_id}"
-            torch.save(val_interaction, output_path / interaction_name)
+            interaction_name = f"test_interaction_{opts.job_id}_{opts.task_id}"
+            torch.save(test_interaction, output_path / interaction_name)
         if opts.wandb:
-            wandb.log({"val_acc": val_interaction.aux["acc"].mean().item()})
+            wandb.log({"test_acc": test_interaction.aux["acc"].mean().item()})
