@@ -34,6 +34,7 @@ def load_data(
         img_data = json.load(fin)
     with open(path_objects) as fin:
         obj_data = json.load(fin)
+    assert len(img_data) == len(obj_data)
 
     train_samples = math.floor(len(img_data) * train_data / 100)
     validation_samples = math.floor(len(img_data) * val_data / 100)
@@ -50,10 +51,11 @@ def load_data(
     val_obj_list, val_image_data_list = [], []
     test_obj_list, test_image_data_list = [], []
     for i, idx in enumerate(idxs):
+        assert obj_data[idx]["image_id"] == img_data[idx]["image_id"]
         if i < train_samples:
             train_obj_list.append(obj_data[idx])
             train_image_data_list.append(img_data[idx])
-        elif i < validation_samples:
+        elif i < train_samples + validation_samples:
             val_obj_list.append(obj_data[idx])
             val_image_data_list.append(img_data[idx])
         else:
@@ -76,7 +78,9 @@ def load_data(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--dataset_folder", required=True, help="Path to a folder with VG data"
+        "--dataset_folder",
+        default="/private/home/rdessi/visual_genome",
+        help="Path to a folder with VG data",
     )
     parser.add_argument(
         "--output_folder",

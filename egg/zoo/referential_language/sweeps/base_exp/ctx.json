@@ -1,8 +1,6 @@
 {
     "n_epoch": [10],
-    "batch_size":[32],
-    "image_size": [64],
-    "max_objects": [20],
+    "max_objects": [20, 40],
     "lr": [0.0005],
     "random_seed": [111],
     "shared_vision": [true],
@@ -10,6 +8,5 @@
     "gs_temperature": [5.0],
     "vocab_size": [2000],
     "use_cosine_similarity": [true, false],
-    "contextual_distractors": [true],
     "wandb": [true]
 }
