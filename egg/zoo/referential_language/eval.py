@@ -18,24 +18,31 @@ def log_stats(interaction, mode):
     print(json.dumps(dump), flush=True)
 
 
+def eval_and_log(trainer, data_loader, log_name, dump=False, opts=None):
+    _, interaction = trainer.eval(data_loader)
+    log_stats(interaction, log_name)
+
+    if opts:
+        if opts.distributed_context.is_leader and opts.checkpoint_dir:
+            output_path = Path(opts.checkpoint_dir) / "interactions"
+            output_path.mkdir(exist_ok=True, parents=True)
+            interaction_name = f"interaction_{opts.job_id}_{opts.task_id}"
+
+            if interaction.aux_input:
+                interaction.aux_input.update({"args": opts})
+            else:
+                interaction.aux_input = {"args": opts}
+            torch.save(interaction, output_path / interaction_name)
+        if opts.wandb:
+            wandb.log({"test_acc": interaction.aux["acc"].mean().item()})
+
+
 def perform_gaussian_test(trainer, data_kwargs):
-    gaussian_data = data.get_gaussian_dataloader(**data_kwargs)
-    _, gaussian_interaction = trainer.eval(gaussian_data)
-    log_stats(gaussian_interaction, "GAUSSIAN TEST")
+    data_loader = data.get_gaussian_dataloader(**data_kwargs)
+    eval_and_log(trainer, data_loader, "GAUSSIAN TEST")
 
 
 def run_evaluation_loop(trainer, opts, data_kwargs):
     data_kwargs.update({"split": "test"})
-    test_loader = data.get_dataloader(**data_kwargs)
-    _, test_interaction = trainer.eval(test_loader)
-    test_interaction.aux_input.update({"args": opts})
-    log_stats(test_interaction, "TEST SET")
-
-    if opts.distributed_context.is_leader:
-        if opts.checkpoint_dir:
-            output_path = Path(opts.checkpoint_dir) / "interactions"
-            output_path.mkdir(exist_ok=True, parents=True)
-            interaction_name = f"test_interaction_{opts.job_id}_{opts.task_id}"
-            torch.save(test_interaction, output_path / interaction_name)
-        if opts.wandb:
-            wandb.log({"test_acc": test_interaction.aux["acc"].mean().item()})
+    data_loader = data.get_dataloader(**data_kwargs)
+    eval_and_log(trainer, data_loader, "TEST SET", dump=True, opts=opts)

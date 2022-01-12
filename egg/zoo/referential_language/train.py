@@ -15,8 +15,6 @@ from egg.zoo.referential_language.eval import perform_gaussian_test, run_evaluat
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils import get_common_opts
 
-# from egg.zoo.referential_language.scripts.analyze_interaction import analyze_interaction
-
 
 def get_job_and_task_id(opts):
     job_id = os.environ.get("SLURM_ARRAY_JOB_ID", None)
@@ -34,9 +32,6 @@ def main(params):
     opts = get_common_opts(params=params)
     job_id, task_id = get_job_and_task_id(opts)
     print(opts)
-
-    if not opts.distributed_context.is_distributed and opts.debug:
-        breakpoint()
 
     if opts.wandb and opts.distributed_context.is_leader:
         opts.wandb_id = f"{job_id}_{task_id}"
@@ -60,6 +55,8 @@ def main(params):
     val_loader = data.get_dataloader(**data_kwargs)
 
     game = build_game(opts)
+    if opts.wandb and opts.distributed_context.is_leader:
+        wandb.watch(game, log="all")
 
     optimizer = core.build_optimizer(game.parameters())
 

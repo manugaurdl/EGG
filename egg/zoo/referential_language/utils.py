@@ -29,7 +29,7 @@ def get_data_opts(parser):
         help="Max number of bboxes to extract from an image",
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
-    group.add_argument("--contextual_distractors", action="store_true", default=False)
+    group.add_argument("--random_distractors", action="store_true", default=False)
 
 
 def get_vision_module_opts(parser):
@@ -60,7 +60,7 @@ def get_attention_opts(parser):
     group.add_argument(
         "--attention_type",
         default="none",
-        choices=["self", "simple", "none"],
+        choices=["self", "self_mask", "simple", "none"],
         help="Type of attention fn used to compute visual context",
     )
     group.add_argument(
