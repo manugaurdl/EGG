@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import math
 from typing import Optional
 
 import torch
@@ -36,36 +35,32 @@ def get_cnn(name: str = "resnet50", pretrained: bool = False):
 
 class SimpleAttention(nn.Module):
     def forward(self, img_feats, aux_input=None):
-        # img_feats = nn.functional.normalize(img_feats, dim=-1)
-        img_feats = img_feats / math.sqrt(img_feats.shape[-1])
-        sims = img_feats @ img_feats.t()
+        img_feats_norm = nn.functional.normalize(img_feats, dim=-1)
+        sims = img_feats_norm @ img_feats_norm.t()
         self_mask = torch.eye(sims.shape[0], device=img_feats.device)
         sims += self_mask.fill_diagonal_(float("-inf"))
-        attn = nn.functional.softmax(sims, dim=-1)
-        aux_input["attn_weights"] = attn
-        return attn @ img_feats.t()
+        attn_weights = nn.functional.softmax(sims, dim=-1)
+        return attn_weights @ img_feats, attn_weights
 
 
 class SelfAttention(nn.Module):
-    def __init__(
-        self,
-        embed_dim: int,
-        num_heads: int,
-    ):
+    def __init__(self, embed_dim: int, num_heads: int, self_mask: bool = False):
         super(SelfAttention, self).__init__()
         self.attn_fn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads)
+        self.self_mask = self_mask
 
-    def forward(self, img_feats, aux_input=None):
+    def forward(self, img_feats):
         # MultiHead attn takes tensor in seq X batch X embedding format
-        img_feats = img_feats.unsqueeze(1)
-        img_feats = torch.transpose(img_feats, 0, 1)
+        mask = None
+        if self.self_mask:
+            mask = torch.eye(img_feats.shape[0], device=img_feats.device).bool()
         attn, attn_weights = self.attn_fn(
-            query=img_feats,
-            key=img_feats,
-            value=img_feats,
+            query=img_feats.unsqueeze(1),
+            key=img_feats.unsqueeze(1),
+            value=img_feats.unsqueeze(1),
+            attn_mask=mask,
         )
-        aux_input["attn_weights"] = attn_weights
-        return torch.transpose(attn, 1, 0).squeeze()
+        return attn.squeeze(), attn_weights.squeeze()
 
 
 class Sender(nn.Module):
@@ -78,17 +73,19 @@ class Sender(nn.Module):
         context_integration: str = "cat",
     ):
         super(Sender, self).__init__()
-        assert attention_type in ["self", "simple", "none"]
+        assert attention_type in ["self", "self_mask", "simple", "none"]
         assert context_integration in ["cat", "gate"]
 
         self.context_integration = context_integration
         self.attention_type = attention_type
-        if self.attention_type == "self":
+        if self.attention_type == "self_mask":
+            self.attn_fn = SelfAttention(input_dim, num_heads, self_mask=True)
+        elif self.attention_type == "self":
             self.attn_fn = SelfAttention(input_dim, num_heads)
         elif self.attention_type == "simple":
             self.attn_fn = SimpleAttention()
 
-        if context_integration == "cat" and self.attention_type != "none":
+        if self.attention_type != "none" and context_integration == "cat":
             input_dim *= 2
 
         self.fc_out = nn.Sequential(
@@ -100,17 +97,18 @@ class Sender(nn.Module):
         if self.attention_type == "none":
             return img_feats
 
-        context = self.attn_fn(img_feats, aux_input)
+        context, attn_weights = self.attn_fn(img_feats)
+        aux_input["attn_weights"] = attn_weights
         if self.context_integration == "cat":
             # random_idxs = torch.randperm(context.size(2))
             # context = context[:, :, random_idxs]
-            # random_idxs = torch.randperm(img_feats.size(2))
-            # img_feats = img_feats[:, :, random_idxs]
             contextualized_objs = torch.cat([img_feats, context], dim=-1)
         elif self.context_integration == "gate":
-            obj_w_context = img_feats * context
-            context_gate = 1 - torch.sigmoid(obj_w_context)
-            aux_input["context_gate"] = context_gate
+            img_feats_norm = nn.functional.normalize(img_feats, dim=-1)
+            context_norm = nn.functional.normalize(context, dim=-1)
+            obj_w_context = img_feats_norm * (1 - context_norm)
+            context_gate = 1 - obj_w_context
+            aux_input["context_gate"] = context_norm
             contextualized_objs = img_feats * context_gate
         return contextualized_objs
 
@@ -158,6 +156,7 @@ class VisionWrapper(nn.Module):
             self.encoder_recv = recv_vision_module
 
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
+        labels = labels.squeeze()
         sender_input = self.encoder_sender(sender_input.squeeze())
 
         if self.shared:
