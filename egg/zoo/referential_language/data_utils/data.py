@@ -163,4 +163,4 @@ def get_dataloader(
         max_objects=max_objects,
         image_size=image_size,
     )
-    return torch.utils.data.DataLoader(dataset, num_workers=6, pin_memory=True)
+    return torch.utils.data.DataLoader(dataset, num_workers=12, pin_memory=True)

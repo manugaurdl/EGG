@@ -31,11 +31,10 @@ def loss(
     labels = torch.arange(receiver_output.shape[0], device=receiver_output.device)
     acc = (receiver_output.argmax(dim=-1) == labels).detach().float()
     loss = F.cross_entropy(receiver_output, labels, reduction="none")
-    n_objs = receiver_output.shape[0]
-    return loss, {"acc": acc, "baseline": torch.Tensor([1 / n_objs])}
+    return loss, {"acc": acc}
 
 
-def build_gs_game(opts):
+def build_game(opts):
     cnn_sender, input_dim = get_cnn(opts.vision_model_name, opts.pretrain_vision)
     cnn_receiver = None
     if not opts.shared_vision:
@@ -74,7 +73,3 @@ def build_gs_game(opts):
         test_logging_strategy=test_logging_strategy,
     )
     return VisionWrapper(game, cnn_sender, cnn_receiver)
-
-
-def build_game(opts):
-    return build_gs_game(opts)

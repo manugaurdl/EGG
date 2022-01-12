@@ -96,46 +96,35 @@ def get_message_info(
     return labels2message, all_message_counter
 
 
-def get_opts():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--interaction_path", help="Run the game with pdb enabled")
-    return parser.parse_args()
-
-
 def analyze_interaction(interaction):
     # Extracting standard-ish fields from the interaction
     run_args = interaction.aux_input["args"]
     print(run_args)
-    bsz, max_objs = run_args.batch_size, run_args.max_objects
-    msg_len = run_args.max_len
+    max_objs = run_args.max_objects
 
-    receiver_output = interaction.receiver_output.view(-1, bsz, max_objs, max_objs)
+    receiver_output = interaction.receiver_output.view(-1, max_objs, max_objs)
     n_batches = receiver_output.shape[0]
-    messages = interaction.message.view(n_batches, bsz, max_objs, msg_len, -1).squeeze()
+    messages = interaction.message.view(n_batches, max_objs, -1).squeeze()
     messages = torch.argmax(messages, -1)
-    labels = interaction.labels.view(-1, bsz, max_objs)
-    acc = interaction.aux["acc"].view(-1, bsz, max_objs)
+    labels = interaction.labels
+    acc = interaction.aux["single_accs"]
 
     # Extracting values from aux_input
     aux_input = interaction.aux_input
-    recv_img_feats = interaction.receiver_input.view(n_batches, bsz, max_objs, -1)
-    mask = aux_input["mask"].view(n_batches, bsz, max_objs)
+    recv_img_feats = interaction.receiver_input
+    mask = aux_input["mask"]
     if "context_gate" in aux_input:
         print("CONTEXT GATE")
         context_gate = aux_input["context_gate"]
-        n_elems = context_gate.numel()
         print(f"Mean = {torch.mean(context_gate):.2f}")
         print(f"Avg var is {torch.mean(torch.var(context_gate, dim=-1)):.4f}")
         print(f"Var of means {torch.var(torch.mean(context_gate, dim=-1)):.4f}")
-        print(f"Elem set to 1: {torch.sum(context_gate == 1) / n_elems:.4f}")
-        print(f"Elem set to 0: {torch.sum(context_gate == 0) / n_elems:.4f}")
-        print(f"Elem set to 0.5: {torch.sum(context_gate == 0.5) / n_elems:.4f}")
 
     if "attn_weights" in aux_input:
         print("ATTN WEIGHTS")
         attn_weights = aux_input["attn_weights"]
         print(f"Var means attn weights: {torch.var(torch.mean(attn_weights, dim=-1))}")
-        print(f"Mean attn weights: {torch.mean(attn_weights)}")
+        print(f"Mean attn weights: {torch.mean(attn_weights):.4f}")
 
     (
         visual_errors,
@@ -168,6 +157,12 @@ def analyze_interaction(interaction):
     )
 
     print(f"Accuracy = {torch.sum(acc == 1).int() / acc.numel() * 100:.2f}%")
+
+
+def get_opts():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--interaction_path")
+    return parser.parse_args()
 
 
 def main():
