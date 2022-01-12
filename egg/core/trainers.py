@@ -52,6 +52,7 @@ class Trainer:
         callbacks: Optional[List[Callback]] = None,
         grad_norm: float = None,
         aggregate_interaction_logs: bool = True,
+        debug: bool = False,
     ):
         """
         :param game: A nn.Module that implements forward(); it is expected that forward returns a tuple of (loss, d),
@@ -72,6 +73,7 @@ class Trainer:
         common_opts = get_opts()
         self.validation_freq = common_opts.validation_freq
         self.device = common_opts.device if device is None else device
+        self.debug = debug
 
         self.should_stop = False
         self.start_epoch = 0  # Can be overwritten by checkpoint loader
@@ -170,6 +172,8 @@ class Trainer:
         self.game.eval()
         with torch.no_grad():
             for batch_id, batch in enumerate(validation_data):
+                if self.debug and batch_id == 10:
+                    break
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
@@ -207,6 +211,8 @@ class Trainer:
         self.optimizer.zero_grad()
 
         for batch_id, batch in enumerate(self.train_data):
+            if self.debug and batch_id == 10:
+                break
             if not isinstance(batch, Batch):
                 batch = Batch(*batch)
             batch = batch.to(self.device)
