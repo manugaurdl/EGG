@@ -48,6 +48,7 @@ def main(params):
         "split": "train",
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
+        "random_distractors": opts.random_distractors,
     }
 
     train_loader = data.get_dataloader(**data_kwargs)

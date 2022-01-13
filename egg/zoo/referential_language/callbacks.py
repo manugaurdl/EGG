@@ -47,8 +47,9 @@ class EarlyStopperAcc(EarlyStopper):
 
 
 class InteractionPadder(Callback):
-    def __init__(self, max_objs):
+    def __init__(self, max_objs, random_distractors):
         self.max_objs = max_objs
+        self.random_distractors = random_distractors
 
     def on_batch_end(
         self, logs: Interaction, loss: float, batch_id: int, is_training: bool = True
@@ -76,15 +77,18 @@ class InteractionPadder(Callback):
             if pad_len > 0:
                 logs.aux_input["mask"][-pad_len:] = 0
 
-        acc = logs.aux["acc"].mean().item()
-        logs.aux["acc"] = torch.Tensor([acc] * self.max_objs)
+        if self.random_distractors and not is_training:
+            acc = logs.aux["acc"][0].item()
+        else:
+            acc = logs.aux["acc"].mean().item()
+        logs.aux["acc"] = torch.Tensor([acc])
 
 
 def get_callbacks(opts):
     callbacks = [
         ConsoleLogger(as_json=True, print_train_loss=True),
         EarlyStopperAcc(),
-        InteractionPadder(opts.max_objects),
+        InteractionPadder(opts.max_objects, opts.random_distractors),
     ]
     if opts.wandb:
         return callbacks + [WandbLogger()]

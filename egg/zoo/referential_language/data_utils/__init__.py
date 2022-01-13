@@ -4,6 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from .data import get_dataloader
-from .gaussian_data import get_gaussian_dataloader
+from .gaussian_data import gaussian_eval, get_gaussian_dataloader
 
-__all__ = ["get_dataloader", "get_gaussian_dataloader"]
+__all__ = ["get_dataloader", "get_gaussian_dataloader", "gaussian_eval"]

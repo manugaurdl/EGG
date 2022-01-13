@@ -38,35 +38,150 @@ class _ImageIterator:
         self.class2id = class2id
         self.transform = transform
         self.max_objects = max_objects
-        self.image_size = image_size
-        self.curr_idx = -1
+        self.curr_idx = 0
+
+        self.resizer = transforms.Resize(size=(image_size, image_size))
+
+    def __iter__(self):
+        return self
 
     def __next__(self):
-        self.curr_idx += 1
-        if self.curr_idx >= len(self.samples):
-            self.curr_idx = 0
-            raise StopIteration
+        raise NotImplementedError
 
-        img_path, obj_info, img_id = self.samples[self.curr_idx]
+    def extract_object(self, image, obj_data):
+        label = self.class2id[obj_data["names"][0]]
+        y, x, h, w = obj_data["y"], obj_data["x"], obj_data["h"], obj_data["w"]
+        obj = self.resizer(crop(image, y, x, h, w))
+        return obj, label
 
-        image = pil_loader(img_path)
+
+class _ImageIteratorRandomDistractor(_ImageIterator):
+    def __init__(
+        self,
+        samples,
+        class2id,
+        transform=None,
+        max_objects=20,
+        image_size=64,
+        shuffle=False,
+    ):
+        super(_ImageIteratorRandomDistractor, self).__init__(
+            samples=samples,
+            class2id=class2id,
+            transform=transform,
+            max_objects=max_objects,
+            image_size=image_size,
+            shuffle=shuffle,
+        )
+        self.distractors_bank = []
+        dists = random.choices(self.samples, k=max_objects * 2)
+        for img_path, obj_data in dists:
+            img = pil_loader(img_path)
+            if self.transform:
+                img = self.transform(img)
+            self.distractors_bank.append(self.extract_object(img, obj_data[0]))
+
+        img_path, obj_data = self.samples[0]
+        self.curr_img = pil_loader(img_path)
         if self.transform:
-            image = self.transform(image)
+            self.curr_img = self.transform(self.curr_img)
+        self.curr_obj_data = obj_data
+        self.curr_obj_idx = 0
 
-        resizer = transforms.Resize(size=(self.image_size, self.image_size))
-        cropped_objs, labels = [], []
-        last_obj = min(self.max_objects, len(obj_info))
-        for obj in obj_info[:last_obj]:
-            labels.append(self.class2id[obj["names"][0]])
-            y, x, h, w = obj["y"], obj["x"], obj["h"], obj["w"]
-            cropped_objs.append(resizer(crop(image, y, x, h, w)))
+        self.eval = shuffle is False  # we know we don't shuflle eval/test data
+
+    def _next_eval(self):
+        max_obj_idx = min(self.max_objects, len(self.curr_obj_data))
+        if self.curr_obj_idx >= max_obj_idx:
+            self.curr_idx += 1
+            if self.curr_idx >= len(self.samples):
+                self.curr_idx = 0
+                raise StopIteration
+
+            new_dists = [
+                self.extract_object(self.curr_img, obj)
+                for obj in self.curr_obj_data[1:max_obj_idx]
+            ]
+            self.distractors_bank = self.distractors_bank[max_obj_idx:] + new_dists
+
+            img_path, obj_data = self.samples[self.curr_idx]
+            self.curr_img = pil_loader(img_path)
+            if self.transform:
+                self.curr_img = self.transform(self.curr_img)
+            self.curr_obj_data = obj_data
+
+        random.shuffle(self.distractors_bank)
+        obj, label = self.extract_object(
+            self.curr_img, self.curr_obj_data[self.curr_obj_idx]
+        )
+        cropped_objs, labels = [obj], [label]
+        for d, l in self.distractors_bank[: self.max_objects - 1]:
+            cropped_objs.append(d)
+            labels.append(l)
+
+        self.curr_obj_idx += 1
 
         agent_input = torch.stack(cropped_objs)
         labels = torch.Tensor(labels)
         return agent_input, labels, torch.Tensor([1])
 
-    def __iter__(self):
-        return self
+    def _next_train(self):
+        if self.curr_idx >= len(self.samples):
+            self.curr_idx = 0
+            raise StopIteration
+
+        img_path, obj_data = self.samples[self.curr_idx]
+        self.curr_idx += 1
+
+        image = pil_loader(img_path)
+        if self.transform:
+            image = self.transform(image)
+
+        random.shuffle(self.distractors_bank)
+        cropped_obj, label = self.extract_object(image, obj_data[0])
+        cropped_objs, labels = [cropped_obj], [label]
+        for idx in range(self.max_objects - 1):
+            obj, label = self.distractors_bank[idx]
+            cropped_objs.append(obj)
+            labels.append(label)
+
+        end = min(len(obj_data), self.max_objects - 1)
+        new_dists = [self.extract_object(image, obj) for obj in obj_data[1:end]]
+        self.distractors_bank = self.distractors_bank[end:] + new_dists
+
+        agent_input = torch.stack(cropped_objs)
+        labels = torch.Tensor(labels)
+        return agent_input, labels, torch.Tensor([1])
+
+    def __next__(self):
+        if self.eval:
+            return self._next_eval()
+        return self._next_train()
+
+
+class _ImageIteratorCtxDistractors(_ImageIterator):
+    def __next__(self):
+        if self.curr_idx >= len(self.samples):
+            self.curr_idx = 0
+            raise StopIteration
+
+        img_path, obj_info = self.samples[self.curr_idx]
+        self.curr_idx += 1
+
+        image = pil_loader(img_path)
+        if self.transform:
+            image = self.transform(image)
+
+        last_obj = min(self.max_objects, len(obj_info))
+        cropped_objs, labels = [], []
+        for obj in obj_info[:last_obj]:
+            cropped_obj, label = self.extract_object(image, obj)
+            labels.append(label)
+            cropped_objs.append(cropped_obj)
+
+        agent_input = torch.stack(cropped_objs)
+        labels = torch.Tensor(labels)
+        return agent_input, labels, torch.Tensor([1])
 
 
 class VisualGenomeDataset(IterableDataset):
@@ -79,6 +194,7 @@ class VisualGenomeDataset(IterableDataset):
         transform: Callable = None,
         max_objects=20,
         image_size=64,
+        random_distractors=False,
     ):
         super(VisualGenomeDataset, self).__init__()
         path_images = Path(image_dir)
@@ -100,12 +216,13 @@ class VisualGenomeDataset(IterableDataset):
 
             objs = self._filter_objs(img, objs_data["objects"])
             if len(objs) > 2:
-                self.samples.append((img_path, objs, objs_data["image_id"]))
+                self.samples.append((img_path, objs))
 
         self.transform = transform
         self.max_objects = max_objects
         self.image_size = image_size
         self.shuffle = split == "train"
+        self.random_distractors = random_distractors
 
     def _filter_objs(self, img, objs):
         filtered_objs = []
@@ -133,14 +250,24 @@ class VisualGenomeDataset(IterableDataset):
             iter_start = worker_info.id * per_worker
             iter_end = min(iter_start + per_worker, len(self.samples))
 
-        return _ImageIterator(
-            samples=self.samples[iter_start:iter_end],
-            class2id=self.class2id,
-            transform=self.transform,
-            max_objects=self.max_objects,
-            image_size=self.image_size,
-            shuffle=self.shuffle,
-        )
+        if self.random_distractors:
+            return _ImageIteratorRandomDistractor(
+                samples=self.samples[iter_start:iter_end],
+                class2id=self.class2id,
+                transform=self.transform,
+                max_objects=self.max_objects,
+                image_size=self.image_size,
+                shuffle=self.shuffle,
+            )
+        else:
+            return _ImageIteratorCtxDistractors(
+                samples=self.samples[iter_start:iter_end],
+                class2id=self.class2id,
+                transform=self.transform,
+                max_objects=self.max_objects,
+                image_size=self.image_size,
+                shuffle=self.shuffle,
+            )
 
     def __len__(self):
         return len(self.samples)
@@ -152,7 +279,7 @@ def get_dataloader(
     split: str = "train",
     image_size: int = 32,
     max_objects: int = 20,
-    # contextual_distractors: bool = False,
+    random_distractors: bool = False,
 ):
     transform = transforms.ToTensor()
     dataset = VisualGenomeDataset(
@@ -162,5 +289,6 @@ def get_dataloader(
         transform=transform,
         max_objects=max_objects,
         image_size=image_size,
+        random_distractors=random_distractors,
     )
-    return torch.utils.data.DataLoader(dataset, num_workers=12, pin_memory=True)
+    return torch.utils.data.DataLoader(dataset, num_workers=0, pin_memory=True)
