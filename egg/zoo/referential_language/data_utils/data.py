@@ -93,6 +93,7 @@ class _ImageIteratorRandomDistractor(_ImageIterator):
     def _next_eval(self):
         max_obj_idx = min(self.max_objects, len(self.curr_obj_data))
         if self.curr_obj_idx >= max_obj_idx:
+            self.curr_obj_idx = 0
             self.curr_idx += 1
             if self.curr_idx >= len(self.samples):
                 self.curr_idx = 0
@@ -102,7 +103,8 @@ class _ImageIteratorRandomDistractor(_ImageIterator):
                 self.extract_object(self.curr_img, obj)
                 for obj in self.curr_obj_data[1:max_obj_idx]
             ]
-            self.distractors_bank = self.distractors_bank[max_obj_idx:] + new_dists
+            self.distractors_bank.extend(new_dists)
+            self.distractors_bank = self.distractors_bank[len(new_dists) :]
 
             img_path, obj_data = self.samples[self.curr_idx]
             self.curr_img = pil_loader(img_path)
@@ -292,4 +294,7 @@ def get_dataloader(
         image_size=image_size,
         random_distractors=random_distractors,
     )
-    return torch.utils.data.DataLoader(dataset, num_workers=12, pin_memory=True)
+    num_workers = 0 if random_distractors else 12
+    return torch.utils.data.DataLoader(
+        dataset, num_workers=num_workers, pin_memory=True
+    )
