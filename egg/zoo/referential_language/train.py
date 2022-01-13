@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+import time
 import uuid
 
 import wandb
@@ -29,6 +30,7 @@ def get_job_and_task_id(opts):
 
 
 def main(params):
+    start = time.time()
     opts = get_common_opts(params=params)
     job_id, task_id = get_job_and_task_id(opts)
     print(opts)
@@ -73,6 +75,8 @@ def main(params):
     run_evaluation_loop(trainer, opts, data_kwargs)
     perform_gaussian_test(trainer, data_kwargs)
     print("| FINISHED JOB")
+    end = time.time()
+    print(f"| Run took {end - start:.2f} seconds")
 
 
 if __name__ == "__main__":

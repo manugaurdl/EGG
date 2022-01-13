@@ -74,7 +74,7 @@ class _ImageIteratorRandomDistractor(_ImageIterator):
             shuffle=shuffle,
         )
         self.distractors_bank = []
-        dists = random.choices(self.samples, k=max_objects * 2)
+        dists = random.choices(self.samples, k=max_objects)
         for img_path, obj_data in dists:
             img = pil_loader(img_path)
             if self.transform:
@@ -145,9 +145,10 @@ class _ImageIteratorRandomDistractor(_ImageIterator):
             cropped_objs.append(obj)
             labels.append(label)
 
-        end = min(len(obj_data), self.max_objects - 1)
+        end = min(len(obj_data), self.max_objects + 1)
         new_dists = [self.extract_object(image, obj) for obj in obj_data[1:end]]
-        self.distractors_bank = self.distractors_bank[end:] + new_dists
+        self.distractors_bank.extend(new_dists)
+        self.distractors_bank = self.distractors_bank[len(new_dists) :]
 
         agent_input = torch.stack(cropped_objs)
         labels = torch.Tensor(labels)
@@ -291,4 +292,4 @@ def get_dataloader(
         image_size=image_size,
         random_distractors=random_distractors,
     )
-    return torch.utils.data.DataLoader(dataset, num_workers=0, pin_memory=True)
+    return torch.utils.data.DataLoader(dataset, num_workers=12, pin_memory=True)
