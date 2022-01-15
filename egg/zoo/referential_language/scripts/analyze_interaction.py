@@ -7,7 +7,6 @@
 
 import argparse
 from collections import defaultdict, Counter
-from typing import Optional
 
 import numpy as np
 import torch
@@ -23,96 +22,103 @@ def entropy_dict(freq_table):
     return -(torch.where(t > 0, t.log(), t) * t).sum().item() / np.log(2)
 
 
-def get_errors(
+def compute_errors(
     accs: torch.Tensor,
     labels: torch.Tensor,
     receiver_output: torch.Tensor,
     img_feats: torch.Tensor,
-    mask: Optional[torch.Tensor] = None,
+    attn_weights: torch.Tensor = None,
 ):
-    cosine_sims = cosine_similarity(img_feats.unsqueeze(2), img_feats.unsqueeze(3), 4)
-    top_visual_similarities = torch.argsort(cosine_sims, descending=True)[:, :, :, 1]
-    top_model_guesses = torch.argsort(receiver_output, descending=True)[:, :, :, 0]
+    cosine_sims = cosine_similarity(img_feats.unsqueeze(1), img_feats.unsqueeze(2), 3)
+    max_objects = cosine_sims.shape[-1]
+    self_mask = torch.eye(max_objects).fill_diagonal_(float("-inf"))
+    cosine_sims += self_mask
 
-    total_errors = 0
-    label_errors, visual_errors = 0, 0
-    potential_label_errors = 0
-    both_errors = 0
-    for batch_id, _ in enumerate(accs):
-        for batch_elem_id, _ in enumerate(accs[batch_id]):
-            counter = Counter()
-            for obj_id, model_guess in enumerate(accs[batch_id, batch_elem_id]):
-                wrong_guess = model_guess.item() == 0
-                not_masked = mask[batch_id, batch_elem_id, obj_id].item() == 0
-                if not_masked and wrong_guess:
-                    total_errors += 1
-                    idx = top_model_guesses[batch_id, batch_elem_id, obj_id]
-                    chosen_label = labels[batch_id, batch_elem_id, idx]
-                    correct_label = labels[batch_id, batch_elem_id, obj_id]
+    top_model_guesses = torch.argmax(receiver_output, dim=-1)
+    top_visual_similarities = torch.argmax(cosine_sims, dim=-1)
 
-                    counter[correct_label.item()] += 1
+    if attn_weights is not None:
+        attn_weights = torch.argmax(attn_weights, dim=-1)
+        visual_err_att_when_correct = 0
+        visual_err_att_when_wrong = 0
 
-                    label_err = chosen_label == correct_label
-                    label_errors += 1 if label_err else 0
-                    visual_err = (
-                        idx == top_visual_similarities[batch_id, batch_elem_id, obj_id]
-                    )
-                    visual_errors += 1 if visual_err else 0
-                    both_errors += 1 if visual_err and label_err else 0
-            for _, v in counter.items():
-                potential_label_errors += v if v > 1 else 0
+    total_samples = 0
+    total_err, label_err, visual_err, both_err = 0, 0, 0, 0
+    for batch_id, acc in enumerate(accs):
+        for obj_id, is_obj_guess_correct in enumerate(acc):
+            if is_obj_guess_correct == -1:
+                continue
+            total_samples += 1
 
-    return (
-        visual_errors,
-        label_errors,
-        both_errors,
-        potential_label_errors,
-        total_errors,
-    )
+            idx_most_similar = top_visual_similarities[batch_id, obj_id]
+            if is_obj_guess_correct == 0:
+                total_err += 1
+                idx = top_model_guesses[batch_id, obj_id].item()
+                assert idx != obj_id
+
+                chosen_label = labels[batch_id, idx]
+                correct_label = labels[batch_id, obj_id]
+
+                label = chosen_label == correct_label
+                visual = idx == idx_most_similar
+
+                label_err += 1 if label else 0
+                visual_err += 1 if visual else 0
+
+                both_err += 1 if visual and label else 0
+                if attn_weights is not None:
+                    if attn_weights[batch_id, obj_id] == idx_most_similar:
+                        visual_err_att_when_wrong += 1
+            else:
+                if attn_weights is not None:
+                    if attn_weights[batch_id, obj_id] == idx_most_similar:
+                        visual_err_att_when_correct += 1
+
+    if attn_weights is not None:
+        print(
+            f"Right attn when correct = {visual_err_att_when_correct / total_samples:.2f}"
+        )
+        print(
+            f"Right attn when wrong = {visual_err_att_when_wrong / total_samples:.2f}"
+        )
+    print(f"Visual errs: {visual_err / total_err * 100:.2f}%")
+    print(f"Label errs: {label_err / total_err * 100:.2f}%")
+    print(f"Both errs: {both_err / total_err * 100:.2f}%")
 
 
-def get_message_info(
+def compute_message_stats(
     labels: torch.Tensor,
     messages: torch.Tensor,
     accs: torch.Tensor,
-    mask: torch.Tensor,
 ):
     # defaultdict of default dict of int
     # from labels to messages to count of those messages
-    labels2message = defaultdict(lambda: defaultdict(int))
+    labels2messages = defaultdict(lambda: defaultdict(int))
     all_message_counter = Counter()
-    for batch_id, _ in enumerate(accs):
-        for batch_elem_id, _ in enumerate(accs[batch_id]):
-            for obj_id, model_guess in enumerate(accs[batch_id, batch_elem_id]):
-                not_masked = mask[batch_id, batch_elem_id, obj_id].item() == 0
-                if not_masked:
-                    label = labels[batch_id, batch_elem_id, obj_id].int().item()
-                    message = messages[batch_id, batch_elem_id, obj_id].tolist()
-                    if isinstance(message, int):
-                        message = [message]
-                    message = tuple(message)
-                    all_message_counter[message] += 1
-                    labels2message[label][message] += 1
-    return labels2message, all_message_counter
+    for batch_id, acc in enumerate(accs):
+        for obj_id, acc_value in enumerate(acc):
+            if acc_value == -1:
+                continue
+            message = messages[batch_id, obj_id].item()
+            label = labels[batch_id, obj_id].int().item()
+            all_message_counter[message] += 1
+            labels2messages[label][message] += 1
+
+    print(f"Number of distinct messages = {len(all_message_counter)}")
+    messages_per_label = 0
+    prop_entropy_per_label = 0
+    for label, message_table in labels2messages.items():
+        messages_per_label += len(message_table)
+        if len(message_table) > 1:
+            max_ent = np.log2(len(message_table))
+            prop_entropy_per_label += entropy_dict(message_table) / max_ent
+
+    nb_labels = len(labels2messages)
+    print(f"Avg messages per label: {messages_per_label / nb_labels:.2f}")
+    print(f"Avg proportional ent per label: {prop_entropy_per_label / nb_labels:.2f}")
 
 
-def analyze_interaction(interaction):
-    # Extracting standard-ish fields from the interaction
-    run_args = interaction.aux_input["args"]
-    print(run_args)
-    max_objs = run_args.max_objects
-
-    receiver_output = interaction.receiver_output.view(-1, max_objs, max_objs)
-    n_batches = receiver_output.shape[0]
-    messages = interaction.message.view(n_batches, max_objs, -1).squeeze()
-    messages = torch.argmax(messages, -1)
-    labels = interaction.labels
-    acc = interaction.aux["single_accs"]
-
-    # Extracting values from aux_input
-    aux_input = interaction.aux_input
-    recv_img_feats = interaction.receiver_input
-    mask = aux_input["mask"]
+def analyze_context(aux_input):
     if "context_gate" in aux_input:
         print("CONTEXT GATE")
         context_gate = aux_input["context_gate"]
@@ -126,37 +132,28 @@ def analyze_interaction(interaction):
         print(f"Var means attn weights: {torch.var(torch.mean(attn_weights, dim=-1))}")
         print(f"Mean attn weights: {torch.mean(attn_weights):.4f}")
 
-    (
-        visual_errors,
-        label_errors,
-        both_errors,
-        potential_label_errors,
-        total_errors,
-    ) = get_errors(acc, labels, receiver_output, recv_img_feats, mask)
-    print(f"Visual errs: {visual_errors / total_errors * 100:.2f}%")
-    print(f"Label errs: {label_errors / total_errors * 100:.2f}%")
-    print(f"Potential Label errs: {potential_label_errors / total_errors * 100:.2f}%")
-    print(f"Both errs: {both_errors / total_errors * 100:.2f}%")
 
-    labels2messages, all_messages = get_message_info(labels, messages, acc, mask)
-    print(f"Number of distinct messages = {len(all_messages)}")
-    messages_per_label = 0
-    prop_entropy_per_label = 0
-    labels_with_syn = 0
-    for label, message_table in labels2messages.items():
-        messages_per_label += len(message_table)
-        if len(message_table) > 1:
-            max_ent = np.log2(len(message_table))
-            prop_entropy_per_label += entropy_dict(message_table) / max_ent
-            labels_with_syn += 1
+def analyze_interaction(interaction):
+    # print(interaction.aux_input["args"])
 
-    nb_labels = len(labels2messages)
-    print(f"Avg messages per label: {messages_per_label / nb_labels:.2f}")
-    print(
-        f"Avg proportional ent per label: {prop_entropy_per_label / labels_with_syn:.2f}"
+    messages = torch.argmax(interaction.message, -1)
+    labels = interaction.labels.int()
+    acc = interaction.aux_input["single_accs"]
+
+    attn_wgt = None
+    if "attn_weights" in interaction.aux_input:
+        attn_wgt = interaction.aux_input["attn_weights"]
+    compute_errors(
+        acc,
+        labels,
+        interaction.receiver_output,
+        interaction.aux_input["recv_img_feats"],
+        attn_wgt,
     )
+    analyze_context(interaction.aux_input)
+    compute_message_stats(labels, messages, acc)
 
-    print(f"Accuracy = {torch.sum(acc == 1).int() / acc.numel() * 100:.2f}%")
+    print(f"Accuracy = {interaction.aux['acc'].mean().item()}")
 
 
 def get_opts():

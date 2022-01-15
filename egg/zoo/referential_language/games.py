@@ -43,13 +43,11 @@ def build_game(opts):
     sender = Sender(
         input_dim=input_dim,
         output_dim=opts.vocab_size,
-        num_heads=opts.num_heads,
         attention_type=opts.attention_type,
         context_integration=opts.context_integration,
     )
     receiver = Receiver(
         input_dim=input_dim,
-        hidden_dim=opts.recv_hidden_dim,
         output_dim=opts.recv_output_dim,
         temperature=opts.recv_temperature,
         use_cosine_sim=opts.use_cosine_similarity,
@@ -63,13 +61,11 @@ def build_game(opts):
         opts.vocab_size,
         opts.recv_output_dim,
     )
-    logging_test_args = [False, True, True, True, True, True, False]
-    test_logging_strategy = LoggingStrategy(*logging_test_args)
     game = SymbolGameGS(
         sender=sender,
         receiver=receiver,
         loss=loss,
         train_logging_strategy=LoggingStrategy.minimal(),
-        test_logging_strategy=test_logging_strategy,
+        test_logging_strategy=LoggingStrategy.minimal(),
     )
     return VisionWrapper(game, cnn_sender, cnn_receiver)

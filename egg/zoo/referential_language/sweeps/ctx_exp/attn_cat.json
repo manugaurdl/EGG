@@ -6,8 +6,8 @@
     "pretrain_vision": [true],
     "gs_temperature": [0.1, 0.5, 1.0, 3.0, 5.0],
     "vocab_size": [2000],
-    "attention_type": ["simple", "self", "self_mask"],
+    "attention_type": ["simple"],
     "context_integration": ["cat"],
     "use_cosine_similarity": [true],
-    "lr": [0.0001]
+    "lr": [0.0005, 0.0001]
 }

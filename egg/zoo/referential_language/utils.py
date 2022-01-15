@@ -19,13 +19,13 @@ def get_data_opts(parser):
     group.add_argument(
         "--metadata_dir",
         type=str,
-        default="/private/home/rdessi/visual_genome/train_val_test_split",
+        default="/private/home/rdessi/visual_genome/train_val_test_split_clean",
         help="Path to folder with VG metada",
     )
     group.add_argument(
         "--max_objects",
         type=int,
-        default=20,
+        default=10,
         help="Max number of bboxes to extract from an image",
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
@@ -60,7 +60,7 @@ def get_attention_opts(parser):
     group.add_argument(
         "--attention_type",
         default="none",
-        choices=["self", "self_mask", "simple", "none"],
+        choices=["simple", "simple_linear", "none"],
         help="Type of attention fn used to compute visual context",
     )
     group.add_argument(
@@ -68,12 +68,6 @@ def get_attention_opts(parser):
         default="cat",
         choices=["cat", "gate"],
         help="Cat concatenates visual context with object features gate uses context to gate object features",
-    )
-    group.add_argument(
-        "--num_heads",
-        type=int,
-        default=1,
-        help="Number of heads in the self attention to integrate context with objects",
     )
 
 
@@ -106,12 +100,6 @@ def get_gs_opts(parser):
 def get_single_symbol_opts(parser):
     group = parser.add_argument_group("single symbol options")
     group.add_argument(
-        "--recv_hidden_dim",
-        type=int,
-        default=2048,
-        help="Hidden dim of the non-linear projection of the distractors in the receiver agent",
-    )
-    group.add_argument(
         "--recv_output_dim",
         type=int,
         default=2048,
@@ -126,12 +114,6 @@ def get_common_opts(params):
         action="store_true",
         default=False,
         help="Run the game with pdb enabled",
-    )
-    parser.add_argument(
-        "--wandb",
-        action="store_true",
-        default=False,
-        help="Run the game logging to wandb",
     )
 
     get_data_opts(parser)

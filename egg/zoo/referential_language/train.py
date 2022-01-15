@@ -7,9 +7,8 @@ import os
 import time
 import uuid
 
-import wandb
-
 import egg.core as core
+from egg.core.interaction import LoggingStrategy
 import egg.zoo.referential_language.data_utils as data
 from egg.zoo.referential_language.callbacks import get_callbacks
 from egg.zoo.referential_language.eval import perform_gaussian_test, run_evaluation_loop
@@ -35,15 +34,6 @@ def main(params):
     job_id, task_id = get_job_and_task_id(opts)
     print(opts)
 
-    if opts.wandb and opts.distributed_context.is_leader:
-        opts.wandb_id = f"{job_id}_{task_id}"
-        wandb.init(
-            project="contexualized_emcomm",
-            id=f"{job_id}_{task_id}",
-            tags=[f"att={opts.attention_type, opts.context_integration}"],
-        )
-        wandb.config.update(opts)
-
     data_kwargs = {
         "image_dir": opts.image_dir,
         "metadata_dir": opts.metadata_dir,
@@ -58,9 +48,6 @@ def main(params):
     val_loader = data.get_dataloader(**data_kwargs)
 
     game = build_game(opts)
-    if opts.wandb and opts.distributed_context.is_leader:
-        wandb.watch(game, log="all")
-
     optimizer = core.build_optimizer(game.parameters())
 
     trainer = core.Trainer(
@@ -72,6 +59,11 @@ def main(params):
         debug=opts.debug,
     )
     trainer.train(n_epochs=opts.n_epochs)
+
+    logging_test_args = [False, True, True, True, True, True, False]
+    test_logging_strategy = LoggingStrategy(*logging_test_args)
+    trainer.game.game.test_logging_strategy = test_logging_strategy
+
     run_evaluation_loop(trainer, opts, data_kwargs)
     perform_gaussian_test(trainer, data_kwargs)
     print("| FINISHED JOB")

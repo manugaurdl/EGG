@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 
 import torch
-import wandb
 
 import egg.zoo.referential_language.data_utils as data
 
@@ -40,5 +39,3 @@ def run_evaluation_loop(trainer, opts, data_kwargs):
         else:
             interaction.aux_input = {"args": opts}
         torch.save(interaction, output_path / interaction_name)
-    if opts.wandb:
-        wandb.log({"test_acc": interaction.aux["acc"].mean().item()})
