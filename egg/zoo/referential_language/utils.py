@@ -25,7 +25,7 @@ def get_data_opts(parser):
     group.add_argument(
         "--max_objects",
         type=int,
-        default=10,
+        default=20,
         help="Max number of bboxes to extract from an image",
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")

@@ -76,10 +76,10 @@ def compute_errors(
 
     if attn_weights is not None:
         print(
-            f"Right attn when correct = {visual_err_att_when_correct / total_samples:.2f}"
+            f"Most similar distractor picked by  attn when correct = {visual_err_att_when_correct / total_samples:.2f}"
         )
         print(
-            f"Right attn when wrong = {visual_err_att_when_wrong / total_samples:.2f}"
+            f"Most similar distractor picked by attn when wrong = {visual_err_att_when_wrong / total_samples:.2f}"
         )
     print(f"Visual errs: {visual_err / total_err * 100:.2f}%")
     print(f"Label errs: {label_err / total_err * 100:.2f}%")
