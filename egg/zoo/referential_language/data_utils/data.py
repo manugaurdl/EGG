@@ -99,12 +99,14 @@ class _ImageIteratorRandomDistractor(_ImageIterator):
                 self.curr_idx = 0
                 raise StopIteration
 
+            """
             new_dists = [
                 self.extract_object(self.curr_img, obj)
                 for obj in self.curr_obj_data[1:max_obj_idx]
             ]
             self.distractors_bank.extend(new_dists)
             self.distractors_bank = self.distractors_bank[len(new_dists) :]
+            """
 
             img_path, obj_data = self.samples[self.curr_idx]
             self.curr_img = pil_loader(img_path)

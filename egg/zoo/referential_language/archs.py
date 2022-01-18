@@ -39,15 +39,8 @@ class SimpleAttention(nn.Module):
         self_mask = torch.eye(sims.shape[0], device=img_feats.device)
         sims += self_mask.fill_diagonal_(float("-inf"))
         attn_weights = nn.functional.softmax(sims, dim=-1)
-
-        """
         random_idxs = torch.randperm(attn_weights.size(1))
         attn_weights = attn_weights[:, random_idxs]
-        attn_weights = torch.zeros_like(attn_weights)
-        random_idxs = torch.randint(0, len(attn_weights), (len(attn_weights),))
-        attn_weights[torch.arange(len(attn_weights)), random_idxs] = 1
-        assert torch.sum(attn_weights).item() == len(attn_weights)
-        """
         return attn_weights @ img_feats, attn_weights
 
 
@@ -77,7 +70,7 @@ class Sender(nn.Module):
         ]
         assert context_integration in ["cat", "gate"]
 
-        self.fc_in = nn.Sequential(nn.Linear(input_dim, input_dim), nn.Tanh())
+        # self.fc_in = nn.Sequential(nn.Linear(input_dim, input_dim), nn.Tanh())
         self.context_integration = context_integration
         self.attention_type = attention_type
 
@@ -107,19 +100,16 @@ class Sender(nn.Module):
         if not self.training:
             aux_input["attn_weights"] = attn_weights
         if self.context_integration == "cat":
-            # random_idxs = torch.randperm(context.size(1))
-            # context = context[:, random_idxs]
             contextualized_objs = torch.cat([img_feats, context], dim=-1)
         elif self.context_integration == "gate":
-            context = self.fc_ctx(context)
-            context_gate = img_feats * context
+            context_gate = self.fc_ctx(context)
             if not self.training:
                 aux_input["context_gate"] = context_gate
             contextualized_objs = img_feats * context_gate
         return contextualized_objs
 
     def forward(self, x, aux_input=None):
-        x = self.fc_in(x)
+        # x = self.fc_in(x)
         x = self._integrate_ctx(x, aux_input)
         return self.fc_out(x)
 

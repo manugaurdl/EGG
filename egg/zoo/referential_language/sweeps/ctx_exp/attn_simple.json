@@ -4,10 +4,10 @@
     "random_seed": [111],
     "shared_vision": [true],
     "pretrain_vision": [true],
-    "gs_temperature": [0.5, 1.0, 3.0],
+    "gs_temperature": [2.0, 3.0, 4.0],
     "vocab_size": [2000],
     "attention_type": ["simple"],
-    "context_integration": ["cat", "gate"],
+    "context_integration": ["gate", "cat"],
     "use_cosine_similarity": [true],
     "lr": [0.0005]
 }

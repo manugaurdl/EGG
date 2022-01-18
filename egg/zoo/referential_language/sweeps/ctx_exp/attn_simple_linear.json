@@ -7,7 +7,7 @@
     "gs_temperature": [0.5, 1.0, 3.0],
     "vocab_size": [2000],
     "attention_type": ["simple_linear"],
-    "context_integration": ["cat", "gate"],
+    "context_integration": ["gate", "cat"],
     "use_cosine_similarity": [true],
     "lr": [0.0005]
 }
