@@ -29,7 +29,7 @@ def get_data_opts(parser):
         help="Max number of bboxes to extract from an image",
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
-    group.add_argument("--random_distractors", action="store_true", default=False)
+    group.add_argument("--random_distractors", default=False, action="store_true")
 
 
 def get_vision_module_opts(parser):
@@ -55,35 +55,19 @@ def get_vision_module_opts(parser):
     )
 
 
-def get_attention_opts(parser):
-    group = parser.add_argument_group("attn and ctx integration options")
-    group.add_argument(
-        "--attention_type",
-        default="none",
-        choices=["simple", "simple_linear", "none"],
-        help="Type of attention fn used to compute visual context",
-    )
-    group.add_argument(
-        "--context_integration",
-        default="cat",
-        choices=["cat", "gate"],
-        help="Cat concatenates visual context with object features gate uses context to gate object features",
-    )
-
-
 def get_game_arch_opts(parser):
     group = parser.add_argument_group("game architecture options")
     group.add_argument(
-        "--recv_temperature",
+        "--loss_temperature",
         type=float,
         default=1.0,
         help="Temperature for similarity computation in the loss fn. Ignored when similarity is 'dot'",
     )
     group.add_argument(
-        "--use_cosine_similarity",
-        action="store_true",
-        default=False,
-        help="If True, Receiver will compute l2-normalized dot product between message and images (default: False)",
+        "--output_dim",
+        type=int,
+        default=2048,
+        help="Output dim of the non-linear projection of the distractors, used to compare with msg embedding",
     )
 
 
@@ -94,16 +78,6 @@ def get_gs_opts(parser):
         type=float,
         default=1.0,
         help="gs temperature used in the relaxation layer",
-    )
-
-
-def get_single_symbol_opts(parser):
-    group = parser.add_argument_group("single symbol options")
-    group.add_argument(
-        "--recv_output_dim",
-        type=int,
-        default=2048,
-        help="Output dim of the non-linear projection of the distractors, used to compare with msg embedding",
     )
 
 
@@ -120,8 +94,20 @@ def get_common_opts(params):
     get_gs_opts(parser)
     get_vision_module_opts(parser)
     get_game_arch_opts(parser)
-    get_single_symbol_opts(parser)
-    get_attention_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)
+    setup_for_distributed(opts.distributed_context.is_leader)
     return opts
+
+
+def setup_for_distributed(is_master):
+    import builtins as __builtin__
+
+    builtin_print = __builtin__.print
+
+    def print(*args, **kwargs):
+        force = kwargs.pop("force", False)
+        if is_master or force:
+            builtin_print(*args, **kwargs)
+
+    __builtin__.print = print

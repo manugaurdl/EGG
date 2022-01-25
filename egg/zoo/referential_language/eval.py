@@ -8,7 +8,8 @@ from pathlib import Path
 
 import torch
 
-import egg.zoo.referential_language.data_utils as data
+from egg.core.interaction import LoggingStrategy
+from egg.zoo.referential_language.data import get_gaussian_dataloader
 
 
 def log_stats(interaction, mode):
@@ -17,14 +18,28 @@ def log_stats(interaction, mode):
     print(json.dumps(dump), flush=True)
 
 
-def perform_gaussian_test(trainer, data_kwargs):
-    data_loader = data.get_gaussian_dataloader(**data_kwargs)
-    data.gaussian_eval(trainer.game, data_loader, trainer.device)
+def run_gaussian_test(trainer, opts, data_kwargs):
+    logging_test_args = [False, True, True, True, True, True, False]
+    test_logging_strategy = LoggingStrategy(*logging_test_args)
+    if opts.distributed_context.is_distributed:
+        game = trainer.game.module.game
+    else:
+        game = trainer.game.game
+    game.test_logging_strategy = test_logging_strategy
+
+    gaussian_data_loader = get_gaussian_dataloader(**data_kwargs)
+    _, gaussian_interaction = trainer.eval(gaussian_data_loader)
+    log_stats(gaussian_interaction, "GAUSSIAN SET")
 
 
-def run_evaluation_loop(trainer, opts, data_kwargs):
-    data_kwargs.update({"split": "test"})
-    data_loader = data.get_dataloader(**data_kwargs)
+def run_test(trainer, opts, data_loader):
+    logging_test_args = [False, True, True, True, True, True, False]
+    test_logging_strategy = LoggingStrategy(*logging_test_args)
+    if opts.distributed_context.is_distributed:
+        game = trainer.game.module.game
+    else:
+        game = trainer.game.game
+    game.test_logging_strategy = test_logging_strategy
 
     _, interaction = trainer.eval(data_loader)
     log_stats(interaction, "TEST SET")
@@ -34,8 +49,5 @@ def run_evaluation_loop(trainer, opts, data_kwargs):
         output_path.mkdir(exist_ok=True, parents=True)
         interaction_name = f"interaction_{opts.job_id}_{opts.task_id}"
 
-        if interaction.aux_input:
-            interaction.aux_input.update({"args": opts})
-        else:
-            interaction.aux_input = {"args": opts}
+        interaction.aux_input["args"] = opts
         torch.save(interaction, output_path / interaction_name)

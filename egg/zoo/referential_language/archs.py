@@ -8,10 +8,9 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torchvision
-from torch.nn.functional import cosine_similarity as cosine_sim
 
 
-def get_cnn(name: str = "resnet50", pretrained: bool = False):
+def get_cnn(name, pretrained):
     modules = {
         "resnet50": torchvision.models.resnet50(pretrained=pretrained),
         "resnet101": torchvision.models.resnet101(pretrained=pretrained),
@@ -33,109 +32,47 @@ def get_cnn(name: str = "resnet50", pretrained: bool = False):
     return model, n_features
 
 
-class SimpleAttention(nn.Module):
-    def forward(self, img_feats, aux_input=None):
-        sims = img_feats @ img_feats.t()
-        self_mask = torch.eye(sims.shape[0], device=img_feats.device)
-        sims += self_mask.fill_diagonal_(float("-inf"))
-        attn_weights = nn.functional.softmax(sims, dim=-1)
-        random_idxs = torch.randperm(attn_weights.size(1))
-        attn_weights = attn_weights[:, random_idxs]
-        return attn_weights @ img_feats, attn_weights
-
-
-class SimpleLinearAttention(SimpleAttention):
-    def __init__(self, input_dim):
-        super(SimpleLinearAttention, self).__init__()
-        self.fc_in = nn.Sequential(nn.Linear(input_dim, input_dim), nn.Tanh())
-
-    def forward(self, img_feats, aux_input=None):
-        img_feats = self.fc_in(img_feats)
-        return super().forward(img_feats, aux_input)
-
-
 class Sender(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        output_dim: int = 2048,
-        attention_type: str = "none",
-        context_integration: str = "cat",
+        output_dim: int,
     ):
         super(Sender, self).__init__()
-        assert attention_type in [
-            "simple",
-            "simple_linear",
-            "none",
-        ]
-        assert context_integration in ["cat", "gate"]
-
-        # self.fc_in = nn.Sequential(nn.Linear(input_dim, input_dim), nn.Tanh())
-        self.context_integration = context_integration
-        self.attention_type = attention_type
-
-        if self.attention_type == "simple":
-            self.attn_fn = SimpleAttention()
-        elif self.attention_type == "simple_linear":
-            self.attn_fn = SimpleLinearAttention(input_dim)
-
-        if self.attention_type != "none":
-            if context_integration == "cat":
-                input_dim *= 2
-            elif context_integration == "gate":
-                self.fc_ctx = nn.Sequential(
-                    nn.Linear(input_dim, input_dim), nn.Sigmoid()
-                )
-
         self.fc_out = nn.Sequential(
             nn.Linear(input_dim, output_dim, bias=False),
             nn.BatchNorm1d(output_dim),
         )
 
-    def _integrate_ctx(self, img_feats, aux_input=None):
-        if self.attention_type == "none":
-            return img_feats
-
-        context, attn_weights = self.attn_fn(img_feats)
-        if not self.training:
-            aux_input["attn_weights"] = attn_weights
-        if self.context_integration == "cat":
-            contextualized_objs = torch.cat([img_feats, context], dim=-1)
-        elif self.context_integration == "gate":
-            context_gate = self.fc_ctx(context)
-            if not self.training:
-                aux_input["context_gate"] = context_gate
-            contextualized_objs = img_feats * context_gate
-        return contextualized_objs
-
     def forward(self, x, aux_input=None):
-        # x = self.fc_in(x)
-        x = self._integrate_ctx(x, aux_input)
-        return self.fc_out(x)
+        bsz, max_objs, _ = x.shape
+        return self.fc_out(x.view(bsz * max_objs, -1))
 
 
 class Receiver(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        output_dim: int = 2048,
-        temperature: float = 1.0,
-        use_cosine_sim: bool = False,
+        output_dim: int,
+        temperature: int,
     ):
         super(Receiver, self).__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(input_dim, output_dim),
+        self.fc_out = nn.Sequential(
+            nn.Linear(input_dim, input_dim, bias=False),
+            nn.BatchNorm1d(input_dim),
             nn.ReLU(),
+            nn.Linear(input_dim, output_dim, bias=False),
         )
         self.temperature = temperature
-        self.use_cosine_sim = use_cosine_sim
 
     def forward(self, messages, images, aux_input=None):
-        images = self.fc(images)
-        if self.use_cosine_sim:
-            sims = cosine_sim(messages.unsqueeze(1), images.unsqueeze(0), 2)
-            return sims / self.temperature
-        return messages @ images.t()
+        bsz, max_objs, _ = images.shape
+        images = self.fc_out(images.view(bsz * max_objs, -1))
+
+        images = images.view(bsz, max_objs, -1)
+        messages = messages.view(bsz, max_objs, -1)
+        sims = torch.bmm(messages, images.transpose(-1, -2)) / self.temperature
+        return sims.view(bsz * max_objs, -1)
 
 
 class VisionWrapper(nn.Module):
@@ -153,12 +90,17 @@ class VisionWrapper(nn.Module):
             self.encoder_recv = recv_vision_module
 
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
-        labels = labels.squeeze()
-        sender_input = self.encoder_sender(sender_input.squeeze())
+        bsz, max_objs, _, h, w = sender_input.shape
+        sender_input = self.encoder_sender(sender_input.view(bsz * max_objs, 3, h, w))
         receiver_input = sender_input
-
         if not self.shared:
-            receiver_input = self.encoder_recv(receiver_input.squeeze())
+            receiver_input = self.encoder_recv(
+                receiver_input.view(bsz * max_objs, 3, h, w)
+            )
+
         if not self.training:
-            aux_input = {"recv_img_feats": receiver_input}
+            aux_input["recv_img_feats"] = receiver_input
+
+        sender_input = sender_input.view(bsz, max_objs, -1)
+        receiver_input = receiver_input.view(bsz, max_objs, -1)
         return self.game(sender_input, labels, receiver_input, aux_input)

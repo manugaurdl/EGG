@@ -8,10 +8,9 @@ import time
 import uuid
 
 import egg.core as core
-from egg.core.interaction import LoggingStrategy
-import egg.zoo.referential_language.data_utils as data
 from egg.zoo.referential_language.callbacks import get_callbacks
-from egg.zoo.referential_language.eval import perform_gaussian_test, run_evaluation_loop
+from egg.zoo.referential_language.data import get_dataloader
+from egg.zoo.referential_language.eval import run_gaussian_test, run_test
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils import get_common_opts
 
@@ -37,15 +36,16 @@ def main(params):
     data_kwargs = {
         "image_dir": opts.image_dir,
         "metadata_dir": opts.metadata_dir,
+        "batch_size": opts.batch_size,
         "split": "train",
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
-        "random_distractors": opts.random_distractors,
+        "seed": opts.random_seed,
     }
 
-    train_loader = data.get_dataloader(**data_kwargs)
+    train_loader = get_dataloader(**data_kwargs)
     data_kwargs.update({"split": "val"})
-    val_loader = data.get_dataloader(**data_kwargs)
+    val_loader = get_dataloader(**data_kwargs)
 
     game = build_game(opts)
     optimizer = core.build_optimizer(game.parameters())
@@ -60,12 +60,12 @@ def main(params):
     )
     trainer.train(n_epochs=opts.n_epochs)
 
-    logging_test_args = [False, True, True, True, True, True, False]
-    test_logging_strategy = LoggingStrategy(*logging_test_args)
-    trainer.game.game.test_logging_strategy = test_logging_strategy
+    data_kwargs.update({"split": "test"})
+    data_loader = get_dataloader(**data_kwargs)
+    run_test(trainer, opts, data_loader)
 
-    run_evaluation_loop(trainer, opts, data_kwargs)
-    perform_gaussian_test(trainer, data_kwargs)
+    run_gaussian_test(trainer, opts, data_kwargs)
+
     print("| FINISHED JOB")
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")
