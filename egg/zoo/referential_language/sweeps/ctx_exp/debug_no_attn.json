@@ -1,11 +1,12 @@
 {
-    "n_epoch": [10],
+    "n_epoch": [1],
     "max_objects": [20],
     "random_seed": [111],
     "shared_vision": [true],
     "pretrain_vision": [true],
-    "gs_temperature": [2.0, 3.0, 4.0],
+    "gs_temperature": [3.0],
     "vocab_size": [2000],
     "loss_temperature": [0.1],
-    "lr": [0.0005]
+    "lr": [0.0005],
+    "debug": [true]
 }
