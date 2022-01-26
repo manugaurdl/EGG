@@ -19,13 +19,11 @@ def log_stats(interaction, mode):
 
 
 def run_gaussian_test(trainer, opts, data_kwargs):
-    logging_test_args = [False, True, True, True, True, True, False]
-    test_logging_strategy = LoggingStrategy(*logging_test_args)
     if opts.distributed_context.is_distributed:
         game = trainer.game.module.game
     else:
         game = trainer.game.game
-    game.test_logging_strategy = test_logging_strategy
+    game.test_logging_strategy = LoggingStrategy.minimal()
 
     gaussian_data_loader = get_gaussian_dataloader(**data_kwargs)
     _, gaussian_interaction = trainer.eval(gaussian_data_loader)

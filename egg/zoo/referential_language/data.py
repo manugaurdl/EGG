@@ -186,7 +186,7 @@ def get_dataloader(
 
 def get_gaussian_dataloader(image_size, max_objects, batch_size, **kwargs):
     return torch.utils.data.DataLoader(
-        GaussianDataset(image_size, max_objects, nb_samples=20_000),
+        GaussianDataset(image_size, max_objects, nb_samples=2_000),
         batch_size=batch_size,
         num_workers=12,
         pin_memory=True,

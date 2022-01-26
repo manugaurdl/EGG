@@ -8,6 +8,7 @@ import time
 import uuid
 
 import torch
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 import egg.core as core
 from egg.zoo.referential_language.callbacks import get_callbacks
@@ -51,10 +52,12 @@ def main(params):
 
     game = build_game(opts)
     optimizer = torch.optim.Adam(game.parameters(), lr=opts.lr)
+    optimizer_scheduler = CosineAnnealingLR(optimizer, T_max=opts.n_epochs)
 
     trainer = core.Trainer(
         game=game,
         optimizer=optimizer,
+        optimizer_scheduler=optimizer_scheduler,
         train_data=train_loader,
         validation_data=val_loader,
         callbacks=get_callbacks(opts),
