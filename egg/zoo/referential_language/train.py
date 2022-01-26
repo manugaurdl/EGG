@@ -7,6 +7,8 @@ import os
 import time
 import uuid
 
+import torch
+
 import egg.core as core
 from egg.zoo.referential_language.callbacks import get_callbacks
 from egg.zoo.referential_language.data import get_dataloader
@@ -48,7 +50,7 @@ def main(params):
     val_loader = get_dataloader(**data_kwargs)
 
     game = build_game(opts)
-    optimizer = core.build_optimizer(game.parameters())
+    optimizer = torch.optim.Adam(game.parameters(), lr=opts.lr)
 
     trainer = core.Trainer(
         game=game,

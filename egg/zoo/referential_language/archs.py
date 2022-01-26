@@ -3,10 +3,11 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 
 
@@ -32,20 +33,63 @@ def get_cnn(name, pretrained):
     return model, n_features
 
 
+class ScaledDotProductAttention:
+    def __call__(self, x):
+        return x
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, num_heads):
+        super(SelfAttention, self).__init__()
+
+        self.num_heads = num_heads
+
+    def forward(self, x):
+        return x
+
+
+class Attention_topk:
+    def __init__(self, k=1):
+        self.k = k
+
+    def __call__(self, x):
+        bsz, max_objs, _ = x.shape
+        mask = torch.ones(max_objs, max_objs, device=x.device).fill_diagonal_(0)
+        sims = F.cosine_similarity(x.unsqueeze(2), x.unsqueeze(1), 3)
+        sims = sims * mask
+        ranks = torch.argsort(sims, descending=True)
+
+        most_similar_dist = []
+        for rank in range(self.k):
+            top_dist = x[torch.arange(bsz).unsqueeze(-1), ranks[..., rank]]
+            most_similar_dist.append(top_dist)
+
+        if self.k == 1:
+            most_similar_dist = torch.cat(most_similar_dist, dim=1)
+        else:
+            # averaging topk distractors with k > 1
+            most_similar_dist = torch.stack(most_similar_dist, dim=2).mean(dim=2)
+        return torch.cat([x, most_similar_dist], dim=-1)
+
+
 class Sender(nn.Module):
     def __init__(
         self,
         input_dim: int,
         output_dim: int,
+        attn_fn: Callable,
     ):
         super(Sender, self).__init__()
+        self.attn_fn = attn_fn
         self.fc_out = nn.Sequential(
             nn.Linear(input_dim, output_dim, bias=False),
             nn.BatchNorm1d(output_dim),
+            nn.LeakyReLU(0.02),
         )
 
     def forward(self, x, aux_input=None):
         bsz, max_objs, _ = x.shape
+        x = self.attn_fn(x)
         return self.fc_out(x.view(bsz * max_objs, -1))
 
 

@@ -55,6 +55,20 @@ def get_vision_module_opts(parser):
     )
 
 
+def get_attention_opts(parser):
+    group = parser.add_argument_group("sender attention options")
+    group.add_argument(
+        "--attn_type",
+        default="none",
+        choices=["none", "top"],
+    )
+    group.add_argument(
+        "--attn_topk",
+        default=1,
+        type=int,
+    )
+
+
 def get_game_arch_opts(parser):
     group = parser.add_argument_group("game architecture options")
     group.add_argument(
@@ -94,6 +108,7 @@ def get_common_opts(params):
     get_gs_opts(parser)
     get_vision_module_opts(parser)
     get_game_arch_opts(parser)
+    get_attention_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)
     setup_for_distributed(opts.distributed_context.is_leader)

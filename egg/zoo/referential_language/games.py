@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import torch.nn as nn
 import torch.nn.functional as F
 
 from egg.core.gs_wrappers import (
@@ -12,6 +13,7 @@ from egg.core.gs_wrappers import (
 )
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.referential_language.archs import (
+    Attention_topk,
     Receiver,
     Sender,
     VisionWrapper,
@@ -28,17 +30,27 @@ def loss(
     aux_input,
 ):
     labels = aux_input["game_labels"].view(-1)
-    mask = aux_input["mask"]
+    mask = aux_input["mask"].view(-1)
 
     acc = (receiver_output.argmax(dim=-1) == labels).detach().float()
+    acc *= mask  # zeroing masked elements
     acc = (acc.sum() / mask.sum()).unsqueeze(0)  # avoid dimensionless tensors
 
     loss = F.cross_entropy(receiver_output, labels, reduction="none")
-    loss = loss * mask.view(-1)  # multiply by 0 masked elements
+    loss = loss * mask  # multiply by 0 masked elements
+
     aux = {"acc": acc}
     if "baseline" in aux_input:
         aux["baseline"] = aux_input["baseline"].squeeze()
+
     return loss, aux
+
+
+def build_attention(opts):
+    attn_type = nn.Identity()
+    if opts.attn_type == "top":
+        attn_type = Attention_topk(k=opts.attn_topk)
+    return attn_type
 
 
 def build_game(opts):
@@ -48,9 +60,13 @@ def build_game(opts):
         assert not opts.pretrain_vision
         cnn_receiver, _ = get_cnn(opts.vision_model_name, opts.pretrain_vision)
 
+    attn = build_attention(opts)
+
+    sender_input_dim = input_dim * 2 if opts.attn_type != "none" else input_dim
     sender = Sender(
-        input_dim=input_dim,
+        input_dim=sender_input_dim,
         output_dim=opts.vocab_size,
+        attn_fn=attn,
     )
     receiver = Receiver(
         input_dim=input_dim,
@@ -73,4 +89,6 @@ def build_game(opts):
         train_logging_strategy=LoggingStrategy.minimal(),
         test_logging_strategy=LoggingStrategy.minimal(),
     )
+    if opts.distributed_context.is_distributed:
+        game = nn.SyncBatchNorm.convert_sync_batchnorm(game)
     return VisionWrapper(game, cnn_sender, cnn_receiver)
