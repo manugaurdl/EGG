@@ -1,5 +1,5 @@
 {
-    "n_epoch": [10],
+    "n_epoch": [100],
     "max_objects": [20],
     "random_seed": [111],
     "shared_vision": [true],
@@ -7,5 +7,6 @@
     "gs_temperature": [2.0, 3.0, 4.0],
     "vocab_size": [2000],
     "loss_temperature": [0.1],
-    "lr": [0.0005]
+    "attn_type": ["none"],
+    "lr": [0.0005, 0.0001]
 }
