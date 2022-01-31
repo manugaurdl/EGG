@@ -4,10 +4,11 @@
     "random_seed": [111],
     "shared_vision": [true],
     "pretrain_vision": [true],
-    "gs_temperature": [2.0, 3.0, 4.0],
+    "gs_temperature": [5.0],
     "vocab_size": [2000],
     "loss_temperature": [0.1],
     "attn_type": ["top"],
-    "attn_topk": [1, 3, 5],
-    "lr": [0.0005, 0.0001]
+    "attn_topk": [1, 3, 5, 10, 0],
+    "random_k": [true, false],
+    "lr": [0.0001]
 }
