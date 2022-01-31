@@ -60,12 +60,31 @@ def get_attention_opts(parser):
     group.add_argument(
         "--attn_type",
         default="none",
-        choices=["none", "top"],
+        choices=["none", "dot", "self", "top"],
     )
     group.add_argument(
         "--attn_topk",
         default=1,
         type=int,
+        help="Use top k most similar distractors to compute the attention vector",
+    )
+    group.add_argument(
+        "--num_heads",
+        default=1,
+        type=int,
+        help="Number of attention heads used in self attention",
+    )
+    group.add_argument(
+        "--random_k",
+        default=False,
+        action="store_true",
+        help="Use k random distractors to compute the attention vector",
+    )
+    group.add_argument(
+        "--global_context",
+        default=False,
+        action="store_true",
+        help="Use k random distractors to compute the attention vector",
     )
 
 

@@ -3,11 +3,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import math
 from typing import Callable, Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+# import torch.nn.functional as F
 import torchvision
 
 
@@ -34,42 +36,83 @@ def get_cnn(name, pretrained):
 
 
 class ScaledDotProductAttention:
-    def __call__(self, x):
-        return x
+    def __call__(self, x, aux_input=None):
+        bsz, max_objs, embed_dim = x.shape
+        x = x / math.sqrt(embed_dim)
+
+        sims = torch.bmm(x, x.transpose(1, 2))
+
+        padded_elems_mask = ~aux_input["mask"].unsqueeze(-2).expand_as(sims)
+        sims = sims.masked_fill(padded_elems_mask, value=float("-inf"))
+        self_mask = torch.eye(max_objs, device=x.device).fill_diagonal_(float("-inf"))
+        sims += self_mask
+
+        attn_weights = nn.functional.softmax(sims, dim=-1)
+        attn = torch.bmm(attn_weights, x)
+        return attn, attn_weights
 
 
 class SelfAttention(nn.Module):
-    def __init__(self, num_heads):
+    def __init__(self, embed_dim: int, num_heads: int):
         super(SelfAttention, self).__init__()
+        self.attn_fn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads)
 
-        self.num_heads = num_heads
+    def forward(self, x, aux_input=None):
+        x = x.transpose(0, 1)
 
-    def forward(self, x):
-        return x
+        mask = torch.logical_not(aux_input["mask"])
+        self_mask = torch.eye(x.shape[0], device=x.device, dtype=torch.bool)
+
+        attn, attn_weights = self.attn_fn(
+            query=x,
+            key=x,
+            value=x,
+            key_padding_mask=mask,  # masking padded elements
+            attn_mask=self_mask,  # masking self
+        )
+        attn = attn.transpose(0, 1)
+
+        return attn, attn_weights
 
 
 class Attention_topk:
-    def __init__(self, k=1):
+    def __init__(self, k=1, random=False):
         self.k = k
+        self.random = random
 
-    def __call__(self, x):
-        bsz, max_objs, _ = x.shape
-        mask = torch.ones(max_objs, max_objs, device=x.device).fill_diagonal_(0)
-        sims = F.cosine_similarity(x.unsqueeze(2), x.unsqueeze(1), 3)
-        sims = sims * mask
+    def __call__(self, x, aux_input=None):
+        bsz, max_objs, embed_dim = x.shape
+        x = x / math.sqrt(embed_dim)
+
+        # zeroing padded elements so they dont participate in the distractor mean computation
+        x = x * aux_input["mask"].unsqueeze(-1).expand_as(x).float()
+
+        sims = torch.bmm(x, x.transpose(1, 2))
+        padded_elems_mask = ~aux_input["mask"].unsqueeze(-2).expand_as(sims)
+        sims = sims.masked_fill(padded_elems_mask, value=2)  # lower than minimum sim
+        self_mask = torch.eye(max_objs, device=x.device).fill_diagonal_(float("-inf"))
+        sims += self_mask
+
         ranks = torch.argsort(sims, descending=True)
+        assert torch.allclose(
+            ranks[..., -1], torch.arange(max_objs, device=x.device).repeat(bsz, 1)
+        )
+        if self.random:
+            ranks = ranks[..., torch.randperm(ranks.shape[-1])]
+
+        # get topk distractor or all, whatever is smaller if k>0, else all but self if k is negative
+        last_k = min(self.k, max_objs - 1) if self.k > 0 else max_objs - 1
 
         most_similar_dist = []
-        for rank in range(self.k):
+        for rank in range(last_k):
             top_dist = x[torch.arange(bsz).unsqueeze(-1), ranks[..., rank]]
             most_similar_dist.append(top_dist)
 
-        if self.k == 1:
-            most_similar_dist = torch.cat(most_similar_dist, dim=1)
-        else:
-            # averaging topk distractors with k > 1
-            most_similar_dist = torch.stack(most_similar_dist, dim=2).mean(dim=2)
-        return torch.cat([x, most_similar_dist], dim=-1)
+        attn = torch.stack(most_similar_dist, dim=2).sum(dim=2)
+        denom = torch.sum(aux_input["mask"].int(), dim=-1) - 1  # excluding self
+        attn = attn / torch.clamp(denom, max=last_k).unsqueeze(-1).unsqueeze(-1)
+
+        return attn, torch.zeros(1, device=x.device)  # dummy attn_weights
 
 
 class Sender(nn.Module):
@@ -89,7 +132,15 @@ class Sender(nn.Module):
 
     def forward(self, x, aux_input=None):
         bsz, max_objs, _ = x.shape
-        x = self.attn_fn(x)
+        attn, attn_weights = self.attn_fn(x, aux_input)
+        aux_input["attn_weights"] = attn_weights
+
+        # TODO: this cat should be moved inside the attention functions
+        x = torch.cat([x, attn], dim=-1)
+
+        if "global_context_feats" in aux_input:
+            x = torch.cat([x, aux_input["global_context_feats"]], dim=-1)
+
         return self.fc_out(x.view(bsz * max_objs, -1))
 
 
@@ -125,6 +176,7 @@ class VisionWrapper(nn.Module):
         game: nn.Module,
         sender_vision_module: nn.Module,
         recv_vision_module: Optional[nn.Module] = None,
+        global_context: bool = True,
     ):
         super(VisionWrapper, self).__init__()
         self.game = game
@@ -133,8 +185,19 @@ class VisionWrapper(nn.Module):
         if not self.shared:
             self.encoder_recv = recv_vision_module
 
+        self.global_context = global_context
+
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
         bsz, max_objs, _, h, w = sender_input.shape
+
+        if "mask" not in aux_input:
+            mask = torch.ones(bsz, max_objs, device=sender_input.device)
+            aux_input["mask"] = mask.bool()
+
+        if self.global_context:
+            ctx = self.encoder_sender(aux_input["global_context"])
+            aux_input["global_context_feats"] = ctx.unsqueeze(1).repeat(1, max_objs, 1)
+
         sender_input = self.encoder_sender(sender_input.view(bsz * max_objs, 3, h, w))
         receiver_input = sender_input
         if not self.shared:

@@ -10,5 +10,6 @@
     "attn_type": ["top"],
     "attn_topk": [1, 3, 5, 10, 0],
     "random_k": [true, false],
+    "global_context": [true],
     "lr": [0.0001]
 }

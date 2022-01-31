@@ -33,9 +33,12 @@ class GaussianDataset:
     def __getitem__(self, index):
         x = torch.rand(self.max_objects, 3, self.image_size, self.image_size)
         labels = torch.ones(1)
-        mask = torch.ones(self.max_objects)
         game_labels = torch.arange(self.max_objects)
-        return x, labels, x, {"mask": mask, "game_labels": game_labels}
+        aux_input = {
+            "game_labels": game_labels,
+            "global_context": torch.rand(3, self.image_size, self.image_size),
+        }
+        return x, labels, x, aux_input
 
 
 class VisualGenomeDataset(torch.utils.data.Dataset):
@@ -112,42 +115,34 @@ class VisualGenomeDataset(torch.utils.data.Dataset):
 
         agent_input = torch.stack(cropped_objs)
         labels = torch.Tensor(labels)
-        return agent_input, labels, None, len(agent_input)
+        return agent_input, labels, self.resizer(image)
 
     def __len__(self):
         return len(self.samples)
 
 
-class Collater:
-    def __init__(self, max_objects):
-        self.max_objects = max_objects
+def collate(batch):
+    inp, lab = [], []
+    global_context = []
+    for x, l, full_image in batch:
+        inp.append(x)
+        lab.append(l)
+        global_context.append(full_image)
 
-    def __call__(self, batch):
-        max_objs = min(self.max_objects, max([x[3] for x in batch]))
-        inp, lab = [], []
-        game_labels, mask, baseline = [], [], []
-        for x, l, _, num_elems in batch:
-            inp.append(x)
-            lab.append(l)
+    inp = torch.nn.utils.rnn.pad_sequence(inp, batch_first=True, padding_value=-1)
+    lab = torch.nn.utils.rnn.pad_sequence(lab, batch_first=True, padding_value=-1)
 
-            x = torch.zeros(max_objs)
-            x[:num_elems] = 1
-            mask.append(x)
-            game_labels.append(torch.arange(self.max_objects))
-            baseline.append(torch.Tensor([1 / num_elems]))
-
-        inp = torch.nn.utils.rnn.pad_sequence(inp, batch_first=True)
-        label = torch.nn.utils.rnn.pad_sequence(lab, batch_first=True, padding_value=-1)
-        mask = torch.stack(mask)
-        game_labels = torch.stack(game_labels)
-        baseline = torch.stack(baseline)
-
-        return (
-            inp,
-            label,
-            None,
-            {"mask": mask, "game_labels": game_labels, "baseline": baseline},
-        )
+    mask = inp[:, :, 0, 0, 0] != -1
+    baseline = 1 / mask.int().sum(-1)
+    bsz, max_objs = inp.shape[:2]
+    game_labels = torch.arange(max_objs).repeat(bsz, 1)
+    aux_input = {
+        "mask": mask,
+        "game_labels": game_labels,
+        "baseline": baseline,
+        "global_context": torch.stack(global_context),
+    }
+    return inp, lab, None, aux_input
 
 
 def get_dataloader(
@@ -177,7 +172,7 @@ def get_dataloader(
         batch_size=batch_size,
         num_workers=6,
         sampler=sampler,
-        collate_fn=Collater(max_objects),
+        collate_fn=collate,
         shuffle=(sampler is None),
         pin_memory=True,
         drop_last=True,
