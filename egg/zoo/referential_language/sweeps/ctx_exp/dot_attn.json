@@ -8,6 +8,5 @@
     "vocab_size": [2000],
     "loss_temperature": [0.1],
     "attn_type": ["dot"],
-    "global_context": [true],
     "lr": [0.0001]
 }

@@ -1,0 +1,17 @@
+{
+    "n_epoch": [100],
+    "max_objects": [10],
+    "vision_model": ["resnet18", "resnet34", "resnet50", "resnet101"],
+    "image_size": [32, 64, 128],
+    "random_seed": [111],
+    "pretrain_vision": [true],
+    "gs_temperature": [0.5, 1.0, 5.0],
+    "vocab_size": [2000, 4000, 6000],
+    "output_dim": [1024],
+    "sender_separate_messages": [true, false],
+    "recv_separate_embeddings": [true, false],
+    "random_ctx_position": [true, false],
+    "loss_temperature": [0.1],
+    "attn_type": ["dot"],
+    "lr": [0.0005, 0.0001]
+}
