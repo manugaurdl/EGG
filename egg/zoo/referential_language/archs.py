@@ -4,51 +4,61 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
-from typing import Callable, Optional
+from typing import Callable
 
 import torch
 import torch.nn as nn
-
-# import torch.nn.functional as F
 import torchvision
 
+from egg.core.gs_wrappers import gumbel_softmax_sample
 
-def get_cnn(name, pretrained):
+
+def get_cnn(opts):
     modules = {
-        "resnet50": torchvision.models.resnet50(pretrained=pretrained),
-        "resnet101": torchvision.models.resnet101(pretrained=pretrained),
-        "resnet152": torchvision.models.resnet152(pretrained=pretrained),
+        "resnet18": torchvision.models.resnet18(pretrained=opts.pretrain_vision),
+        "resnet34": torchvision.models.resnet34(pretrained=opts.pretrain_vision),
+        "resnet50": torchvision.models.resnet50(pretrained=opts.pretrain_vision),
+        "resnet101": torchvision.models.resnet101(pretrained=opts.pretrain_vision),
     }
-    if name not in modules:
-        raise KeyError(f"{name} is not currently supported.")
+    if opts.vision_model not in modules:
+        raise KeyError(f"{opts.vision_model} is not currently supported.")
 
-    model = modules[name]
+    model = modules[opts.vision_model]
 
-    n_features = model.fc.in_features
+    opts.img_feats_dim = model.fc.in_features
     model.fc = nn.Identity()
 
-    if pretrained:
+    if opts.pretrain_vision:
         for param in model.parameters():
             param.requires_grad = False
         model = model.eval()
 
-    return model, n_features
+    return model
 
 
-class ScaledDotProductAttention:
+def no_attention(x, aux_input=None):
+    return None, None
+
+
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, img_feats_dim):
+        super(ScaledDotProductAttention, self).__init__()
+        self.fc_out = nn.Linear(img_feats_dim, img_feats_dim)
+
     def __call__(self, x, aux_input=None):
         bsz, max_objs, embed_dim = x.shape
-        x = x / math.sqrt(embed_dim)
 
+        x = x / math.sqrt(embed_dim)
         sims = torch.bmm(x, x.transpose(1, 2))
 
-        padded_elems_mask = ~aux_input["mask"].unsqueeze(-2).expand_as(sims)
-        sims = sims.masked_fill(padded_elems_mask, value=float("-inf"))
+        non_padded_elems_mask = aux_input["mask"].unsqueeze(1)
+        sims = sims.masked_fill(~non_padded_elems_mask, value=float("-inf"))
         self_mask = torch.eye(max_objs, device=x.device).fill_diagonal_(float("-inf"))
         sims += self_mask
 
         attn_weights = nn.functional.softmax(sims, dim=-1)
         attn = torch.bmm(attn_weights, x)
+        attn = self.fc_out(attn)
         return attn, attn_weights
 
 
@@ -71,14 +81,16 @@ class SelfAttention(nn.Module):
             attn_mask=self_mask,  # masking self
         )
         attn = attn.transpose(0, 1)
-
         return attn, attn_weights
 
 
 class Attention_topk:
-    def __init__(self, k=1, random=False):
+    def __init__(self, img_feats_dim, k=1, random=False):
+        super(Attention_topk, self).__init__()
         self.k = k
         self.random = random
+
+        self.fc_out = nn.Linear(img_feats_dim, img_feats_dim)
 
     def __call__(self, x, aux_input=None):
         bsz, max_objs, embed_dim = x.shape
@@ -88,18 +100,19 @@ class Attention_topk:
         x = x * aux_input["mask"].unsqueeze(-1).expand_as(x).float()
 
         sims = torch.bmm(x, x.transpose(1, 2))
-        padded_elems_mask = ~aux_input["mask"].unsqueeze(-2).expand_as(sims)
-        sims = sims.masked_fill(padded_elems_mask, value=2)  # lower than minimum sim
+        # lower than minimum sim
+        sims = sims.masked_fill(~aux_input["mask"].unsqueeze(1), value=-100)
         self_mask = torch.eye(max_objs, device=x.device).fill_diagonal_(float("-inf"))
         sims += self_mask
 
         ranks = torch.argsort(sims, descending=True)
+        if self.random:
+            # ranks = ranks[..., torch.randperm(ranks.shape[-1])]
+            ranks[..., :-1] = torch.argsort(sims)[..., 1:]
+
         assert torch.allclose(
             ranks[..., -1], torch.arange(max_objs, device=x.device).repeat(bsz, 1)
         )
-        if self.random:
-            ranks = ranks[..., torch.randperm(ranks.shape[-1])]
-
         # get topk distractor or all, whatever is smaller if k>0, else all but self if k is negative
         last_k = min(self.k, max_objs - 1) if self.k > 0 else max_objs - 1
 
@@ -112,6 +125,7 @@ class Attention_topk:
         denom = torch.sum(aux_input["mask"].int(), dim=-1) - 1  # excluding self
         attn = attn / torch.clamp(denom, max=last_k).unsqueeze(-1).unsqueeze(-1)
 
+        attn = self.fc_out(attn)
         return attn, torch.zeros(1, device=x.device)  # dummy attn_weights
 
 
@@ -121,27 +135,73 @@ class Sender(nn.Module):
         input_dim: int,
         output_dim: int,
         attn_fn: Callable,
+        temperature: float,
+        random_ctx_position: bool,
+        sender_separate_messages: bool,
     ):
         super(Sender, self).__init__()
         self.attn_fn = attn_fn
-        self.fc_out = nn.Sequential(
-            nn.Linear(input_dim, output_dim, bias=False),
-            nn.BatchNorm1d(output_dim),
-            nn.LeakyReLU(0.02),
-        )
+
+        self.fc1 = nn.Linear(input_dim, output_dim, bias=False)
+        self.fc2 = self.fc1
+        if sender_separate_messages:
+            self.fc2 = nn.Linear(input_dim, output_dim, bias=False)
+        self.temperature = temperature
+        self.random_ctx_position = random_ctx_position
 
     def forward(self, x, aux_input=None):
         bsz, max_objs, _ = x.shape
+
+        logits_tgt = self.fc1(x.view(bsz * max_objs, -1))
+        msg_tgt = gumbel_softmax_sample(logits_tgt, self.temperature, self.training)
+
         attn, attn_weights = self.attn_fn(x, aux_input)
-        aux_input["attn_weights"] = attn_weights
+        if attn is None:
+            return msg_tgt
 
-        # TODO: this cat should be moved inside the attention functions
-        x = torch.cat([x, attn], dim=-1)
+        if not self.training:
+            aux_input["attn_weights"] = attn_weights
 
-        if "global_context_feats" in aux_input:
-            x = torch.cat([x, aux_input["global_context_feats"]], dim=-1)
+        logits_ctx = self.fc2(attn.contiguous().view(bsz * max_objs, -1))
+        msg_ctx = gumbel_softmax_sample(logits_ctx, self.temperature, self.training)
+        msg = torch.stack([msg_tgt, msg_ctx], dim=1)
 
-        return self.fc_out(x.view(bsz * max_objs, -1))
+        if self.random_ctx_position:
+            bool_idxs = torch.randint(2, (bsz * max_objs,)).bool()
+            random_idxs = torch.stack([bool_idxs, ~bool_idxs], dim=1).long()
+            msg = msg[torch.arange(bsz * max_objs).unsqueeze(1), random_idxs]
+        return msg
+
+
+class DoubleSymbolReceiverWrapper(nn.Module):
+    def __init__(self, agent, vocab_size, agent_input_size, separate_embeddings: False):
+        super(DoubleSymbolReceiverWrapper, self).__init__()
+        self.agent = agent
+
+        self.embedding1 = nn.Linear(vocab_size, agent_input_size)
+        self.embedding2 = self.embedding1
+        if separate_embeddings:
+            self.embedding2 = nn.Linear(vocab_size, agent_input_size)
+
+        self.fc_out = nn.Linear(agent_input_size * 2, agent_input_size, bias=False)
+
+    def forward(self, message, input=None, aux_input=None):
+        embedded_tgt = self.embedding1(message[:, 0, ...])
+        embedded_ctx = self.embedding2(message[:, 1, ...])
+        embedded_msg = torch.cat([embedded_tgt, embedded_ctx], dim=1)
+        msg = self.fc_out(embedded_msg)
+        return self.agent(msg, input, aux_input)
+
+
+class SingleSymbolReceiverWrapper(nn.Module):
+    def __init__(self, agent, vocab_size, agent_input_size, *args, **kwargs):
+        super(SingleSymbolReceiverWrapper, self).__init__()
+        self.agent = agent
+        self.embedding = nn.Linear(vocab_size, agent_input_size)
+
+    def forward(self, message, input=None, aux_input=None):
+        embedded_msg = self.embedding(message)
+        return self.agent(embedded_msg, input, aux_input)
 
 
 class Receiver(nn.Module):
@@ -152,20 +212,20 @@ class Receiver(nn.Module):
         temperature: int,
     ):
         super(Receiver, self).__init__()
-        self.fc_out = nn.Sequential(
+        self.fc_img = nn.Sequential(
             nn.Linear(input_dim, input_dim, bias=False),
-            nn.BatchNorm1d(input_dim),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(input_dim, output_dim, bias=False),
         )
         self.temperature = temperature
 
     def forward(self, messages, images, aux_input=None):
         bsz, max_objs, _ = images.shape
-        images = self.fc_out(images.view(bsz * max_objs, -1))
 
+        images = self.fc_img(images.view(bsz * max_objs, -1))
         images = images.view(bsz, max_objs, -1)
         messages = messages.view(bsz, max_objs, -1)
+
         sims = torch.bmm(messages, images.transpose(-1, -2)) / self.temperature
         return sims.view(bsz * max_objs, -1)
 
@@ -174,40 +234,18 @@ class VisionWrapper(nn.Module):
     def __init__(
         self,
         game: nn.Module,
-        sender_vision_module: nn.Module,
-        recv_vision_module: Optional[nn.Module] = None,
-        global_context: bool = True,
+        visual_encoder: nn.Module,
     ):
         super(VisionWrapper, self).__init__()
         self.game = game
-        self.encoder_sender = sender_vision_module
-        self.shared = recv_vision_module is None
-        if not self.shared:
-            self.encoder_recv = recv_vision_module
-
-        self.global_context = global_context
+        self.visual_encoder = visual_encoder
 
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
         bsz, max_objs, _, h, w = sender_input.shape
-
-        if "mask" not in aux_input:
-            mask = torch.ones(bsz, max_objs, device=sender_input.device)
-            aux_input["mask"] = mask.bool()
-
-        if self.global_context:
-            ctx = self.encoder_sender(aux_input["global_context"])
-            aux_input["global_context_feats"] = ctx.unsqueeze(1).repeat(1, max_objs, 1)
-
-        sender_input = self.encoder_sender(sender_input.view(bsz * max_objs, 3, h, w))
-        receiver_input = sender_input
-        if not self.shared:
-            receiver_input = self.encoder_recv(
-                receiver_input.view(bsz * max_objs, 3, h, w)
-            )
+        img_feats = self.visual_encoder(sender_input.view(bsz * max_objs, 3, h, w))
+        sender_input = img_feats.view(bsz, max_objs, -1)
+        recv_input = sender_input.clone()
 
         if not self.training:
-            aux_input["recv_img_feats"] = receiver_input
-
-        sender_input = sender_input.view(bsz, max_objs, -1)
-        receiver_input = receiver_input.view(bsz, max_objs, -1)
-        return self.game(sender_input, labels, receiver_input, aux_input)
+            aux_input["recv_img_feats"] = recv_input.view(bsz, max_objs, -1)
+        return self.game(sender_input, labels, recv_input, aux_input)
