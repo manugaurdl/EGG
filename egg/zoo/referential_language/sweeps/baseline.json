@@ -1,12 +1,15 @@
 {
-    "n_epoch": [10],
-    "max_objects": [20],
+    "n_epoch": [100],
+    "max_objects": [3, 20],
+    "image_size": [64, 128],
+    "vision_mode": ["resnet34"],
     "random_seed": [111],
-    "shared_vision": [true],
     "pretrain_vision": [true],
-    "gs_temperature": [2.0, 3.0, 4.0],
-    "vocab_size": [2000],
+    "attn_type": ["none"],
+    "gs_temperature": [0.5, 5.0],
+    "output_dim": [256, 512],
+    "vocab_size": [2000, 4000],
     "loss_temperature": [0.1],
-    "lr": [0.0005],
+    "lr": [0.0005, 0.0001],
     "random_distractors": [true]
 }
