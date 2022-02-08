@@ -7,9 +7,13 @@ import json
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 
 from egg.core.interaction import LoggingStrategy
-from egg.zoo.referential_language.data import get_gaussian_dataloader
+from egg.zoo.referential_language.games import Loss
+from egg.zoo.referential_language.data_utils.gaussian_data import (
+    get_gaussian_dataloader,
+)
 
 
 def log_stats(interaction, mode):
@@ -24,10 +28,28 @@ def run_gaussian_test(trainer, opts, data_kwargs):
     else:
         game = trainer.game.game
     game.test_logging_strategy = LoggingStrategy.minimal()
+    game.loss = Loss()
 
     gaussian_data_loader = get_gaussian_dataloader(**data_kwargs)
     _, gaussian_interaction = trainer.eval(gaussian_data_loader)
     log_stats(gaussian_interaction, "GAUSSIAN SET")
+
+
+class RandomDistractorsTestLoss(nn.Module):
+    def forward(
+        self,
+        _sender_input,
+        _message,
+        _receiver_input,
+        receiver_output,
+        _labels,
+        aux_input,
+    ):
+        bsz, max_objs = aux_input["mask"].shape
+
+        labels = torch.zeros(bsz, device=receiver_output.device)
+        acc = (receiver_output[0::max_objs].argmax(dim=-1) == labels).detach().float()
+        return torch.zeros(1), {"acc": acc}
 
 
 def run_test(trainer, opts, data_loader):
@@ -38,6 +60,9 @@ def run_test(trainer, opts, data_loader):
     else:
         game = trainer.game.game
     game.test_logging_strategy = test_logging_strategy
+
+    if opts.random_distractors:
+        game.loss = RandomDistractorsTestLoss()
 
     _, interaction = trainer.eval(data_loader)
     log_stats(interaction, "TEST SET")

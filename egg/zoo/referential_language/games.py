@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -22,25 +23,40 @@ from egg.zoo.referential_language.archs import (
 )
 
 
-def loss(
-    _sender_input,
-    _message,
-    _receiver_input,
-    receiver_output,
-    _labels,
-    aux_input,
-):
-    labels = aux_input["game_labels"].view(-1)
-    mask = aux_input["mask"].float().view(-1)
+class Loss(nn.Module):
+    def __init__(self, random_distractors: bool = False):
+        super(Loss, self).__init__()
+        self.random_distractors = random_distractors
 
-    acc = (receiver_output.argmax(dim=-1) == labels).detach().float()
-    acc *= mask  # zeroing masked elements
-    acc = (acc.sum() / mask.sum()).unsqueeze(0)  # avoid dimensionless tensors
+    def forward(
+        self,
+        _sender_input,
+        _message,
+        _receiver_input,
+        receiver_output,
+        _labels,
+        aux_input,
+    ):
+        labels = aux_input["game_labels"].view(-1)
+        mask = aux_input["mask"].float().view(-1)
 
-    loss = F.cross_entropy(receiver_output, labels, reduction="none")
-    loss *= mask  # multiply by 0 masked elements
+        if not self.training and self.random_distractors:
+            bsz, max_objs = aux_input["mask"].shape
+            acc_labels = torch.zeros(bsz, device=receiver_output.device)
+            acc = (
+                (receiver_output[0::max_objs].argmax(dim=-1) == acc_labels)
+                .detach()
+                .float()
+            )
+        else:
+            acc = (receiver_output.argmax(dim=-1) == labels).detach().float()
+            acc *= mask  # zeroing masked elements
+            acc = (acc.sum() / mask.sum()).unsqueeze(0)  # avoid dimensionless tensors
 
-    return loss, {"acc": acc, "baseline": aux_input["baseline"]}
+        loss = F.cross_entropy(receiver_output, labels, reduction="none")
+        loss *= mask  # multiply by 0 masked elements
+
+        return loss, {"acc": acc, "baseline": aux_input["baseline"]}
 
 
 def build_attention(opts):
@@ -92,7 +108,7 @@ def build_game(opts):
     game = SymbolGameGS(
         sender=sender,
         receiver=receiver,
-        loss=loss,
+        loss=Loss(opts.random_distractors),
         train_logging_strategy=LoggingStrategy.minimal(),
         test_logging_strategy=LoggingStrategy.minimal(),
     )

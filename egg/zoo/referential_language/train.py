@@ -11,11 +11,11 @@ import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 import egg.core as core
-from egg.zoo.referential_language.callbacks import get_callbacks
-from egg.zoo.referential_language.data import get_dataloader
+from egg.zoo.referential_language.data_utils.dataloaders import get_dataloader
 from egg.zoo.referential_language.eval import run_gaussian_test, run_test
 from egg.zoo.referential_language.games import build_game
-from egg.zoo.referential_language.utils import get_common_opts
+from egg.zoo.referential_language.utils.callbacks import get_callbacks
+from egg.zoo.referential_language.utils.opts import get_common_opts
 
 
 def get_job_and_task_id(opts):
@@ -43,6 +43,7 @@ def main(params):
         "split": "train",
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
+        "random_distractors": opts.random_distractors,
         "seed": opts.random_seed,
     }
 
