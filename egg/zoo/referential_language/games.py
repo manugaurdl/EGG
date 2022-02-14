@@ -13,13 +13,14 @@ from egg.zoo.referential_language.archs import (
     Attention_topk,
     SingleSymbolReceiverWrapper,
     DoubleSymbolReceiverWrapper,
+    MessageGeneratorMLP,
+    NoAttention,
     Receiver,
     ScaledDotProductAttention,
     Sender,
     SelfAttention,
     VisionWrapper,
     get_cnn,
-    no_attention,
 )
 
 
@@ -73,20 +74,26 @@ def build_attention(opts):
             embed_dim=opts.img_feats_dim, num_heads=opts.num_heads
         )
     elif opts.attn_type == "none":
-        attn_type = no_attention
+        attn_type = NoAttention()
     else:
         raise NotImplementedError
     return attn_type
 
 
-def build_sender(opts):
-    return Sender(
+def build_message_generator(opts):
+    return MessageGeneratorMLP(
         input_dim=opts.img_feats_dim,
         output_dim=opts.vocab_size,
-        attn_fn=build_attention(opts),
+        single_symbol=opts.single_symbol,
         temperature=opts.gs_temperature,
-        random_ctx_position=opts.random_ctx_position,
-        sender_separate_messages=opts.sender_separate_messages,
+        separate_mlps=opts.sender_separate_mlps,
+        random_msg_position=opts.random_msg_position,
+    )
+
+
+def build_sender(opts):
+    return Sender(
+        attn_fn=build_attention(opts), msg_generator=build_message_generator(opts)
     )
 
 
@@ -97,7 +104,7 @@ def build_receiver(opts):
         temperature=opts.loss_temperature,
     )
     args = [receiver, opts.vocab_size, opts.output_dim, opts.recv_separate_embeddings]
-    if opts.attn_type == "none":
+    if opts.single_symbol:
         return SingleSymbolReceiverWrapper(*args)
     return DoubleSymbolReceiverWrapper(*args)
 

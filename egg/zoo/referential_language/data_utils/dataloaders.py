@@ -208,7 +208,7 @@ def collate(batch):
 
 def get_dataloader(
     image_dir: str = "/private/home/rdessi/visual_genome",
-    metadata_dir: str = "/private/home/rdessi/visual_genome/last_version_metadata/filtered_splits",
+    metadata_dir: str = "/private/home/rdessi/visual_genome/filtered_splits",
     batch_size: int = 32,
     split: str = "train",
     image_size: int = 32,

@@ -4,7 +4,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
-from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -36,8 +35,10 @@ def get_cnn(opts):
     return model
 
 
-def no_attention(x, aux_input=None):
-    return None, None
+class NoAttention(nn.Module):
+    def forward(self, x, aux_input=None):
+        aux_input["attn_weights"] = None
+        return None
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -45,7 +46,7 @@ class ScaledDotProductAttention(nn.Module):
         super(ScaledDotProductAttention, self).__init__()
         self.fc_out = nn.Linear(img_feats_dim, img_feats_dim)
 
-    def __call__(self, x, aux_input=None):
+    def forward(self, x, aux_input=None):
         bsz, max_objs, embed_dim = x.shape
 
         x = x / math.sqrt(embed_dim)
@@ -59,7 +60,9 @@ class ScaledDotProductAttention(nn.Module):
         attn_weights = nn.functional.softmax(sims, dim=-1)
         attn = torch.bmm(attn_weights, x)
         attn = self.fc_out(attn)
-        return attn, attn_weights
+        if not self.training:
+            aux_input["attn_weights"] = attn_weights
+        return attn
 
 
 class SelfAttention(nn.Module):
@@ -81,7 +84,9 @@ class SelfAttention(nn.Module):
             attn_mask=self_mask,  # masking self
         )
         attn = attn.transpose(0, 1)
-        return attn, attn_weights
+        if not self.training:
+            aux_input["attn_weights"] = attn_weights
+        return attn
 
 
 class Attention_topk(nn.Module):
@@ -125,48 +130,60 @@ class Attention_topk(nn.Module):
         denom = torch.sum(aux_input["mask"].int(), dim=-1) - 1  # excluding self
         attn = attn / torch.clamp(denom, max=last_k).unsqueeze(-1).unsqueeze(-1)
 
+        if not self.training:
+            aux_input["attn_weights"] = None
         attn = self.fc_out(attn)
-        return attn, torch.zeros(1, device=x.device)  # dummy attn_weights
+        return attn
 
 
 class Sender(nn.Module):
     def __init__(
         self,
-        input_dim: int,
-        output_dim: int,
-        attn_fn: Callable,
-        temperature: float,
-        random_ctx_position: bool,
-        sender_separate_messages: bool,
+        attn_fn: nn.Module,
+        msg_generator: nn.Module,
     ):
         super(Sender, self).__init__()
         self.attn_fn = attn_fn
-
-        self.fc1 = nn.Linear(input_dim, output_dim, bias=False)
-        self.fc2 = self.fc1
-        if sender_separate_messages:
-            self.fc2 = nn.Linear(input_dim, output_dim, bias=False)
-        self.temperature = temperature
-        self.random_ctx_position = random_ctx_position
+        self.msg_generator = msg_generator
 
     def forward(self, x, aux_input=None):
-        bsz, max_objs, _ = x.shape
+        attn = self.attn_fn(x, aux_input)
+        return self.msg_generator(x, attn, aux_input)
 
-        logits_tgt = self.fc1(x.view(bsz * max_objs, -1))
+
+class MessageGeneratorMLP(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        output_dim,
+        single_symbol,
+        temperature,
+        separate_mlps,
+        random_msg_position,
+    ):
+        super(MessageGeneratorMLP, self).__init__()
+        self.fc1 = nn.Linear(input_dim, output_dim, bias=False)
+        self.fc2 = self.fc1
+        if separate_mlps:
+            self.fc2 = nn.Linear(input_dim, output_dim, bias=False)
+        self.temperature = temperature
+        self.random_msg_position = random_msg_position
+        self.single_symbol = single_symbol
+
+    def forward(self, tgt_embedding, ctx_embedding, aux_input=None):
+        bsz, max_objs, _ = tgt_embedding.shape
+
+        logits_tgt = self.fc1(tgt_embedding.view(bsz * max_objs, -1))
         msg_tgt = gumbel_softmax_sample(logits_tgt, self.temperature, self.training)
-
-        attn, attn_weights = self.attn_fn(x, aux_input)
-        if attn is None:
+        if self.single_symbol:
             return msg_tgt
 
-        if not self.training:
-            aux_input["attn_weights"] = attn_weights
+        embedding2 = ctx_embedding if ctx_embedding is not None else tgt_embedding
+        logits2 = self.fc2(embedding2.contiguous().view(bsz * max_objs, -1))
+        msg2 = gumbel_softmax_sample(logits2, self.temperature, self.training)
+        msg = torch.stack([msg_tgt, msg2], dim=1)
 
-        logits_ctx = self.fc2(attn.contiguous().view(bsz * max_objs, -1))
-        msg_ctx = gumbel_softmax_sample(logits_ctx, self.temperature, self.training)
-        msg = torch.stack([msg_tgt, msg_ctx], dim=1)
-
-        if self.random_ctx_position:
+        if self.random_msg_position:
             bool_idxs = torch.randint(2, (bsz * max_objs,)).bool()
             random_idxs = torch.stack([bool_idxs, ~bool_idxs], dim=1).long()
             msg = msg[torch.arange(bsz * max_objs).unsqueeze(1), random_idxs]
