@@ -84,7 +84,7 @@ class SelfAttention(nn.Module):
         return attn, attn_weights
 
 
-class Attention_topk:
+class Attention_topk(nn.Module):
     def __init__(self, img_feats_dim, k=1, random=False):
         super(Attention_topk, self).__init__()
         self.k = k
@@ -92,7 +92,7 @@ class Attention_topk:
 
         self.fc_out = nn.Linear(img_feats_dim, img_feats_dim)
 
-    def __call__(self, x, aux_input=None):
+    def forward(self, x, aux_input=None):
         bsz, max_objs, embed_dim = x.shape
         x = x / math.sqrt(embed_dim)
 

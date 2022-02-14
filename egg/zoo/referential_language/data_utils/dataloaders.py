@@ -4,9 +4,9 @@
 # LICENSE file in the root directory of this source tree.
 
 import json
-import random
 from math import floor
 from pathlib import Path
+from random import sample
 from typing import Callable
 from PIL import Image
 
@@ -74,20 +74,18 @@ class VisualGenomeDataset:
             image = self.transform(image)
         return image
 
+    def _get_aux_input_random_dist(self):
+        mask = torch.ones(self.max_objects).bool()
+        game_labels = torch.arange(self.max_objects)
+        baseline = torch.Tensor([1 / self.max_objects])
+        return {"mask": mask, "game_labels": game_labels, "baseline": baseline}
+
 
 class TrainVisualGenomeDatasetRandomDistractors(VisualGenomeDataset):
-    def __init__(self, *args, **kwargs):
-        super(TrainVisualGenomeDatasetRandomDistractors, self).__init__(*args, **kwargs)
-
     def __getitem__(self, index):
-        img_path, bboxes = self.samples[index]
-        image = self._load_and_transform(img_path)
-
-        cropped_obj, label = self._extract_object(image, bboxes[0])
-
-        cropped_objs, labels = [cropped_obj], [label]
-        distractors = random.sample(self.samples, k=self.max_objects - 1)
-        for img_path, bboxes in distractors:
+        labels, cropped_objs = [], []
+        lineup = [self.samples[index]] + sample(self.samples, k=self.max_objects - 1)
+        for img_path, bboxes in lineup:
             image = self._load_and_transform(img_path)
 
             cropped_obj, label = self._extract_object(image, bboxes[0])
@@ -96,11 +94,7 @@ class TrainVisualGenomeDatasetRandomDistractors(VisualGenomeDataset):
 
         game_input = torch.stack(cropped_objs)
         labels = torch.Tensor(labels)
-
-        mask = torch.ones(self.max_objects).bool()
-        game_labels = torch.arange(self.max_objects)
-        baseline = torch.Tensor([1 / self.max_objects])
-        aux_input = {"mask": mask, "game_labels": game_labels, "baseline": baseline}
+        aux_input = self._get_aux_input_random_dist()
         return game_input, labels, torch.zeros(1), aux_input
 
 
@@ -126,31 +120,29 @@ class TestVisualGenomeDatasetRandomDistractors(VisualGenomeDataset, IterableData
             iter_end = iter_start + per_worker
 
         self.samples = self.samples[iter_start:iter_end]
+        self._load_new_sample()  # load first sample
         return self
 
     def _load_new_sample(self):
         img_path, obj_data = self.samples[self.curr_idx]
         self.curr_img = self._load_and_transform(img_path)
         self.curr_obj_data = obj_data
+        self.max_obj_idx = min(self.max_objects, len(self.curr_obj_data))
 
     def __next__(self):
-        self._load_new_sample()
-        max_obj_idx = min(self.max_objects, len(self.curr_obj_data))
-
-        if self.curr_obj_idx >= max_obj_idx:
+        if self.curr_obj_idx >= self.max_obj_idx:
             self.curr_obj_idx = 0
             self.curr_idx += 1
             if self.curr_idx >= len(self.samples):
                 raise StopIteration
             self._load_new_sample()
 
-        img = self.curr_img
         obj_data = self.curr_obj_data[self.curr_obj_idx]
-        obj, label = self._extract_object(img, obj_data)
+        obj, label = self._extract_object(self.curr_img, obj_data)
         self.curr_obj_idx += 1
 
         cropped_objs, labels = [obj], [label]
-        distractors = random.sample(self.samples, k=self.max_objects - 1)
+        distractors = sample(self.samples, k=self.max_objects - 1)
         for img_path, bboxes in distractors:
             image = self._load_and_transform(img_path)
 
@@ -161,10 +153,7 @@ class TestVisualGenomeDatasetRandomDistractors(VisualGenomeDataset, IterableData
         game_input = torch.stack(cropped_objs)
         labels = torch.Tensor(labels)
 
-        mask = torch.ones(self.max_objects).bool()
-        game_labels = torch.arange(self.max_objects)
-        baseline = torch.Tensor([1 / self.max_objects])
-        aux_input = {"mask": mask, "game_labels": game_labels, "baseline": baseline}
+        aux_input = self._get_aux_input_random_dist()
         return game_input, label, torch.zeros(1), aux_input
 
 
