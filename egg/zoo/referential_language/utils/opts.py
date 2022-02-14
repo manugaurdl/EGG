@@ -13,19 +13,19 @@ def get_data_opts(parser):
     group.add_argument(
         "--image_dir",
         type=str,
-        default="/datasets01/VisualGenome1.2/061517/",
+        default="/private/home/rdessi/visual_genome",
         help="Path to folder with VG images",
     )
     group.add_argument(
         "--metadata_dir",
         type=str,
-        default="/private/home/rdessi/visual_genome/train_val_test_split_clean",
+        default="/private/home/rdessi/visual_genome/last_version_metadata/filtered_splits",
         help="Path to folder with VG metada",
     )
     group.add_argument(
         "--max_objects",
         type=int,
-        default=20,
+        default=10,
         help="Max number of bboxes to extract from an image",
     )
     group.add_argument("--image_size", type=int, default=32, help="Image size")
