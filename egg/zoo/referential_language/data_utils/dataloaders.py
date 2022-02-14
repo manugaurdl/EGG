@@ -32,9 +32,10 @@ class VisualGenomeDataset:
         classes_path: str = "/private/home/rdessi/EGG/egg/zoo/referential_language/utils/classes_1600.txt",
         split: str = "train",
         transform: Callable = transforms.ToTensor(),
-        max_objects=20,
+        max_objects=10,
         image_size=64,
     ):
+        assert max_objects >= 3
         path_images = Path(image_dir)
         path_metadata = Path(metadata_dir) / f"{split}_objects.json"
         path_image_data = Path(metadata_dir) / f"{split}_image_data.json"
@@ -43,9 +44,14 @@ class VisualGenomeDataset:
             img_data, img_metadata = json.load(img_in), json.load(metadata_in)
         assert len(img_data) == len(img_metadata)
 
-        get_name = lambda line: line.strip().split(",")[0]
-        with open(classes_path) as fin:
-            self.class2id = {get_name(line): idx for idx, line in enumerate(fin)}
+        self.class2id = {}
+        idx = 0
+        with open(classes_path) as f:
+            for line in f:
+                names = line.strip().split(",")
+                for name in names:
+                    self.class2id[name] = idx
+                    idx += 1
 
         self.samples = []
         for img, objs_data in zip(img_data, img_metadata):
@@ -60,7 +66,13 @@ class VisualGenomeDataset:
         self.resizer = transforms.Resize(size=(image_size, image_size))
 
     def _extract_object(self, image, obj_data):
-        label = self.class2id[obj_data["names"][0]]
+        label = None
+        for name in obj_data["names"]:
+            if name in self.class2id:
+                label = self.class2id[name]
+                break
+        assert label is not None
+
         y, x, h, w = obj_data["y"], obj_data["x"], obj_data["h"], obj_data["w"]
         obj = self.resizer(crop(image, y, x, h, w))
         return obj, label
@@ -237,7 +249,7 @@ def get_dataloader(
         num_workers=6,
         sampler=sampler,
         collate_fn=collate_fn,
-        shuffle=(not is_iterable_dataset and sampler is None),
+        shuffle=(not is_iterable_dataset and sampler is None and split != "test"),
         pin_memory=True,
         drop_last=True,
     )
