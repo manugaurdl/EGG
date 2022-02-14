@@ -1,17 +1,19 @@
 {
     "n_epoch": [100],
-    "max_objects": [3, 20],
-    "image_size": [64, 128],
-    "vision_mode": ["resnet34"],
+    "batch_size": [32],
+    "max_objects": [10],
+    "image_size": [128],
+    "vision_model": ["resnet34"],
     "random_seed": [111],
     "pretrain_vision": [true],
+    "random_k": [false, true],
     "gs_temperature": [0.5, 5.0],
     "output_dim": [256, 512],
     "vocab_size": [2000, 4000],
     "loss_temperature": [0.1],
-    "lr": [0.0005],
+    "single_symbol": [false],
     "attn_type": ["top"],
     "attn_topk": [1, 0],
-    "random_k": [false],
-    "recv_separate_embeddings": [true]
+    "recv_separate_embeddings": [true],
+    "lr": [0.0005]
 }

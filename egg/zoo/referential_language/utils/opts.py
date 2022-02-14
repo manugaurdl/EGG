@@ -19,7 +19,7 @@ def get_data_opts(parser):
     group.add_argument(
         "--metadata_dir",
         type=str,
-        default="/private/home/rdessi/visual_genome/last_version_metadata/filtered_splits",
+        default="/private/home/rdessi/visual_genome/filtered_splits",
         help="Path to folder with VG metada",
     )
     group.add_argument(
@@ -28,7 +28,7 @@ def get_data_opts(parser):
         default=10,
         help="Max number of bboxes to extract from an image",
     )
-    group.add_argument("--image_size", type=int, default=32, help="Image size")
+    group.add_argument("--image_size", type=int, default=64, help="Image size")
     group.add_argument("--random_distractors", default=False, action="store_true")
 
 
@@ -97,16 +97,22 @@ def get_game_arch_opts(parser):
         help="Use separate embedding matrix to transform tgt message and ctx message when attention is used",
     )
     group.add_argument(
-        "--sender_separate_messages",
+        "--sender_separate_mlps",
         default=False,
         action="store_true",
         help="Use separate embedding matrix to generate a tgt message and ctx message when attention is used",
     )
     group.add_argument(
-        "--random_ctx_position",
+        "--random_msg_position",
         default=False,
         action="store_true",
         help="Randomly shuffle target and context message when attention is used",
+    )
+    group.add_argument(
+        "--single_symbol",
+        default=False,
+        action="store_true",
+        help="Play the game sending only one symbol in the communication game",
     )
 
 
