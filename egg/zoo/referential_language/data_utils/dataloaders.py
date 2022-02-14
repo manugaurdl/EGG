@@ -52,30 +52,12 @@ class VisualGenomeDataset:
             assert img["image_id"] == objs_data["image_id"]
             img_path = path_images / "/".join(img["url"].split("/")[-2:])
 
-            objs = self._filter_objs(img, objs_data["objects"])
-            if len(objs) > 2:
-                self.samples.append((img_path, objs))
+            self.samples.append((img_path, objs_data["objects"]))
 
         self.id2class = {v: k for k, v in self.class2id.items()}
         self.transform = transform
         self.max_objects = max_objects
         self.resizer = transforms.Resize(size=(image_size, image_size))
-
-    def _filter_objs(self, img, objs):
-        filtered_objs = []
-        for obj in objs:
-            o_name = next(filter(lambda x: x in self.class2id, obj["names"]), None)
-            if o_name is None:
-                continue
-            obj["names"] = [o_name]
-
-            x, y, h, w = obj["x"], obj["y"], obj["h"], obj["w"]
-            img_area = img["width"] * img["height"]
-            obj_area = (x + w) * (y + h)
-            is_big = obj_area / img_area > 0.01 and w > 1 and h > 1
-            if is_big:
-                filtered_objs.append(obj)
-        return filtered_objs
 
     def _extract_object(self, image, obj_data):
         label = self.class2id[obj_data["names"][0]]
@@ -224,8 +206,8 @@ def collate(batch):
 
 
 def get_dataloader(
-    image_dir: str = "/datasets01/VisualGenome1.2/061517/",
-    metadata_dir: str = "/private/home/rdessi/visual_genome/train_val_test_split_clean",
+    image_dir: str = "/private/home/rdessi/visual_genome",
+    metadata_dir: str = "/private/home/rdessi/visual_genome/last_version_metadata/filtered_splits",
     batch_size: int = 32,
     split: str = "train",
     image_size: int = 32,
