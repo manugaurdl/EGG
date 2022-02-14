@@ -9,7 +9,7 @@
     "output_dim": [256, 512],
     "vocab_size": [2000, 4000],
     "loss_temperature": [0.1],
-    "lr": [0.0005, 0.0001],
+    "lr": [0.0005],
     "attn_type": ["dot"],
     "recv_separate_embeddings": [true]
 }
