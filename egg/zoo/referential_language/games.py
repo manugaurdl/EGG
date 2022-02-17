@@ -24,7 +24,6 @@ from egg.zoo.referential_language.archs import (
 
 
 def loss(
-    self,
     _sender_input,
     _message,
     _receiver_input,
@@ -70,7 +69,6 @@ def build_message_generator(opts):
         single_symbol=opts.single_symbol,
         temperature=opts.gs_temperature,
         separate_mlps=opts.sender_separate_mlps,
-        random_msg_position=opts.random_msg_position,
     )
 
 

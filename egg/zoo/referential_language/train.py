@@ -44,7 +44,6 @@ def main(params):
         "split": "train",
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
-        "random_distractors": opts.random_distractors,
         "seed": opts.random_seed,
     }
 

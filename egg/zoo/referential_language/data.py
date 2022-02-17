@@ -78,7 +78,7 @@ class VisualGenomeDataset(torch.utils.data.Dataset):
             image = self.transform(image)
         return image
 
-    def crop_and_resize_object(self, image, obj_item):
+    def _crop_and_resize_object(self, image, obj_item):
         y, x, h, w = obj_item["y"], obj_item["x"], obj_item["h"], obj_item["w"]
         return self.resizer(crop(image, y, x, h, w))
 
@@ -98,14 +98,14 @@ class VisualGenomeDataset(torch.utils.data.Dataset):
 
             label = next(filter(lambda n: n in self.class2id, obj_item["names"]), None)
             assert label is not None
-            labels.append(label)
+            labels.append(self.class2id[label])
 
         sender_input = torch.stack(sender_objs)
         recv_input = torch.stack(recv_objs)
         labels = torch.Tensor(labels)
 
-        sender_image = resize(sender_image, 224)
-        recv_image = resize(recv_image, 224)
+        sender_image = resize(sender_image, size=(128, 128))
+        recv_image = resize(recv_image, size=(128, 128))
 
         return sender_input, labels, recv_input, sender_image, recv_image
 
@@ -133,8 +133,8 @@ def collate(batch):
         "mask": mask,
         "game_labels": game_labels,
         "baseline": baseline,
-        "sender_images": sender_images,
-        "recv_images": recv_images,
+        "sender_images": torch.stack(sender_images),
+        "recv_images": torch.stack(recv_images),
     }
     return sender_input, labels, recv_input, aux_input
 

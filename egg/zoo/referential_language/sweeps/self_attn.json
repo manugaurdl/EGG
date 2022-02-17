@@ -7,7 +7,7 @@
     "random_seed": [111],
     "pretrain_vision": [true],
     "attn_type": ["self"],
-    "gs_temperature": [0.5, 5.0],
+    "gs_temperature": [0.5],
     "output_dim": [256, 512],
     "vocab_size": [2000, 4000],
     "loss_temperature": [0.1],
