@@ -224,7 +224,7 @@ class Interaction:
 
         synced_interacton = Interaction(**interaction_as_dict)
 
-        assert log.size * world_size == synced_interacton.size
+        # assert log.size * world_size == synced_interacton.size
         return synced_interacton
 
 

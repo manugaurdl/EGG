@@ -48,6 +48,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Don't start jobs, only show the list of commands",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Launch jobn with flag --debug set to True",
+    )
     parser.add_argument("--dry_run", action="store_true", help="Synonym for preview")
 
     parser.add_argument(
@@ -160,6 +165,9 @@ if __name__ == "__main__":
     combinations = [
         comb + [f"--checkpoint_dir={args.checkpoint_dir}"] for comb in combinations
     ]
+
+    if args.debug:
+        combinations = [comb + ["--debug"] for comb in combinations]
 
     if args.tasks > 1:
         # ports should be in between 2**10 and 2**16, but we'll start from some random

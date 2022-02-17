@@ -13,5 +13,5 @@
     "loss_temperature": [0.1],
     "lr": [0.0005],
     "num_heads": [1, 4],
-    "recv_separate_embeddings": [true]
+    "sender_separate_mlps": [true]
 }

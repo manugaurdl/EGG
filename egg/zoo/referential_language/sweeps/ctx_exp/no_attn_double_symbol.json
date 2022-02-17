@@ -11,7 +11,7 @@
     "output_dim": [256, 512],
     "vocab_size": [2000, 4000],
     "single_symbol": [false],
-    "sender_separate_mlps": [true],
+    "recv_separate_embeddings": [true],
     "random_msg_position": [false],
     "loss_temperature": [0.1],
     "lr": [0.0005]

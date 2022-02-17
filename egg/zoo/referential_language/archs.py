@@ -159,7 +159,6 @@ class MessageGeneratorMLP(nn.Module):
         single_symbol,
         temperature,
         separate_mlps,
-        random_msg_position,
     ):
         super(MessageGeneratorMLP, self).__init__()
         self.fc1 = nn.Linear(input_dim, output_dim, bias=False)
@@ -167,7 +166,6 @@ class MessageGeneratorMLP(nn.Module):
         if separate_mlps:
             self.fc2 = nn.Linear(input_dim, output_dim, bias=False)
         self.temperature = temperature
-        self.random_msg_position = random_msg_position
         self.single_symbol = single_symbol
 
     def forward(self, tgt_embedding, ctx_embedding, aux_input=None):
@@ -182,11 +180,6 @@ class MessageGeneratorMLP(nn.Module):
         logits2 = self.fc2(embedding2.contiguous().view(bsz * max_objs, -1))
         msg2 = gumbel_softmax_sample(logits2, self.temperature, self.training)
         msg = torch.stack([msg_tgt, msg2], dim=1)
-
-        if self.random_msg_position:
-            bool_idxs = torch.randint(2, (bsz * max_objs,)).bool()
-            random_idxs = torch.stack([bool_idxs, ~bool_idxs], dim=1).long()
-            msg = msg[torch.arange(bsz * max_objs).unsqueeze(1), random_idxs]
         return msg
 
 
@@ -262,6 +255,7 @@ class VisionWrapper(nn.Module):
         img_feats = self.visual_encoder(sender_input.view(bsz * max_objs, 3, h, w))
         sender_input = img_feats.view(bsz, max_objs, -1)
         recv_input = sender_input.clone()
+        # TODO: change recv_input here when we want to use aumgentation
 
         if not self.training:
             aux_input["recv_img_feats"] = recv_input.view(bsz, max_objs, -1)

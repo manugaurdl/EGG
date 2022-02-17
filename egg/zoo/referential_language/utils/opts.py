@@ -3,10 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import argparse
-
-import egg.core as core
-
 
 def get_data_opts(parser):
     group = parser.add_argument_group("data options")
@@ -103,12 +99,6 @@ def get_game_arch_opts(parser):
         help="Use separate embedding matrix to generate a tgt message and ctx message when attention is used",
     )
     group.add_argument(
-        "--random_msg_position",
-        default=False,
-        action="store_true",
-        help="Randomly shuffle target and context message when attention is used",
-    )
-    group.add_argument(
         "--single_symbol",
         default=False,
         action="store_true",
@@ -124,36 +114,3 @@ def get_gs_opts(parser):
         default=1.0,
         help="gs temperature used in the relaxation layer",
     )
-
-
-def get_common_opts(params):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        default=False,
-        help="Run the game with pdb enabled",
-    )
-
-    get_data_opts(parser)
-    get_gs_opts(parser)
-    get_vision_module_opts(parser)
-    get_game_arch_opts(parser)
-    get_attention_opts(parser)
-
-    opts = core.init(arg_parser=parser, params=params)
-    setup_for_distributed(opts.distributed_context.is_leader)
-    return opts
-
-
-def setup_for_distributed(is_master):
-    import builtins as __builtin__
-
-    builtin_print = __builtin__.print
-
-    def print(*args, **kwargs):
-        force = kwargs.pop("force", False)
-        if is_master or force:
-            builtin_print(*args, **kwargs)
-
-    __builtin__.print = print
