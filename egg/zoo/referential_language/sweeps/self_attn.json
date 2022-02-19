@@ -1,8 +1,8 @@
 {
     "n_epoch": [100],
     "batch_size": [32],
-    "max_objects": [10],
-    "image_size": [128],
+    "max_objects": [9],
+    "image_size": [64],
     "vision_model": ["resnet34"],
     "random_seed": [111],
     "pretrain_vision": [true],
@@ -13,5 +13,5 @@
     "loss_temperature": [0.1],
     "lr": [0.0005],
     "num_heads": [1, 4],
-    "sender_separate_mlps": [true]
+    "recv_separate_embeddings": [true]
 }

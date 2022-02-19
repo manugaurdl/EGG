@@ -11,9 +11,10 @@ from typing import Callable
 
 import torch
 import torch.distributed as dist
+from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import IterableDataset
 from torchvision import transforms
-from torchvision.transforms.functional import crop
+from torchvision.transforms.functional import crop  # , resize
 
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.referential_language.data import pil_loader
@@ -118,23 +119,71 @@ class TestVisualGenomeDatasetDifferentDistractors(IterableDataset):
             self._load_new_sample()
 
         obj_data = self.curr_obj_data[self.curr_obj_idx]
-        obj, label = self._extract_object(self.curr_img, obj_data)
+        obj = self._crop_and_resize_object(self.curr_img, obj_data)
         self.curr_obj_idx += 1
 
-        cropped_objs, labels = [obj], [label]
-        distractors = sample(self.samples, k=self.max_objects - 1)
-        for img_path, bboxes in distractors:
-            image = self._load_and_transform(img_path)
+        label = next(filter(lambda n: n in self.class2id, obj_data["names"]), None)
+        assert label is not None
+        label = self.class2id[label]
+        sender_objs, labels, recv_objs = [obj], [torch.Tensor([label, label])], [obj]
 
-            cropped_obj, label = self._extract_object(image, bboxes[0])
-            labels.append(label)
-            cropped_objs.append(cropped_obj)
+        img_path, dist_data = sample(self.samples, k=1)[0]
+        while len(dist_data) <= min(self.max_objects - 1, len(self.curr_obj_data)):
+            img_path, dist_data = sample(self.samples, k=1)[0]
 
-        game_input = torch.stack(cropped_objs)
-        labels = torch.Tensor(labels)
+        sender_img = self._load_and_transform(img_path)
+        max_n_dist = min(self.max_objects - 1, len(self.curr_obj_data))
+        for distractor_idx in range(max_n_dist):
+            if self.curr_obj_idx - 1 == distractor_idx:
+                continue
 
-        aux_input = self._get_aux_input_random_dist()
-        return game_input, label, torch.zeros(1), aux_input
+            sender_bbox = dist_data[distractor_idx]
+            sender_obj = self._crop_and_resize_object(sender_img, sender_bbox)
+
+            recv_bbox = self.curr_obj_data[distractor_idx]
+            recv_obj = self._crop_and_resize_object(self.curr_img, recv_bbox)
+
+            label1 = next(
+                filter(lambda n: n in self.class2id, sender_bbox["names"]),
+                None,
+            )
+            label2 = next(
+                filter(lambda n: n in self.class2id, recv_bbox["names"]),
+                None,
+            )
+            assert label1 is not None and label2 is not None
+            labels.append(torch.Tensor([self.class2id[label1], self.class2id[label2]]))
+
+            sender_objs.append(sender_obj)
+            recv_objs.append(recv_obj)
+
+        sender_input = torch.stack(sender_objs)
+        recv_input = torch.stack(recv_objs)
+        labels = torch.stack(labels)
+        return sender_input, labels, recv_input
+
+
+def collate_test(batch):
+    sender_input, labels, recv_input = [], [], []
+    for obj_sender, label, obj_recv in batch:
+        sender_input.append(obj_sender)
+        labels.append(label)
+        recv_input.append(obj_recv)
+
+    sender_input = pad_sequence(sender_input, batch_first=True, padding_value=-1)
+    recv_input = pad_sequence(recv_input, batch_first=True, padding_value=-1)
+    labels = pad_sequence(labels, batch_first=True, padding_value=-1)
+
+    mask = sender_input[:, :, 0, 0, 0] != -1
+    baseline = 1 / mask.int().sum(-1)
+    bsz = sender_input.shape[0]
+    game_labels = torch.arange(bsz)
+    aux_input = {
+        "mask": mask,
+        "game_labels": game_labels,
+        "baseline": baseline,
+    }
+    return sender_input, labels, recv_input, aux_input
 
 
 def log_stats(interaction, mode):
@@ -165,6 +214,58 @@ def run_test(trainer, opts, data_loader):
         output_path = Path(opts.checkpoint_dir) / "interactions"
         output_path.mkdir(exist_ok=True, parents=True)
         interaction_name = f"interaction_{opts.job_id}_{opts.task_id}"
+
+        interaction.aux_input["args"] = opts
+        torch.save(interaction, output_path / interaction_name)
+
+
+def loss(
+    _sender_input,
+    _message,
+    _receiver_input,
+    receiver_output,
+    _labels,
+    aux_input,
+):
+    max_objs = aux_input["mask"].shape[1]
+    labels = aux_input["game_labels"].view(-1)
+    acc = (receiver_output[0::max_objs].argmax(dim=-1) == labels).detach().float()
+    return torch.zeros(1), {"acc": acc, "baseline": aux_input["baseline"]}
+
+
+def run_swap_test(trainer, opts, data_kwargs):
+    logging_test_args = [False, True, True, True, True, True, False]
+    test_logging_strategy = LoggingStrategy(*logging_test_args)
+    if opts.distributed_context.is_distributed:
+        game = trainer.game.module.game
+    else:
+        game = trainer.game.game
+    game.test_logging_strategy = test_logging_strategy
+    game.loss = loss
+
+    ds = TestVisualGenomeDatasetDifferentDistractors(
+        image_dir=data_kwargs["image_dir"],
+        metadata_dir=data_kwargs["metadata_dir"],
+        split=data_kwargs["split"],
+        max_objects=data_kwargs["max_objects"],
+        image_size=data_kwargs["image_size"],
+    )
+    data_loader = torch.utils.data.DataLoader(
+        ds,
+        batch_size=data_kwargs["batch_size"],
+        num_workers=12,
+        collate_fn=collate_test,
+        pin_memory=True,
+        drop_last=True,
+    )
+
+    _, interaction = trainer.eval(data_loader)
+    log_stats(interaction, "DIFF_DIST_TEST SET")
+
+    if opts.distributed_context.is_leader and opts.checkpoint_dir:
+        output_path = Path(opts.checkpoint_dir) / "interactions"
+        output_path.mkdir(exist_ok=True, parents=True)
+        interaction_name = f"interaction_swap_test_{opts.job_id}_{opts.task_id}"
 
         interaction.aux_input["args"] = opts
         torch.save(interaction, output_path / interaction_name)

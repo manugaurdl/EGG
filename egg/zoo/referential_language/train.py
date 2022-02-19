@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 
 import egg.core as core
 from egg.zoo.referential_language.data import get_dataloader
-from egg.zoo.referential_language.eval import run_gaussian_test, run_test
+from egg.zoo.referential_language.eval import run_gaussian_test, run_test, run_swap_test
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils.callbacks import get_callbacks
 from egg.zoo.referential_language.utils.utils import get_common_opts, get_sha
@@ -71,6 +71,7 @@ def main(params):
     run_test(trainer, opts, data_loader)
 
     run_gaussian_test(trainer, opts, data_kwargs)
+    run_swap_test(trainer, opts, data_kwargs)
 
     print("| FINISHED JOB")
     end = time.time()
