@@ -7,11 +7,11 @@
     "random_seed": [111],
     "pretrain_vision": [true],
     "attn_type": ["none"],
-    "gs_temperature": [0.5, 5.0],
+    "gs_temperature": [0.5],
     "output_dim": [256, 512],
     "vocab_size": [2000, 4000],
     "single_symbol": [false],
-    "recv_separate_embeddings": [true],
+    "sender_separate_mlps": [true],
     "random_msg_position": [false],
     "loss_temperature": [0.1],
     "lr": [0.0005]
