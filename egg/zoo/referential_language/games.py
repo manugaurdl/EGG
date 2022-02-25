@@ -3,11 +3,11 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from egg.core.gs_wrappers import SymbolGameGS
-from egg.core.interaction import LoggingStrategy
 from egg.zoo.referential_language.archs import (
     Attention_topk,
     SingleSymbolReceiverWrapper,
@@ -32,16 +32,17 @@ def loss(
     aux_input,
 ):
     bsz, max_objs = aux_input["mask"].shape
-    labels = aux_input["game_labels"].view(-1)
+    labels = torch.arange(max_objs, device=receiver_output.device)
+    labels = labels.repeat(bsz, 1).view(-1)
     mask = aux_input["mask"].float().view(-1)
 
-    all_accs = (receiver_output.argmax(dim=-1) == labels).detach().float()
-    aux_input["all_accs"] = all_accs.view(bsz, max_objs, -1)
+    acc = (receiver_output.argmax(dim=-1) == labels).detach().float()
+    aux_input["guesses"] = acc.view(bsz, max_objs, -1)
 
-    loss = F.cross_entropy(receiver_output, labels, reduction="none")
-    loss *= mask  # multiply by 0 masked elements
-    acc = ((all_accs * mask).sum() / mask.sum()).unsqueeze(0)
-    return loss, {"acc": acc, "baseline": aux_input["baseline"]}
+    # multiply by 0-masked elements
+    loss = F.cross_entropy(receiver_output, labels, reduction="none") * mask
+    avg_acc = ((acc * mask).sum() / mask.sum()).unsqueeze(0)
+    return loss, {"acc": avg_acc, "baseline": 1 / aux_input["mask"].int().sum(-1)}
 
 
 def build_attention(opts):
@@ -95,13 +96,8 @@ def build_game(opts):
     sender = build_sender(opts)
     receiver = build_receiver(opts)
 
-    game = SymbolGameGS(
-        sender=sender,
-        receiver=receiver,
-        loss=loss,
-        train_logging_strategy=LoggingStrategy.minimal(),
-        test_logging_strategy=LoggingStrategy.minimal(),
-    )
+    game = SymbolGameGS(sender=sender, receiver=receiver, loss=loss)
     if opts.distributed_context.is_distributed:
         game = nn.SyncBatchNorm.convert_sync_batchnorm(game)
+
     return VisionWrapper(game, visual_encoder)

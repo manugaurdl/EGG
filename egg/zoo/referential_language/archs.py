@@ -4,12 +4,14 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+from typing import Optional
 
 import torch
 import torch.nn as nn
 import torchvision
 
 from egg.core.gs_wrappers import gumbel_softmax_sample
+from egg.core.interaction import LoggingStrategy
 
 
 def get_cnn(opts):
@@ -245,18 +247,51 @@ class VisionWrapper(nn.Module):
         self,
         game: nn.Module,
         visual_encoder: nn.Module,
+        train_logging_strategy: Optional[LoggingStrategy] = None,
+        test_logging_strategy: Optional[LoggingStrategy] = None,
     ):
         super(VisionWrapper, self).__init__()
         self.game = game
         self.visual_encoder = visual_encoder
 
+        self.train_logging_strategy = (
+            LoggingStrategy()
+            if train_logging_strategy is None
+            else train_logging_strategy
+        )
+        self.test_logging_strategy = (
+            LoggingStrategy()
+            if test_logging_strategy is None
+            else test_logging_strategy
+        )
+
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
         bsz, max_objs, _, h, w = sender_input.shape
-        img_feats = self.visual_encoder(sender_input.view(bsz * max_objs, 3, h, w))
-        sender_input = img_feats.view(bsz, max_objs, -1)
-        recv_input = sender_input.clone()
-        # TODO: change recv_input here when we want to use aumgentation
+
+        sender_feats = self.visual_encoder(sender_input.view(bsz * max_objs, 3, h, w))
+        sender_input = sender_feats.view(bsz, max_objs, -1)
+
+        recv_feats = self.visual_encoder(receiver_input.view(bsz * max_objs, 3, h, w))
+        recv_input = recv_feats.view(bsz, max_objs, -1)
 
         if not self.training:
+            aux_input["sender_img_feats"] = sender_input.view(bsz, max_objs, -1)
             aux_input["recv_img_feats"] = recv_input.view(bsz, max_objs, -1)
-        return self.game(sender_input, labels, recv_input, aux_input)
+
+        loss, interaction = self.game(sender_input, labels, recv_input, aux_input)
+
+        logging_strategy = (
+            self.train_logging_strategy if self.training else self.test_logging_strategy
+        )
+
+        interaction = logging_strategy.filtered_interaction(
+            sender_input=sender_input,
+            receiver_input=receiver_input,
+            labels=labels,
+            aux_input=interaction.aux_input,
+            receiver_output=interaction.receiver_output,
+            message=interaction.message,
+            message_length=interaction.message_length,
+            aux=interaction.aux,
+        )
+        return loss, interaction
