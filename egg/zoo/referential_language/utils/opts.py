@@ -3,6 +3,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import argparse
+
+import egg.core as core
+
 
 def get_data_opts(parser):
     group = parser.add_argument_group("data options")
@@ -26,6 +30,7 @@ def get_data_opts(parser):
     )
     group.add_argument("--image_size", type=int, default=64, help="Image size")
     group.add_argument("--random_distractors", default=False, action="store_true")
+    group.add_argument("--use_augmentation", default=False, action="store_true")
 
 
 def get_vision_module_opts(parser):
@@ -114,3 +119,17 @@ def get_gs_opts(parser):
         default=1.0,
         help="gs temperature used in the relaxation layer",
     )
+
+
+def get_common_opts(params):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--debug", action="store_true", default=False)
+
+    get_data_opts(parser)
+    get_gs_opts(parser)
+    get_vision_module_opts(parser)
+    get_game_arch_opts(parser)
+    get_attention_opts(parser)
+
+    opts = core.init(arg_parser=parser, params=params)
+    return opts
