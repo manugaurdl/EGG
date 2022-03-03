@@ -31,7 +31,7 @@ def test(game, data_kwargs):
     log_stats(gaussian_interaction, "GAUSSIAN SET")
 
     game = game.module if dist.is_initialized() else game
-    logging_test_args = [False, True, True, True, True, True, False]
+    logging_test_args = [False, False, True, True, True, True, False]
     game.test_logging_strategy = LoggingStrategy(*logging_test_args)
 
     data_kwargs.update({"split": "test"})

@@ -255,12 +255,12 @@ class VisionWrapper(nn.Module):
         self.visual_encoder = visual_encoder
 
         self.train_logging_strategy = (
-            LoggingStrategy()
+            LoggingStrategy().minimal()
             if train_logging_strategy is None
             else train_logging_strategy
         )
         self.test_logging_strategy = (
-            LoggingStrategy()
+            LoggingStrategy().minimal()
             if test_logging_strategy is None
             else test_logging_strategy
         )
