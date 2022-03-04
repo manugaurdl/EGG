@@ -3,37 +3,73 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import os
 import time
-import uuid
 
 import torch
+import torch.distributed as dist
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 import egg.core as core
-from egg.zoo.referential_language.data import get_dataloader
-from egg.zoo.referential_language.eval import run_gaussian_test, run_test, run_swap_test
+from egg.core.batch import Batch
+from egg.core.interaction import Interaction, LoggingStrategy
+from egg.zoo.referential_language.data import get_dataloader, get_gaussian_dataloader
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils.callbacks import get_callbacks
-from egg.zoo.referential_language.utils.utils import get_common_opts, get_sha
+from egg.zoo.referential_language.utils.opts import get_common_opts
+from egg.zoo.referential_language.utils.helpers import (
+    dump_interaction,
+    get_sha,
+    log_stats,
+    setup_for_distributed,
+    store_job_and_task_id,
+)
 
 
-def get_job_and_task_id(opts):
-    job_id = os.environ.get("SLURM_ARRAY_JOB_ID", None)
-    task_id = os.environ.get("SLURM_ARRAY_TASK_ID", None)
-    if job_id is None or task_id is None:
-        job_id = os.environ.get("SLURM_JOB_ID", uuid.uuid4())
-        task_id = os.environ.get("SLURM_PROCID", 0)
+def test(game, data_kwargs):
+    gaussian_dataloader = get_gaussian_dataloader(**data_kwargs)
+    gaussian_interaction = test_loop(game, gaussian_dataloader)
+    log_stats(gaussian_interaction, "GAUSSIAN SET")
 
-    opts.job_id = job_id
-    opts.task_id = task_id
-    return job_id, task_id
+    game = game.module if dist.is_initialized() else game
+    logging_test_args = [False, False, True, True, True, True, False]
+    game.test_logging_strategy = LoggingStrategy(*logging_test_args)
+
+    data_kwargs.update({"split": "test"})
+    test_dataloader = get_dataloader(**data_kwargs)
+    test_interaction = test_loop(game, test_dataloader)
+    log_stats(test_interaction, "TEST SET")
+
+    return test_interaction
+
+
+def test_loop(game, data, device=None):
+    game.eval()
+
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    interactions = []
+    with torch.no_grad():
+        for batch_id, batch in enumerate(data):
+            if not isinstance(batch, Batch):
+                batch = Batch(*batch)
+            batch = batch.to(device)
+
+            _, interaction = game(*batch)
+
+            if dist.is_initialized():
+                interaction = Interaction.gather_distributed_interactions(interaction)
+            interactions.append(interaction.to("cpu"))
+
+    return Interaction.from_iterable(interactions)
 
 
 def main(params):
     start = time.time()
     opts = get_common_opts(params=params)
-    job_id, task_id = get_job_and_task_id(opts)
+
+    store_job_and_task_id(opts)
+    setup_for_distributed(opts.distributed_context.is_leader)
     print(opts)
     print(get_sha())
 
@@ -44,10 +80,12 @@ def main(params):
         "split": "train",
         "image_size": opts.image_size,
         "max_objects": opts.max_objects,
+        "use_augmentation": opts.use_augmentation,
         "seed": opts.random_seed,
     }
 
     train_loader = get_dataloader(**data_kwargs)
+
     data_kwargs.update({"split": "val"})
     val_loader = get_dataloader(**data_kwargs)
 
@@ -66,16 +104,12 @@ def main(params):
     )
     trainer.train(n_epochs=opts.n_epochs)
 
-    data_kwargs.update({"split": "test"})
-    data_loader = get_dataloader(**data_kwargs)
-    run_test(trainer, opts, data_loader)
-
-    run_gaussian_test(trainer, opts, data_kwargs)
-    run_swap_test(trainer, opts, data_kwargs)
-
-    print("| FINISHED JOB")
+    test_interaction = test(trainer.game, data_kwargs)
+    if opts.distributed_context.is_leader:
+        dump_interaction(test_interaction, opts)
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")
+    print("| FINISHED JOB")
 
 
 if __name__ == "__main__":
