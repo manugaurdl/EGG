@@ -249,6 +249,10 @@ def intervention_context(game, interaction, stats):
         img_feats = interaction.aux_input["sender_img_feats"]
         return img_feats[new_batch_id, new_elem_id, new_obj_id]
 
+    _, _, l_msg = get_msg_lists(interaction.message, interaction.aux_input["mask"])
+    counter = Counter(l_msg)
+    existing_msg = 0
+
     game.sender = HardcodeAttnSender(game.sender.msg_generator)
     game.eval()
     with torch.no_grad():
@@ -265,17 +269,25 @@ def intervention_context(game, interaction, stats):
             _, n_interaction = game(sender_input, labels, recv_input, new_aux_input)
 
             # only consider context-conditioned message
-            n_message = torch.argmax(n_interaction.message, -1)[:, 1]
+            n_message = torch.argmax(n_interaction.message, -1)
             old_message = torch.argmax(interaction.message[batch_id], -1)[:, 1]
             msg_mask = mask.view(-1)
 
-            msg_changes += torch.sum((old_message != n_message).int() * msg_mask).item()
+            for idx, not_masked in enumerate(msg_mask):
+                if not_masked:
+                    if tuple(n_message[idx].tolist()) in counter:
+                        existing_msg += 1
+
+            msg_changes += torch.sum(
+                (old_message != n_message[:, 1]).int() * msg_mask
+            ).item()
             acc += n_interaction.aux["acc"].item()
 
     total_samples = interaction.aux_input["mask"].int().sum().item()
     stats["ratio_msg_changes"] = round(msg_changes / total_samples, 4)
     stats["avg_acc_distractors_changes"] = round(acc / total_samples, 4)
     stats["total_distractor_changes"] = total_samples
+    stats["existing_msg"] = round(existing_msg / total_samples, 4)
     return stats
 
 
@@ -315,17 +327,18 @@ def perform_analysis(opts, interaction, model):
         # compute initial accuracy values
         stats = compute_accuracy(msgs, recv_input, receiver, loss, mask)
 
+    """
     with timebudget("Message intervention analysis"):
         # analyze msg stats and run msg intervention analysis
         stats = compute_msg_stats(interaction, stats=stats)
         stats = intervention_msgs(interaction, receiver, loss, stats)
 
-    #
     with timebudget("Target intervention analysis"):
         # compute stats on attn_weights and run target intervention analysis
         stats = compute_attn_stats(interaction, stats)
         stats = intervention_target(comm_game, interaction, stats=stats)
 
+    """
     with timebudget("Attended distractor intervention analysis"):
         # run distractrors(context)-weighted intervention analysis
         stats = intervention_context(comm_game, interaction, stats=stats)
