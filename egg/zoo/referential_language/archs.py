@@ -275,8 +275,8 @@ class VisionWrapper(nn.Module):
         recv_input = recv_feats.view(bsz, max_objs, -1)
 
         if not self.training:
-            aux_input["sender_img_feats"] = sender_input.view(bsz, max_objs, -1)
-            aux_input["recv_img_feats"] = recv_input.view(bsz, max_objs, -1)
+            aux_input["sender_img_feats"] = sender_input
+            aux_input["recv_img_feats"] = recv_input
 
         loss, interaction = self.game(sender_input, labels, recv_input, aux_input)
 

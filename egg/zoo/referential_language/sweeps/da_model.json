@@ -14,5 +14,5 @@
     "sender_separate_mlps": [true],
     "loss_temperature": [0.1],
     "lr": [0.0005],
-    "num_heads": [4]
+    "num_heads": [1, 2, 4, 8]
 }
