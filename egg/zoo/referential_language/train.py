@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 import egg.core as core
 from egg.core.batch import Batch
 from egg.core.interaction import Interaction, LoggingStrategy
-from egg.zoo.referential_language.data import get_dataloader, get_gaussian_dataloader
+from egg.zoo.referential_language.dataloaders import get_dataloader
 from egg.zoo.referential_language.games import build_game
 from egg.zoo.referential_language.utils.callbacks import get_callbacks
 from egg.zoo.referential_language.utils.opts import get_common_opts
@@ -26,7 +26,9 @@ from egg.zoo.referential_language.utils.helpers import (
 
 
 def test(game, data_kwargs):
-    gaussian_dataloader = get_gaussian_dataloader(**data_kwargs)
+    ds_name = data_kwargs["dataset_name"]
+    data_kwargs.update({"dataset_name": "gaussian"})
+    gaussian_dataloader = get_dataloader(**data_kwargs)
     gaussian_interaction = test_loop(game, gaussian_dataloader)
     log_stats(gaussian_interaction, "GAUSSIAN SET")
 
@@ -34,7 +36,7 @@ def test(game, data_kwargs):
     logging_test_args = [False, False, True, True, True, True, False]
     game.test_logging_strategy = LoggingStrategy(*logging_test_args)
 
-    data_kwargs.update({"split": "test"})
+    data_kwargs.update({"split": "test", "dataset_name": ds_name})
     test_dataloader = get_dataloader(**data_kwargs)
     test_interaction = test_loop(game, test_dataloader)
     log_stats(test_interaction, "TEST SET")
@@ -74,6 +76,7 @@ def main(params):
     print(get_sha())
 
     data_kwargs = {
+        "dataset_name": opts.dataset_name,
         "image_dir": opts.image_dir,
         "metadata_dir": opts.metadata_dir,
         "batch_size": opts.batch_size,
