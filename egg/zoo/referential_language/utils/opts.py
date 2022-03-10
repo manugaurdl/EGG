@@ -11,16 +11,23 @@ import egg.core as core
 def get_data_opts(parser):
     group = parser.add_argument_group("data options")
     group.add_argument(
+        "--dataset_name",
+        type=str,
+        default="flickr",
+        choices=["flickr", "vg"],
+        help="Dataset to use for game playing",
+    )
+    group.add_argument(
         "--image_dir",
         type=str,
-        default="/private/home/rdessi/visual_genome",
-        help="Path to folder with VG images",
+        default=None,
+        help="Path to folder with images",
     )
     group.add_argument(
         "--metadata_dir",
         type=str,
-        default="/private/home/rdessi/visual_genome/filtered_splits",
-        help="Path to folder with VG metada",
+        default=None,
+        help="Path to folder with images metada",
     )
     group.add_argument(
         "--max_objects",

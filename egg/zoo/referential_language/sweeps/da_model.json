@@ -1,5 +1,9 @@
 {
     "n_epoch": [100],
+    "dataset_name": ["flickr"],
+    "image_dir": ["/private/home/rdessi/flickr30k/Images"],
+    "metadata_dir": ["/private/home/rdessi/flickr30k/Annotations"],
+    "debug": [true],
     "batch_size": [32],
     "max_objects": [9],
     "image_size": [64],
@@ -14,5 +18,5 @@
     "sender_separate_mlps": [true],
     "loss_temperature": [0.1],
     "lr": [0.0005],
-    "num_heads": [1, 2, 4, 8]
+    "num_heads": [1]
 }
