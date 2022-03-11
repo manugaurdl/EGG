@@ -3,7 +3,6 @@
     "dataset_name": ["flickr"],
     "image_dir": ["/private/home/rdessi/flickr30k/Images"],
     "metadata_dir": ["/private/home/rdessi/flickr30k/Annotations"],
-    "debug": [true],
     "batch_size": [32],
     "max_objects": [9],
     "image_size": [64],
