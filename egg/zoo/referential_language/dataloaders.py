@@ -176,47 +176,41 @@ class VisualObjectsDataset(VisionDataset):
 class Flickr30kDataset(VisualObjectsDataset):
     def __init__(
         self,
-        image_dir: str = "/private/home/rdessi/flickr30k/Images",
-        metadata_dir: str = "/private/home/rdessi/flickr30k/Annotations",
+        image_dir: str = "/private/home/rdessi/flickr30k/",
+        metadata_dir: str = "/private/home/rdessi/flickr30k/",
         split: str = "train",
         transform: Optional[Callable] = None,
         max_objects: int = 8,
         image_size: int = 64,
     ):
         super(Flickr30kDataset, self).__init__(image_dir=image_dir, transform=transform)
-
-        image_dir = Path(image_dir)
-        metadata_dir = os.path.expanduser(metadata_dir)
-        ann_paths = glob.iglob(f"{metadata_dir}/*xml")
-
-        split_file = image_dir.parents[0] / f"{split}.txt"
-        with open(split_file) as f:
+        metadata_dir = Path(metadata_dir)
+        with open(metadata_dir / f"{split}.txt") as f:
             split_images = set(f.read().splitlines())
 
+        ann_paths = glob.iglob(f"{os.path.expanduser(metadata_dir)}/Annotations/*xml")
         self.samples = []
-        done = 0
         for ann_path in ann_paths:
             image_id = Path(ann_path).stem
-
             if image_id not in split_images:
                 continue
 
             anns = get_annotations(ann_path)
-            img_path = image_dir / f"{image_id}.jpg"
 
-            boxes_list = []
+            boxes = []
             for label, objs in anns["boxes"].items():
-                boxes_list.extend(product([label], objs))
-
-            if len(boxes_list) < 3:
+                boxes.extend(product([label], objs))
+            if len(boxes) < 3:
                 continue
+            random.shuffle(boxes)
+            anns["boxes"] = boxes
 
-            random.shuffle(boxes_list)
-            anns["boxes"] = boxes_list
-            self.samples.append((img_path, anns))
+            img_path = Path(image_dir) / "Images" / f"{image_id}.jpg"
+            sents = get_sentence_data(metadata_dir / "Sentences" / f"{image_id}.txt")
 
-            done += 1
-            if done >= len(split_images):
+            self.samples.append((img_path, anns, sents))
+
+            if len(self.samples) >= len(split_images):
                 break
 
         self.transform = transform
@@ -224,7 +218,7 @@ class Flickr30kDataset(VisualObjectsDataset):
         self.resizer = transforms.Resize(size=(image_size, image_size))
 
     def __getitem__(self, index):
-        img_path, anns = self.samples[index]
+        img_path, anns, sents = self.samples[index]
 
         sender_image = self._load_and_transform(img_path)
         recv_image = self._load_and_transform(img_path)
@@ -251,13 +245,8 @@ class Flickr30kDataset(VisualObjectsDataset):
             "image_ids": torch.Tensor([int(img_path.stem)]),
             "image_sizes": torch.Tensor([*sender_image.shape]).int(),
             "bboxes": torch.stack(bboxes),
+            "sents": sents,
         }
-
-        """
-        sentence_path = f"/private/home/rdessi/flickr30k/Sentences/{img_path.stem}.txt"
-        d = get_sentence_data(sentence_path)
-        sentences = [x["sentence"] for x in d]
-        """
 
         return sender_input, labels, recv_input, aux
 
@@ -319,11 +308,10 @@ class VisualGenomeDataset(VisualObjectsDataset):
         recv_image = self._load_and_transform(img_path)
 
         sender_objs, labels, recv_objs = [], [], []
-        bboxes, bboxes_ids = [], []
+        bboxes = []
         for obj_item in obj_list[: min(self.max_objects, len(obj_list))]:
             x, y, w, h = obj_item["x"], obj_item["y"], obj_item["w"], obj_item["h"]
             bboxes.append(torch.IntTensor([x, y, w, h]))
-            bboxes_ids.append(torch.Tensor([obj_item["object_id"]]))
 
             sender_obj = self.resizer(crop(sender_image, y, x, h, w))
             recv_obj = self.resizer(crop(recv_image, y, x, h, w))
@@ -344,7 +332,6 @@ class VisualGenomeDataset(VisualObjectsDataset):
             "image_ids": torch.Tensor([img_id]),
             "image_sizes": torch.Tensor([*sender_image.shape]).int(),
             "bboxes": torch.stack(bboxes),
-            "bboxes_ids": torch.stack(bboxes_ids),
         }
 
         return sender_input, labels, recv_input, aux

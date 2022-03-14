@@ -11,6 +11,9 @@ import torch
 from torchvision import transforms
 from torch.nn.utils.rnn import pad_sequence
 
+from egg.core.util import move_to
+from egg.core.batch import Batch
+
 
 def collate(batch):
     sender_input, labels, recv_input = [], [], []
@@ -70,15 +73,13 @@ class ImageTransformation:
         return self.transform(x)
 
 
-"""
 class MyBatch(Batch):
     def to(self, device: torch.device):
         self.sender_input = move_to(self.sender_input, device)
         self.labels = move_to(self.labels, device)
         self.receiver_input = move_to(self.receiver_input, device)
         # all fields of aux_input except mask are not needed during trying,
-        # we store them on cpu to save gpu space
+        # we store them on cpu to save gpu mem
         self.aux_input = move_to(self.aux_input, torch.device("cpu"))
         self.aux_input["mask"] = move_to(self.aux_input["mask"], device)
         return self
-"""
