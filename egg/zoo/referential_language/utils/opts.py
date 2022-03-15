@@ -46,7 +46,7 @@ def get_vision_module_opts(parser):
         "--vision_model",
         type=str,
         default="resnet34",
-        choices=["resnet18", "resnet34", "resnet50", "resnet101"],
+        choices=["resnet18", "resnet34", "resnet50", "resnet101", "resnet152"],
         help="Model name for the encoder",
     )
     group.add_argument(
@@ -62,7 +62,7 @@ def get_attention_opts(parser):
     group.add_argument(
         "--attn_type",
         default="none",
-        choices=["none", "dot", "self", "top"],
+        choices=["none", "dot", "self", "top", "target"],
     )
     group.add_argument(
         "--attn_topk",
@@ -86,6 +86,13 @@ def get_attention_opts(parser):
 
 def get_game_arch_opts(parser):
     group = parser.add_argument_group("game architecture options")
+    group.add_argument("--message_model", default="mlp", choices=["mlp", "rnn"])
+    group.add_argument(
+        "--single_symbol",
+        default=False,
+        action="store_true",
+        help="Play the game sending only one symbol in the communication game",
+    )
     group.add_argument(
         "--loss_temperature",
         type=float,
@@ -111,11 +118,34 @@ def get_game_arch_opts(parser):
         help="Use separate embedding matrix to generate a tgt message and ctx message when attention is used",
     )
     group.add_argument(
-        "--single_symbol",
-        default=False,
-        action="store_true",
-        help="Play the game sending only one symbol in the communication game",
+        "--sender_embed_dim",
+        type=int,
+        default=256,
+        help="Output dim of rnn embeddings when using rnn to produce and read messages",
     )
+    group.add_argument(
+        "--sender_cell",
+        default="rnn",
+        choices=["rnn", "lstm", "gru"],
+    )
+    group.add_argument(
+        "--recv_embed_dim",
+        type=int,
+        default=256,
+        help="Output dim of rnn embeddings when using rnn to produce and read messages",
+    )
+    group.add_argument(
+        "--recv_cell_hidden_size",
+        type=int,
+        default=256,
+    )
+    group.add_argument(
+        "--recv_cell",
+        default="rnn",
+        choices=["rnn", "lstm", "gru"],
+    )
+    parser.add_argument("--cat_ctx", action="store_true", default=False)
+    parser.add_argument("--shuffle_cat", action="store_true", default=False)
 
 
 def get_gs_opts(parser):
