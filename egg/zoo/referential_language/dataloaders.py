@@ -245,7 +245,7 @@ class Flickr30kDataset(VisualObjectsDataset):
             "image_ids": torch.Tensor([int(img_path.stem)]),
             "image_sizes": torch.Tensor([*sender_image.shape]).int(),
             "bboxes": torch.stack(bboxes),
-            "sents": sents,
+            # "sents": sents,
         }
 
         return sender_input, labels, recv_input, aux
