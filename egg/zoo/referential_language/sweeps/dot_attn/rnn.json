@@ -11,7 +11,7 @@
     "pretrain_vision": [true],
     "gs_temperature": [0.5, 1.0],
     "message_model": ["rnn"],
-    "use_augmentations": [true, false],
+    "use_augmentation": [true, false],
     "output_dim": [64, 128],
     "vocab_size": [500, 1000, 2500],
     "sender_cell": ["gru"],

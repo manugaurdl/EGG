@@ -20,9 +20,14 @@
 #        --iou_threshold 0.3 \
 #        --min_area 250
 
-import json
-import random
 import argparse
+import glob
+import json
+import os
+import random
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from itertools import product
 
 arg_parser = argparse.ArgumentParser()
 
@@ -30,9 +35,8 @@ arg_parser.add_argument("--iou_threshold", type=float, default=0.1)
 arg_parser.add_argument("--min_area", type=int, default=100)
 arg_parser.add_argument("--image_area_proportion", type=float, default=0.25)
 arg_parser.add_argument("--min_object_count", type=int, default=3)
-arg_parser.add_argument("--image_file", type=str, default=None)
-arg_parser.add_argument("--objects_file", type=str, default=None)
-arg_parser.add_argument("--class_file", type=str, default=None)
+arg_parser.add_argument("--objects_dir", type=str, default=None)
+arg_parser.add_argument("--split_file", type=str, default=None)
 arg_parser.add_argument("--output_prefix", type=str, default=None)
 arg_parser.add_argument("--random_seed", type=int, default=666)
 
@@ -40,25 +44,57 @@ args = arg_parser.parse_args()
 
 random.seed(args.random_seed)
 
-# file with image metadata
-with open(args.image_file) as f:
-    image_data = json.load(f)
 
-# file with object lists for each image
-with open(args.objects_file) as f:
-    object_data = json.load(f)
+def get_annotations(fn):
+    """
+    Parses the xml files in the Flickr30K Entities dataset
 
-# label file
-class_set = set()
-with open(args.class_file) as f:
-    for line in f:
-        F = line.strip().split(",")
-        class_set.update(set(F))
+    input:
+      fn - full file path to the annotations file to parse
 
-object_dict = {}
-for object_item in object_data:
-    object_dict[object_item["image_id"]] = object_item
+    output:
+      dictionary with the following fields:
+          scene - list of identifiers which were annotated as
+                  pertaining to the whole scene
+          nobox - list of identifiers which were annotated as
+                  not being visible in the image
+          boxes - a dictionary where the fields are identifiers
+                  and the values are its list of boxes in the
+                  [xmin ymin xmax ymax] format
+    """
+    tree = ET.parse(fn)
+    root = tree.getroot()
+    size_container = root.findall("size")[0]
+    anno_info = {"boxes": {}, "scene": [], "nobox": []}
+    for size_element in size_container:
+        anno_info[size_element.tag] = int(size_element.text)
 
+    for object_container in root.findall("object"):
+        for names in object_container.findall("name"):
+            box_id = names.text
+            box_container = object_container.findall("bndbox")
+            if len(box_container) > 0:
+                if box_id not in anno_info["boxes"]:
+                    anno_info["boxes"][box_id] = []
+                xmin = int(box_container[0].findall("xmin")[0].text) - 1
+                ymin = int(box_container[0].findall("ymin")[0].text) - 1
+                xmax = int(box_container[0].findall("xmax")[0].text) - 1
+                ymax = int(box_container[0].findall("ymax")[0].text) - 1
+                anno_info["boxes"][box_id].append([xmin, ymin, xmax, ymax])
+            else:
+                nobndbox = int(object_container.findall("nobndbox")[0].text)
+                if nobndbox > 0:
+                    anno_info["nobox"].append(box_id)
+
+                scene = int(object_container.findall("scene")[0].text)
+                if scene > 0:
+                    anno_info["scene"].append(box_id)
+
+    return anno_info
+
+
+metadata_dir = Path(args.objects_dir)
+split_file = Path(args.split_file)
 
 original_dataset_image_count = 0
 original_dataset_total_object_count = 0
@@ -67,17 +103,29 @@ filtered_datset_total_object_count = 0
 filtered_image_list = []
 filtered_object_list = []
 
+ann_paths = glob.iglob(f"{os.path.expanduser(metadata_dir)}/*xml")
+for ann_path in ann_paths:
+    image_id = Path(ann_path).stem
+
+    anns = get_annotations(ann_path)
+
+    boxes = []
+    for label, objs in anns["boxes"].items():
+        boxes.extend(product([label], objs))
+    if len(boxes) < 3:
+        continue
+    random.shuffle(boxes)
+    anns["boxes"] = boxes
+
+
 obj_area = 0.0
 total_objs = 0
 for image_item in image_data:
-    image_id = image_item["image_id"]
-    object_item = object_dict[image_id]
 
     # area of full image
-    img_area = image_item["width"] * image_item["height"]
+    img_area = anns["width"] * anns["height"]
 
-    objects = object_item["objects"]
-    random.shuffle(objects)
+    objects = boxes
 
     blacklist = set()
     for i in range(len(objects)):
@@ -89,18 +137,11 @@ for image_item in image_data:
             x12 = x11 + object1["w"]
             y12 = y11 + object1["h"]
             # general check of object sanity
-            # is any of the object names in set of accepted labels?
             # are width and length more than one pixel, and overall are above min_area?
             # is the object's area less than image_area_proportion of the whole image?
             # is the object spilling over the image?
-            acceptable_label_found = False
-            for name in object1["names"]:
-                if name in class_set:
-                    acceptable_label_found = True
-                    break
             if (
-                (not (acceptable_label_found))
-                or (object1["w"] == 1)
+                (object1["w"] == 1)
                 or (object1["h"] == 1)
                 or (area1 < args.min_area)
                 or ((area1 / img_area) > args.image_area_proportion)
