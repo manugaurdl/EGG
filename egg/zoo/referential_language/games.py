@@ -12,12 +12,15 @@ from egg.zoo.referential_language.archs import (
     Attention_topk,
     SingleSymbolReceiverWrapper,
     DoubleSymbolReceiverWrapper,
+    MessageGeneratorRnn,
     MessageGeneratorMLP,
     NoAttention,
     Receiver,
+    RnnReceiver,
     ScaledDotProductAttention,
     Sender,
     SelfAttention,
+    TargetAttention,
     VisionWrapper,
     get_cnn,
 )
@@ -47,30 +50,51 @@ def loss(
 
 def build_attention(opts):
     if opts.attn_type == "top":
-        attn_type = Attention_topk(
+        attn_fn = Attention_topk(
             img_feats_dim=opts.img_feats_dim, k=opts.attn_topk, random=opts.random_k
         )
     elif opts.attn_type == "dot":
-        attn_type = ScaledDotProductAttention(img_feats_dim=opts.img_feats_dim)
+        attn_fn = ScaledDotProductAttention(img_feats_dim=opts.img_feats_dim)
     elif opts.attn_type == "self":
-        attn_type = SelfAttention(
-            embed_dim=opts.img_feats_dim, num_heads=opts.num_heads
-        )
+        attn_fn = SelfAttention(embed_dim=opts.img_feats_dim, num_heads=opts.num_heads)
     elif opts.attn_type == "none":
-        attn_type = NoAttention()
+        if not opts.single_symbol:
+            raise RuntimeError(
+                "Cannot have double symbol w/o attention, use single symbol or TargetAttention instead"
+            )
+        attn_fn = NoAttention()
+    elif opts.attn_type == "target":
+        attn_fn = TargetAttention()
     else:
         raise NotImplementedError
-    return attn_type
+    return attn_fn
 
 
 def build_message_generator(opts):
-    return MessageGeneratorMLP(
-        input_dim=opts.img_feats_dim,
-        output_dim=opts.vocab_size,
-        single_symbol=opts.single_symbol,
-        temperature=opts.gs_temperature,
-        separate_mlps=opts.sender_separate_mlps,
-    )
+    if opts.message_model == "mlp":
+        input_dim = opts.img_feats_dim * 2 if opts.cat_ctx else opts.img_feats_dim
+        return MessageGeneratorMLP(
+            input_dim=input_dim,
+            output_dim=opts.vocab_size,
+            single_symbol=opts.single_symbol,
+            temperature=opts.gs_temperature,
+            cat_ctx=opts.cat_ctx,
+            shuffle_cat=opts.shuffle_cat,
+            separate_mlps=opts.sender_separate_mlps,
+        )
+    elif opts.message_model == "rnn":
+        hidden_size = opts.img_feats_dim * 2 if opts.cat_ctx else opts.img_feats_dim
+        return MessageGeneratorRnn(
+            opts.vocab_size,
+            opts.sender_embed_dim,
+            hidden_size,
+            opts.cat_ctx,
+            opts.shuffle_cat,
+            opts.gs_temperature,
+            opts.sender_cell,
+        )
+    else:
+        raise RuntimeError(f"Cannot recognize model {opts.message_model}")
 
 
 def build_sender(opts):
@@ -85,10 +109,27 @@ def build_receiver(opts):
         output_dim=opts.output_dim,
         temperature=opts.loss_temperature,
     )
-    args = [receiver, opts.vocab_size, opts.output_dim, opts.recv_separate_embeddings]
-    if opts.single_symbol:
-        return SingleSymbolReceiverWrapper(*args)
-    return DoubleSymbolReceiverWrapper(*args)
+    if opts.message_model == "mlp":
+        args = [
+            receiver,
+            opts.vocab_size,
+            opts.output_dim,
+            opts.recv_separate_embeddings,
+        ]
+        if opts.single_symbol:
+            return SingleSymbolReceiverWrapper(*args)
+        return DoubleSymbolReceiverWrapper(*args)
+    elif opts.message_model == "rnn":
+        return RnnReceiver(
+            receiver,
+            opts.vocab_size,
+            opts.recv_embed_dim,
+            opts.recv_cell_hidden_size,
+            opts.output_dim,
+            opts.recv_cell,
+        )
+    else:
+        raise RuntimeError(f"Cannot recognize model {opts.message_model}")
 
 
 def build_game(opts):

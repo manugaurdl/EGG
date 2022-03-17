@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+import random
 from typing import Optional
 
 import torch
@@ -20,6 +21,7 @@ def get_cnn(opts):
         "resnet34": torchvision.models.resnet34(pretrained=opts.pretrain_vision),
         "resnet50": torchvision.models.resnet50(pretrained=opts.pretrain_vision),
         "resnet101": torchvision.models.resnet101(pretrained=opts.pretrain_vision),
+        "resnet152": torchvision.models.resnet152(pretrained=opts.pretrain_vision),
     }
     if opts.vision_model not in modules:
         raise KeyError(f"{opts.vision_model} is not currently supported.")
@@ -41,6 +43,12 @@ class NoAttention(nn.Module):
     def forward(self, x, aux_input=None):
         aux_input["attn_weights"] = None
         return None
+
+
+class TargetAttention(nn.Module):
+    def forward(self, x, aux_input=None):
+        aux_input["attn_weights"] = None
+        return x
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -153,36 +161,177 @@ class Sender(nn.Module):
         return self.msg_generator(x, attn, aux_input)
 
 
+class MessageGeneratorRnn(nn.Module):
+    def __init__(
+        self,
+        vocab_size,
+        embed_dim,
+        hidden_size,
+        cat_ctx,
+        shuffle_cat,
+        temperature,
+        cell="rnn",
+    ):
+        super(MessageGeneratorRnn, self).__init__()
+
+        self.hidden_to_output = nn.Linear(hidden_size, vocab_size)
+        self.sos_embedding = nn.Parameter(torch.zeros(embed_dim))
+        self.embed_dim = embed_dim
+        self.vocab_size = vocab_size
+        self.cat_ctx = cat_ctx
+        if self.cat_ctx:
+            self.embedding = nn.Linear(vocab_size, embed_dim)
+        else:
+            self.embedding = nn.Linear(hidden_size, embed_dim)
+        self.shuffle_cat = shuffle_cat
+
+        self.temperature = temperature
+
+        self.cell = None
+
+        cell = cell.lower()
+
+        if cell == "rnn":
+            self.cell = nn.RNNCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "gru":
+            self.cell = nn.GRUCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "lstm":
+            self.cell = nn.LSTMCell(input_size=embed_dim, hidden_size=hidden_size)
+        else:
+            raise ValueError(f"Unknown RNN Cell: {cell}")
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.normal_(self.sos_embedding, 0.0, 0.01)
+
+    def forward(self, target, ctx, aux_input=None):
+        bsz, max_objs, _ = target.shape
+
+        if self.cat_ctx:
+            inp_list = [target, ctx]
+            if self.shuffle_cat:
+                random.shuffle(inp_list)
+            prev_hidden = torch.cat(inp_list, dim=-1).view(bsz * max_objs, -1)
+        else:
+            prev_hidden = target.view(bsz * max_objs, -1)
+            ctx = ctx.contiguous().view(bsz * max_objs, -1)
+
+        prev_c = torch.zeros_like(prev_hidden)  # only for LSTM
+
+        e_t = torch.stack([self.sos_embedding] * prev_hidden.size(0))
+        sequence = []
+
+        for step in range(2):
+            if isinstance(self.cell, nn.LSTMCell):
+                h_t, prev_c = self.cell(e_t, (prev_hidden, prev_c))
+            else:
+                h_t = self.cell(e_t, prev_hidden)
+
+            step_logits = self.hidden_to_output(h_t)
+            x = gumbel_softmax_sample(step_logits, self.temperature, self.training)
+
+            prev_hidden = h_t
+            e_t = self.embedding(x) if self.cat_ctx else self.embedding(ctx)
+            sequence.append(x)
+
+        return torch.stack(sequence).permute(1, 0, 2)
+
+
+class RnnReceiver(nn.Module):
+    def __init__(
+        self, agent, vocab_size, embed_dim, hidden_size, output_dim, cell="rnn"
+    ):
+        super(RnnReceiver, self).__init__()
+        self.agent = agent
+
+        self.cell = None
+        cell = cell.lower()
+        if cell == "rnn":
+            self.cell = nn.RNNCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "gru":
+            self.cell = nn.GRUCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "lstm":
+            self.cell = nn.LSTMCell(input_size=embed_dim, hidden_size=hidden_size)
+        else:
+            raise ValueError(f"Unknown RNN Cell: {cell}")
+
+        self.embedding = nn.Linear(vocab_size, embed_dim)
+        self.fc_out = nn.Linear(hidden_size, output_dim)
+
+    def forward(self, message, input=None, aux_input=None):
+        emb = self.embedding(message)
+
+        prev_hidden = None
+        prev_c = None
+
+        # to get an access to the hidden states, we have to unroll the cell ourselves
+        for step in range(message.size(1)):
+            e_t = emb[:, step, ...]
+            if isinstance(self.cell, nn.LSTMCell):
+                h_t, prev_c = (
+                    self.cell(e_t, (prev_hidden, prev_c))
+                    if prev_hidden is not None
+                    else self.cell(e_t)
+                )
+            else:
+                h_t = self.cell(e_t, prev_hidden)
+
+            prev_hidden = h_t
+
+        out = self.fc_out(h_t)
+        return self.agent(out, input, aux_input)
+
+
 class MessageGeneratorMLP(nn.Module):
     def __init__(
         self,
         input_dim,
         output_dim,
-        single_symbol,
         temperature,
+        single_symbol,
+        cat_ctx,
+        shuffle_cat,
         separate_mlps,
     ):
         super(MessageGeneratorMLP, self).__init__()
-        self.fc1 = nn.Linear(input_dim, output_dim, bias=False)
+        self.fc1 = nn.Sequential(
+            nn.Linear(input_dim, output_dim),
+            nn.LeakyReLU(),
+            nn.Linear(output_dim, output_dim),
+        )
+
         self.fc2 = self.fc1
         if separate_mlps:
-            self.fc2 = nn.Linear(input_dim, output_dim, bias=False)
-        self.temperature = temperature
+            self.fc2 = nn.Sequential(
+                nn.Linear(input_dim, output_dim),
+                nn.LeakyReLU(),
+                nn.Linear(output_dim, output_dim),
+            )
+
         self.single_symbol = single_symbol
+        self.cat_ctx = cat_ctx
+        self.shuffle_cat = shuffle_cat
+        self.temperature = temperature
 
     def forward(self, tgt_embedding, ctx_embedding, aux_input=None):
         bsz, max_objs, _ = tgt_embedding.shape
+
+        if self.cat_ctx:
+            inp_list = [tgt_embedding, ctx_embedding]
+            if self.shuffle_cat:
+                random.shuffle(inp_list)
+            tgt_embedding = torch.cat(inp_list, dim=-1)
+            ctx_embedding = tgt_embedding
 
         logits_tgt = self.fc1(tgt_embedding.view(bsz * max_objs, -1))
         msg_tgt = gumbel_softmax_sample(logits_tgt, self.temperature, self.training)
         if self.single_symbol:
             return msg_tgt
 
-        embedding2 = ctx_embedding if ctx_embedding is not None else tgt_embedding
-        logits2 = self.fc2(embedding2.contiguous().view(bsz * max_objs, -1))
-        msg2 = gumbel_softmax_sample(logits2, self.temperature, self.training)
-        msg = torch.stack([msg_tgt, msg2], dim=1)
-        return msg
+        logits_ctx = self.fc2(ctx_embedding.contiguous().view(bsz * max_objs, -1))
+        msg_ctx = gumbel_softmax_sample(logits_ctx, self.temperature, self.training)
+        return torch.stack([msg_tgt, msg_ctx], dim=1)
 
 
 class DoubleSymbolReceiverWrapper(nn.Module):
@@ -190,10 +339,19 @@ class DoubleSymbolReceiverWrapper(nn.Module):
         super(DoubleSymbolReceiverWrapper, self).__init__()
         self.agent = agent
 
-        self.embedding1 = nn.Linear(vocab_size, agent_input_size)
+        self.embedding1 = nn.Sequential(
+            nn.Linear(vocab_size, agent_input_size),
+            torch.nn.LeakyReLU(),
+            nn.Linear(agent_input_size, agent_input_size),
+        )
+
         self.embedding2 = self.embedding1
         if separate_embeddings:
-            self.embedding2 = nn.Linear(vocab_size, agent_input_size)
+            self.embedding2 = nn.Sequental(
+                nn.Linear(vocab_size, agent_input_size),
+                torch.nn.LeakyReLU(),
+                nn.Linear(agent_input_size, agent_input_size),
+            )
 
         self.fc_out = nn.Linear(agent_input_size * 2, agent_input_size, bias=False)
 
@@ -225,9 +383,9 @@ class Receiver(nn.Module):
     ):
         super(Receiver, self).__init__()
         self.fc_img = nn.Sequential(
-            nn.Linear(input_dim, input_dim, bias=False),
-            nn.Tanh(),
-            nn.Linear(input_dim, output_dim, bias=False),
+            nn.Linear(input_dim, output_dim),
+            nn.LeakyReLU(),
+            nn.Linear(output_dim, output_dim),
         )
         self.temperature = temperature
 
