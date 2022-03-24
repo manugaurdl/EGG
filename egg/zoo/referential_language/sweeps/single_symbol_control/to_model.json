@@ -15,5 +15,5 @@
     "vocab_size": [500, 1000, 2500],
     "loss_temperature": [0.1, 0.5, 1.0],
     "lr": [0.0005],
-    "attn_type": ["none"]
+    "attn_fn": ["none"]
 }
