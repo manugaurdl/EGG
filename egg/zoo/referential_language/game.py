@@ -39,6 +39,8 @@ def build_attention(opts):
         "top": modules.AttentionTopK,
         "dot": modules.ScaledDotProductAttention,
         "self": modules.MHAttention,
+        "random": modules.RandomAttention,
+        "random_context": modules.RandomContextAttention,
         "target": modules.TargetAttention,
         "none": modules.NoAttention,
     }

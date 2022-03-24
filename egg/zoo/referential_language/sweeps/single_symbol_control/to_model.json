@@ -9,13 +9,11 @@
     "vision_model": ["resnet34"],
     "random_seed": [111],
     "pretrain_vision": [true],
-    "attn_type": ["target"],
-    "cat_ctx": [false],
-    "gs_temperature": [1.0],
-    "output_dim": [64],
-    "vocab_size": [2500],
-    "sender_separate_mlps": [false],
-    "loss_temperature": [0.5],
+    "gs_temperature": [0.5, 1.0, 3.0],
+    "use_augmentation": [false],
+    "output_dim": [64, 128],
+    "vocab_size": [500, 1000, 2500],
+    "loss_temperature": [0.1, 0.5, 1.0],
     "lr": [0.0005],
-    "single_symbol": [true]
+    "attn_type": ["none"]
 }

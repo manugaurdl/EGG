@@ -113,8 +113,31 @@ class TargetAttention(nn.Module):
 
 
 class NoAttention(nn.Module):
-    def __init__(self, embed_dim, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(NoAttention, self).__init__()
 
     def forward(self, x, aux_input=None):
-        return torch.Tensor([])
+        return torch.Tensor([]).to(x.device)
+
+
+class RandomContextAttention(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super(RandomContextAttention, self).__init__()
+
+    def forward(self, x, aux_input=None):
+        bsz, max_objs = x.shape[:2]
+
+        random_idxs = (torch.arange(bsz) + 1) % bsz
+
+        ctx = x.clone().detach()
+        ctx[torch.arange(bsz)] = ctx[random_idxs]
+
+        return ctx
+
+
+class RandomAttention(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super(RandomAttention, self).__init__()
+
+    def forward(self, x, aux_input=None):
+        return torch.rand_like(x, device=x.device).detach()

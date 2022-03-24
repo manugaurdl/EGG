@@ -8,6 +8,8 @@ from .attentions import (
     AttentionTopK,
     MHAttention,
     NoAttention,
+    RandomAttention,
+    RandomContextAttention,
     ScaledDotProductAttention,
     TargetAttention,
 )
@@ -18,6 +20,8 @@ __all__ = [
     "AttentionTopK",
     "MHAttention",
     "NoAttention",
+    "RandomAttention",
+    "RandomContextAttention",
     "ScaledDotProductAttention",
     "TargetAttention",
     "CatMLP",

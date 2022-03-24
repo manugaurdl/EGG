@@ -10,17 +10,10 @@
     "random_seed": [111],
     "pretrain_vision": [true],
     "gs_temperature": [0.5, 1.0, 3.0],
-    "message_model": ["mlp"],
     "use_augmentation": [false],
     "output_dim": [64, 128],
     "vocab_size": [500, 1000, 2500],
-    "sender_separate_mlps": [ false],
-    "recv_separate_embeddings": [false],
-    "cat_ctx": [true],
-    "shuffle_cat": [true, false],
     "loss_temperature": [0.1, 0.5, 1.0],
     "lr": [0.0005],
-    "attn_type": ["self"],
-    "single_symbol": [true],
-    "num_heads": [1, 2, 4]
+    "attn_type": ["self"]
 }

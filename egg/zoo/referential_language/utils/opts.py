@@ -62,7 +62,7 @@ def get_attention_opts(parser):
     group.add_argument(
         "--attn_fn",
         default="none",
-        choices=["none", "dot", "self", "top", "target"],
+        choices=["none", "dot", "self", "top", "target", "random", "random_context"],
     )
     group.add_argument(
         "--attn_topk",
