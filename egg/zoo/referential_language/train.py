@@ -13,7 +13,7 @@ import egg.core as core
 from egg.core.batch import Batch
 from egg.core.interaction import Interaction, LoggingStrategy
 from egg.zoo.referential_language.dataloaders import get_dataloader
-from egg.zoo.referential_language.games import build_game
+from egg.zoo.referential_language.game import build_game
 from egg.zoo.referential_language.utils.callbacks import get_callbacks
 from egg.zoo.referential_language.utils.opts import get_common_opts
 from egg.zoo.referential_language.utils.helpers import (

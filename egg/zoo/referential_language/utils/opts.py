@@ -60,7 +60,7 @@ def get_vision_module_opts(parser):
 def get_attention_opts(parser):
     group = parser.add_argument_group("sender attention options")
     group.add_argument(
-        "--attn_type",
+        "--attn_fn",
         default="none",
         choices=["none", "dot", "self", "top", "target"],
     )
@@ -86,13 +86,6 @@ def get_attention_opts(parser):
 
 def get_game_arch_opts(parser):
     group = parser.add_argument_group("game architecture options")
-    group.add_argument("--message_model", default="mlp", choices=["mlp", "rnn"])
-    group.add_argument(
-        "--single_symbol",
-        default=False,
-        action="store_true",
-        help="Play the game sending only one symbol in the communication game",
-    )
     group.add_argument(
         "--loss_temperature",
         type=float,
@@ -104,18 +97,6 @@ def get_game_arch_opts(parser):
         type=int,
         default=1024,
         help="Output dim of the non-linear projection of the distractors, used to compare with msg embedding",
-    )
-    group.add_argument(
-        "--recv_separate_embeddings",
-        default=False,
-        action="store_true",
-        help="Use separate embedding matrix to transform tgt message and ctx message when attention is used",
-    )
-    group.add_argument(
-        "--sender_separate_mlps",
-        default=False,
-        action="store_true",
-        help="Use separate embedding matrix to generate a tgt message and ctx message when attention is used",
     )
     group.add_argument(
         "--sender_embed_dim",
@@ -144,8 +125,6 @@ def get_game_arch_opts(parser):
         default="rnn",
         choices=["rnn", "lstm", "gru"],
     )
-    parser.add_argument("--cat_ctx", action="store_true", default=False)
-    parser.add_argument("--shuffle_cat", action="store_true", default=False)
 
 
 def get_gs_opts(parser):
