@@ -123,14 +123,33 @@ class NoAttention(nn.Module):
 class RandomContextAttention(nn.Module):
     def __init__(self, *args, **kwargs):
         super(RandomContextAttention, self).__init__()
+        self.attn_fn = nn.MultiheadAttention(
+            embed_dim=kwargs["embed_dim"], num_heads=kwargs["num_heads"]
+        )
 
     def forward(self, x, aux_input=None):
         bsz, max_objs = x.shape[:2]
 
         random_idxs = (torch.arange(bsz) + 1) % bsz
 
-        ctx = x.clone().detach()
+        ctx = x.clone()  # .detach()
         ctx[torch.arange(bsz)] = ctx[random_idxs]
+
+        x = x.transpose(0, 1)
+        ctx = ctx.transpose(0, 1)
+
+        mask = aux_input["mask"].clone()
+        mask[torch.arange(bsz)] = mask[random_idxs]
+        mask = torch.logical_not(mask)
+        attn, attn_weights = self.attn_fn(
+            query=x,
+            key=ctx,
+            value=ctx,
+            key_padding_mask=mask,  # masking padded elements
+        )
+
+        x = x.transpose(0, 1)
+        ctx = ctx.transpose(0, 1)
 
         return ctx
 
