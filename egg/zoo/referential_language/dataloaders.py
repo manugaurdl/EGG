@@ -202,7 +202,6 @@ class Flickr30kDataset(VisualObjectsDataset):
                 boxes.extend(product([label], objs))
             if len(boxes) < 3:
                 continue
-            random.shuffle(boxes)
             anns["boxes"] = boxes
 
             img_path = Path(image_dir) / "Images" / f"{image_id}.jpg"
