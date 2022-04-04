@@ -3,12 +3,8 @@
 # This source code is licensed under the MIT license fod in the
 # LICENSE file in the root directory of this source tree.
 
-import glob
 import json
-import os
-import random
 import xml.etree.ElementTree as ET
-from itertools import product
 from pathlib import Path
 from typing import Callable, Optional
 from PIL import Image
@@ -178,55 +174,61 @@ class Flickr30kDataset(VisualObjectsDataset):
         self,
         image_dir: str = "/private/home/rdessi/flickr30k/",
         metadata_dir: str = "/private/home/rdessi/flickr30k/",
+        classes_path: str = None,
         split: str = "train",
         transform: Optional[Callable] = None,
-        max_objects: int = 8,
+        max_objects: int = 5,
         image_size: int = 64,
     ):
         super(Flickr30kDataset, self).__init__(image_dir=image_dir, transform=transform)
-        metadata_dir = Path(metadata_dir)
-        with open(metadata_dir / f"{split}.txt") as f:
-            split_images = set(f.read().splitlines())
+        assert max_objects >= 3
+        path_images = Path(image_dir)
+        path_metadata = Path(metadata_dir) / f"{split}_objects.json"
+        path_image_data = Path(metadata_dir) / f"{split}_image_data.json"
 
-        ann_paths = glob.iglob(f"{os.path.expanduser(metadata_dir)}/Annotations/*xml")
+        with open(path_image_data) as img_in, open(path_metadata) as metadata_in:
+            img_data, object_data = json.load(img_in), json.load(metadata_in)
+        assert len(img_data) == len(object_data)
+
+        """
+        self.class2id = {}
+        idx = 0
+        with open(classes_path) as f:
+            for line in f:
+                names = line.strip().split(",")
+                for name in names:
+                    self.class2id[name] = idx
+                    idx += 1
+        """
+
+        object_dict = {}
+        for object_item in object_data:
+            object_dict[object_item["image_id"]] = object_item
+
         self.samples = []
-        for ann_path in ann_paths:
-            image_id = Path(ann_path).stem
-            if image_id not in split_images:
-                continue
+        for img_item in img_data:
+            img_id = img_item["image_id"]
+            object_item = object_dict[img_id]
 
-            anns = get_annotations(ann_path)
+            img_path = path_images / img_item["url"].split("/")[-1]
 
-            boxes = []
-            for label, objs in anns["boxes"].items():
-                boxes.extend(product([label], objs))
-            if len(boxes) < 3:
-                continue
-            anns["boxes"] = boxes
+            self.samples.append((img_path, img_id, object_item["objects"]))
 
-            img_path = Path(image_dir) / "Images" / f"{image_id}.jpg"
-            sents = get_sentence_data(metadata_dir / "Sentences" / f"{image_id}.txt")
-
-            self.samples.append((img_path, anns, sents))
-
-            if len(self.samples) >= len(split_images):
-                break
-
+        # self.id2class = {v: k for k, v in self.class2id.items()}
         self.transform = transform
         self.max_objects = max_objects
         self.resizer = transforms.Resize(size=(image_size, image_size))
 
     def __getitem__(self, index):
-        img_path, anns, sents = self.samples[index]
+        img_path, img_id, obj_list = self.samples[index]
 
         sender_image = self._load_and_transform(img_path)
         recv_image = self._load_and_transform(img_path)
 
         sender_objs, labels, recv_objs = [], [], []
         bboxes = []
-        for label, coords in anns["boxes"][: min(self.max_objects, len(anns["boxes"]))]:
-            xmin, ymin, xmax, ymax = coords
-            x, y, w, h = xmin, ymin, xmax - xmin, ymax - ymin
+        for obj_item in obj_list[: min(self.max_objects, len(obj_list))]:
+            x, y, w, h = obj_item["x"], obj_item["y"], obj_item["w"], obj_item["h"]
             bboxes.append(torch.IntTensor([x, y, w, h]))
 
             sender_obj = self.resizer(crop(sender_image, y, x, h, w))
@@ -235,16 +237,20 @@ class Flickr30kDataset(VisualObjectsDataset):
             sender_objs.append(sender_obj)
             recv_objs.append(recv_obj)
 
+            # label = next(filter(lambda n: n in self.class2id, obj_item["names"]), None)
+            # assert label is not None
+            # labels.append(self.class2id[label])
+            labels.append(torch.Tensor([1]))
+
         sender_input = torch.stack(sender_objs)
         recv_input = torch.stack(recv_objs)
         labels = torch.Tensor(labels)
         aux = {
             "sender_image": resize(sender_image, size=(128, 128)),
             "recv_image": resize(recv_image, size=(128, 128)),
-            "image_ids": torch.Tensor([int(img_path.stem)]),
+            "image_ids": torch.Tensor([int(img_id)]),
             "image_sizes": torch.Tensor([*sender_image.shape]).int(),
             "bboxes": torch.stack(bboxes),
-            # "sents": sents,
         }
 
         return sender_input, labels, recv_input, aux
@@ -371,8 +377,6 @@ def get_gaussian_dataloader(batch_size, image_size, max_objects, seed, **kwargs)
 
 def get_dataloader(
     dataset_name: str,
-    image_dir: str,
-    metadata_dir: str,
     batch_size: int = 32,
     split: str = "train",
     image_size: int = 32,
@@ -380,17 +384,20 @@ def get_dataloader(
     use_augmentation: bool = False,
     seed: int = 111,
 ):
-    # image_dir: str = "/private/home/rdessi/flickr30k/Images",
-    # metadata_dir: str = "/private/home/rdessi/flickr30k/Annotations",
-
-    # image_dir: str = "/private/home/rdessi/visual_genome",
-    # metadata_dir: str = "/private/home/rdessi/visual_genome/filtered_splits",
-
     assert dataset_name in ["flickr", "vg", "gaussian"]
     if dataset_name == "gaussian":
         return get_gaussian_dataloader(batch_size, image_size, max_objects, seed)
 
     name2dataset = {"flickr": Flickr30kDataset, "vg": VisualGenomeDataset}
+
+    if dataset_name == "flickr":
+        image_dir = "/private/home/rdessi/flickr30k/Images"
+        metadata_dir = "/private/home/rdessi/flickr30k/filtered_flickr"
+    elif dataset_name == "vg":
+        image_dir = "/private/home/rdessi/visual_genome"
+        metadata_dir = "/private/home/rdessi/visual_genome/filtered_splits"
+    else:
+        raise RuntimeError(f"Cannot recognize dataset {dataset_name}")
 
     ds = name2dataset[dataset_name](
         image_dir=image_dir,

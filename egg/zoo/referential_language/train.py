@@ -77,8 +77,6 @@ def main(params):
 
     data_kwargs = {
         "dataset_name": opts.dataset_name,
-        "image_dir": opts.image_dir,
-        "metadata_dir": opts.metadata_dir,
         "batch_size": opts.batch_size,
         "split": "train",
         "image_size": opts.image_size,

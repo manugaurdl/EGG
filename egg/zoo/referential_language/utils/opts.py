@@ -18,18 +18,6 @@ def get_data_opts(parser):
         help="Dataset to use for game playing",
     )
     group.add_argument(
-        "--image_dir",
-        type=str,
-        default=None,
-        help="Path to folder with images",
-    )
-    group.add_argument(
-        "--metadata_dir",
-        type=str,
-        default=None,
-        help="Path to folder with images metada",
-    )
-    group.add_argument(
         "--max_objects",
         type=int,
         default=10,
