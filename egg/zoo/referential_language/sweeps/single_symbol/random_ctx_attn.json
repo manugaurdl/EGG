@@ -1,19 +1,17 @@
 {
     "n_epoch": [100],
     "dataset_name": ["flickr"],
-    "image_dir": ["/private/home/rdessi/flickr30k/"],
-    "metadata_dir": ["/private/home/rdessi/flickr30k/"],
-    "batch_size": [32],
-    "max_objects": [9],
+    "batch_size": [64],
+    "max_objects": [5],
     "image_size": [32],
     "vision_model": ["resnet34"],
     "random_seed": [111],
     "pretrain_vision": [true],
-    "gs_temperature": [0.5, 1.0, 3.0],
+    "gs_temperature": [0.5, 1.0],
     "use_augmentation": [false],
     "output_dim": [64, 128],
     "vocab_size": [500, 1000, 2500],
     "loss_temperature": [0.1, 0.5, 1.0],
     "lr": [0.0005],
-    "attn_fn": ["target"]
+    "attn_fn": ["random_context"]
 }
