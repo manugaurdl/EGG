@@ -54,9 +54,22 @@ def build_attention(opts):
 
 def build_message_generator(opts):
     input_dim = opts.img_feats_dim
-    if opts.attn_fn != "none":
-        input_dim *= 2
-    return modules.CatMLP(input_dim, opts.vocab_size, opts.gs_temperature)
+    if opts.msg_generator == "cat":
+        if opts.attn_fn != "none":
+            input_dim *= 2
+        return modules.CatMLP(
+            input_dim=input_dim,
+            vocab_size=opts.vocab_size,
+            gs_temperature=opts.gs_temperature,
+        )
+    elif opts.msg_generator == "cond_mlp":
+        assert opts.attn_fn != "none" "ConditionalMLP does not support no attention fn"
+        return modules.ConditionalMLP(
+            input_dim=input_dim,
+            embedding_dim=opts.sender_embed_dim,
+            vocab_size=opts.vocab_size,
+            gs_temperature=opts.gs_temperature,
+        )
 
 
 def build_sender(opts):
@@ -66,12 +79,22 @@ def build_sender(opts):
 
 
 def build_receiver(opts):
-    linear_reader = RelaxedEmbedding(opts.vocab_size, opts.output_dim)
+    if opts.msg_generator == "cat":
+        msg_reader = RelaxedEmbedding(opts.vocab_size, opts.output_dim)
+    elif opts.msg_generator == "cond_mlp":
+        msg_reader = modules.MultipleSymbolReader(
+            vocab_size=opts.vocab_size,
+            embedding_dim=opts.recv_embed_dim,
+            output_dim=opts.output_dim,
+        )
+    else:
+        raise RuntimeError("Cannot build message reader. Wrong msg generator")
+
     return modules.Receiver(
         input_dim=opts.img_feats_dim,
         output_dim=opts.output_dim,
         temperature=opts.loss_temperature,
-        msg_reader=linear_reader,
+        msg_reader=msg_reader,
     )
 
 

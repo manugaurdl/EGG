@@ -81,6 +81,11 @@ def get_game_arch_opts(parser):
         help="Temperature for similarity computation in the loss fn. Ignored when similarity is 'dot'",
     )
     group.add_argument(
+        "--msg_generator",
+        default="cat",
+        choices=["cat", "cond_mlp"],
+    )
+    group.add_argument(
         "--output_dim",
         type=int,
         default=1024,

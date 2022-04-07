@@ -13,7 +13,8 @@ from .attentions import (
     ScaledDotProductAttention,
     TargetAttention,
 )
-from .msg_generators import CatMLP
+from .msg_generators import CatMLP, ConditionalMLP
+from .msg_readers import MultipleSymbolReader
 
 
 __all__ = [
@@ -25,7 +26,9 @@ __all__ = [
     "ScaledDotProductAttention",
     "TargetAttention",
     "CatMLP",
+    "ConditionalMLP",
     "Sender",
     "Receiver",
     "VisionWrapper",
+    "MultipleSymbolReader",
 ]

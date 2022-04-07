@@ -1,0 +1,19 @@
+{
+    "n_epoch": [100],
+    "dataset_name": ["flickr"],
+    "batch_size": [64],
+    "max_objects": [5],
+    "image_size": [32],
+    "vision_model": ["resnet34"],
+    "random_seed": [111],
+    "pretrain_vision": [true],
+    "gs_temperature": [0.5, 1.0, 3.0],
+    "msg_generator": ["cond_mlp"],
+    "output_dim": [128, 512],
+    "vocab_size": [1000, 2500],
+    "sender_embed_dim": [256, 512],
+    "recv_embed_dim": [256, 512],
+    "loss_temperature": [1.0],
+    "lr": [0.0005],
+    "attn_fn": ["dot"]
+}
