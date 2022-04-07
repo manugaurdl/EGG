@@ -14,7 +14,7 @@ class CatMLP(nn.Module):
         self,
         input_dim,
         vocab_size,
-        temperature,
+        gs_temperature,
         **kwargs,
     ):
         super(CatMLP, self).__init__()
@@ -24,7 +24,7 @@ class CatMLP(nn.Module):
             nn.Linear(vocab_size, vocab_size),
         )
 
-        self.temperature = temperature
+        self.temperature = gs_temperature
 
     def forward(self, tgt_embedding, ctx_embedding, aux_input=None):
         bsz, max_objs, _ = tgt_embedding.shape
@@ -39,7 +39,7 @@ class CatMLP(nn.Module):
 
 
 class ConditionalMLP(nn.Module):
-    def __init__(self, input_dim, embedding_dim, vocab_size, temperature, **kwargs):
+    def __init__(self, input_dim, embedding_dim, vocab_size, gs_temperature, **kwargs):
         super(ConditionalMLP, self).__init__()
 
         self.fc = nn.Sequential(
@@ -51,7 +51,7 @@ class ConditionalMLP(nn.Module):
 
         self.fc_out = nn.Linear(embedding_dim * 2, vocab_size)
 
-        self.temperature = temperature
+        self.temperature = gs_temperature
 
     def forward(self, tgt, ctx, aux_input=None):
         tgt_embedding = self.fc(tgt)
