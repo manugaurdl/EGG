@@ -8,10 +8,11 @@
     "random_seed": [111],
     "pretrain_vision": [true],
     "gs_temperature": [1.0],
-    "use_augmentation": [true],
+    "use_augmentation": [false],
     "output_dim": [64],
     "vocab_size": [2500],
-    "loss_temperature": [0.5],
+    "loss_temperature": [1.0],
     "lr": [0.0005],
-    "attn_fn": ["dot", "self", "top", "target", "none", "random_context"]
+    "attn_fn": ["dot", "self", "top", "target", "none", "random_context"],
+    "num_heads": [8]
 }
