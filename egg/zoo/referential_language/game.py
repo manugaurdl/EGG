@@ -69,6 +69,9 @@ def build_message_generator(opts):
             embedding_dim=opts.sender_embed_dim,
             vocab_size=opts.vocab_size,
             gs_temperature=opts.gs_temperature,
+            num_layers=opts.sender_num_layers,
+            shared_mlp=opts.shared_mlp,
+            context_first=opts.context_first,
         )
 
 

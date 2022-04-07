@@ -11,8 +11,12 @@
     "use_augmentation": [false],
     "output_dim": [64],
     "vocab_size": [2500],
+    "context_first": [true, false],
+    "msg_generator": ["cond_mlp"],
+    "sender_num_layers": [1, 2, 3, 4],
+    "shared_mlp": [true, false],
     "loss_temperature": [1.0],
     "lr": [0.0005],
-    "attn_fn": ["dot", "self", "top", "target", "none", "random_context"],
+    "attn_fn": ["self", "target"],
     "num_heads": [8]
 }

@@ -81,9 +81,26 @@ def get_game_arch_opts(parser):
         help="Temperature for similarity computation in the loss fn. Ignored when similarity is 'dot'",
     )
     group.add_argument(
+        "--context_first",
+        default=False,
+        action="store_true",
+        help="Use the context vector first when generating a message",
+    )
+    group.add_argument(
         "--msg_generator",
         default="cat",
         choices=["cat", "cond_mlp"],
+    )
+    group.add_argument(
+        "--sender_num_layers",
+        type=int,
+        default=1,
+        help="Number of layers in the sender fc",
+    )
+    group.add_argument(
+        "--shared_mlp",
+        default=False,
+        action="store_true",
     )
     group.add_argument(
         "--output_dim",
