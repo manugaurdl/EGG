@@ -53,7 +53,6 @@ class ConditionalMLP(nn.Module):
         **kwargs,
     ):
         super(ConditionalMLP, self).__init__()
-
         activations = {
             "relu": F.relu,
             "tanh": F.tanh,
@@ -62,6 +61,7 @@ class ConditionalMLP(nn.Module):
         }
         self.activation = activations[activation.lower()]
 
+        assert num_layers > 0
         encoder_hidden_sizes = [embedding_dim] * num_layers
         encoder_layer_dimensions = [(input_dim, encoder_hidden_sizes[0])]
 
@@ -90,12 +90,12 @@ class ConditionalMLP(nn.Module):
 
     def forward(self, tgt, ctx, aux_input=None):
         for hidden_layer in self.fc_tgt[:-1]:
-            x = self.activation(hidden_layer(tgt))
-        tgt_embedding = self.fc_tgt[-1](x)
+            tgt = self.activation(hidden_layer(tgt))
+        tgt_embedding = self.fc_tgt[-1](tgt)
 
         for hidden_layer in self.fc_ctx[:-1]:
-            x = self.activation(hidden_layer(ctx))
-        ctx_embedding = self.fc_ctx[-1](x)
+            ctx = self.activation(hidden_layer(ctx))
+        ctx_embedding = self.fc_ctx[-1](ctx)
 
         first_embedding = ctx_embedding if self.context_first else tgt_embedding
         second_embedding = tgt_embedding if self.context_first else ctx_embedding
