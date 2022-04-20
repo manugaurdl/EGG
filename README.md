@@ -27,7 +27,7 @@ with PyTorch. However, to get a taste of communication games without writing any
 
 <details><summary>List of example and tutorial games</summary><p>
  
- * [`MNIST autoencoder tutorial`](/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb): A Jupyter tutorial that implements a MNIST discrete auto-encoder step-by-step, covering the basic concepts of EGG. The tutorial starts with pre-training a "vision" module and builds single- and multiple symbol auto-encoder communication games with channel optimization done by Reinforce and Gumbel-Softmax relaxation ([notebook](/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb) / [colab](https://colab.research.google.com/github/facebookresearch/EGG/blob/master/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb)).
+ * [`MNIST autoencoder tutorial`](/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb): A Jupyter tutorial that implements a MNIST discrete auto-encoder step-by-step, covering the basic concepts of EGG. The tutorial starts with pre-training a "vision" module and builds single- and multiple symbol auto-encoder communication games with channel optimization done by Reinforce and Gumbel-Softmax relaxation ([notebook](/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb) / [colab](https://colab.research.google.com/github/facebookresearch/EGG/blob/main/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb)).
  
 * [`egg/zoo/basic_games`](/egg/zoo/basic_games): Simple implementations of reconstruction and discrimination games, taking their inputs from text files, and with thoroughly annotated code. These might be a good starting point to learn to play with EGG.
  
@@ -48,7 +48,7 @@ with PyTorch. However, to get a taste of communication games without writing any
   
   * [`egg/zoo/compo_vs_generalization`](egg/zoo/compo_vs_generalization) _Compositionality and Generalization in Emergent Languages._ Rahma Chaabouni, Eugene Kharitonov, Diane Bouchacourt, Emmanuel Dupoux, Marco Baroni. ACL 2020.
   
-  * [`egg/zoo/language_bottleneck`](/egg/zoo/language_bottleneck) _Entropy Minimization In Emergent Languages._ Eugene Kharitonov, Rahma Chaabouni, Diane Bouchacourt, Marco Baroni. ICML 2020. `egg/zoo/language_bottleneck` contains a set of games that study the information bottleneck property of the discrete communication channel. This poperty is illustrated in an EGG-based example of MNIST-based style transfer without an adversary ([notebook](/egg/zoo/language_bottleneck/mnist-style-transfer-via-bottleneck.ipynb) / [colab](https://colab.research.google.com/github/facebookresearch/EGG/blob/master/egg/zoo/language_bottleneck/mnist-style-transfer-via-bottleneck.ipynb)).
+  * [`egg/zoo/language_bottleneck`](/egg/zoo/language_bottleneck) _Entropy Minimization In Emergent Languages._ Eugene Kharitonov, Rahma Chaabouni, Diane Bouchacourt, Marco Baroni. ICML 2020. `egg/zoo/language_bottleneck` contains a set of games that study the information bottleneck property of the discrete communication channel. This poperty is illustrated in an EGG-based example of MNIST-based style transfer without an adversary ([notebook](/egg/zoo/language_bottleneck/mnist-style-transfer-via-bottleneck.ipynb) / [colab](https://colab.research.google.com/github/facebookresearch/EGG/blob/main/egg/zoo/language_bottleneck/mnist-style-transfer-via-bottleneck.ipynb)).
 
 </p></details>
 
@@ -101,7 +101,8 @@ The repo is organised as follows:
 ```
 
 ## How-to-Start and Learning more
-* The step-by-step [`MNIST autoencoder tutorial`](/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb) goes over all essential steps to create a full-featured communication game with variable length messages between the agents. NB: depending on your computational resources, this might take a while to run! [(open in colab)](https://colab.research.google.com/github/facebookresearch/EGG/blob/master/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb)
+* Our EMNLP'19 Demo [paper](https://aclanthology.org/D19-3010/) provides a high-level view of the toolkit and points to further resources.
+* The step-by-step [`MNIST autoencoder tutorial`](/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb) goes over all essential steps to create a full-featured communication game with variable length messages between the agents. NB: depending on your computational resources, this might take a while to run! [(open in colab)](https://colab.research.google.com/github/facebookresearch/EGG/blob/main/tutorials/EGG%20walkthrough%20with%20a%20MNIST%20autoencoder.ipynb)
 * The simplest starter code is in [`egg/zoo/basic_games`](/egg/zoo/basic_games), providing implementations of basic reconstruction and discrimination games. Input can be provided through text files, and the code is thoroughly commented.
 * Another good starting point to implement a Sender/Receiver game is the MNIST autoencoder
 game, [MNIST auto-encoder game](/egg/zoo/mnist_autoenc). The game features both Gumbel-Softmax 
@@ -112,28 +113,20 @@ and Reinforce-based implementations.
 [here](docs/CL.md).
 * A brief how-to for tensorboard is [here](docs/tensorboard.md).
 * To learn more about the provided hyperparameter search tool, read this [doc](docs/nest.md).
-* Our [paper](https://arxiv.org/abs/1907.00852) provides a high-level view of the toolkit and points to further resources.
-
 
 ## Citation
-If you find EGG useful in your research, please cite:
+If you find EGG useful in your research, please cite this repository:
 ```
-@inproceedings{Kharitonov2019Egg,
-    title = "{EGG}: a toolkit for research on {E}mergence of lan{G}uage in {G}ames",
-    author = "Kharitonov, Eugene  and
-      Chaabouni, Rahma  and
-      Bouchacourt, Diane  and
-      Baroni, Marco",
-    booktitle = "Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP): System Demonstrations",
-    year = "2019",
-    publisher = "Association for Computational Linguistics",
-    url = "https://www.aclweb.org/anthology/D19-3010",
-    doi = "10.18653/v1/D19-3010"
+@misc{kharitonov:etal:2021,
+  author = "Kharitonov, Eugene  and Dess{\`i}, Roberto and Chaabouni, Rahma  and Bouchacourt, Diane  and Baroni, Marco",
+  title = "{EGG}: a toolkit for research on {E}mergence of lan{G}uage in {G}ames",
+  howpublished = {\url{https://github.com/facebookresearch/EGG}},
+  year = {2021}
 }
 ```
 
 ## Contributing
-Please read the contribution [guide](CONTRIBUTING.md).
+Please read the contribution [guide](.github/CONTRIBUTING.md).
 
 
 ## Testing
@@ -146,5 +139,6 @@ python -m pytest
 All tests should pass.
 
 ## Licence
-EGG is licensed under the MIT license. The text of the license can be found [here](LICENSE).
+The majority of EGG is licensed under MIT, however portions of the project are available under separate license terms: [LARC](egg/zoo/emcom_as_ssl/LARC.py) is licensed under the BSD 3-Clause license.
 
+The text of the license for EGG can be found [here](LICENSE).

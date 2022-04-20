@@ -12,8 +12,7 @@ The game can be launched with the following command (with appropriate path to th
 python -m egg.zoo.signal_game.train --root=/private/home/kharitonov/work/egg/data/concepts/
 ```
 
-To retrieve the data, please contact the author of the original PyTorch implementation:
-https://github.com/DianeBouchacourt/SignalingGame .
+The data used in the paper can be downloaded from [this link](https://dl.fbaipublicfiles.com/signaling_game_data).
 
 The game can be configured with the following command-line parameters:
  * `--root` specifies the root folder of the data set
@@ -34,7 +33,7 @@ The game can be configured with the following command-line parameters:
  * `--n_epochs` the number of training epochs to run (default: 10)
  * `--random_seed` sets the random seed
  * `--lr` , `--optimizer`, ...
- see [this doc](https://github.com/facebookresearch/EGG/blob/master/docs/CL.md).
+ see [this doc](https://github.com/facebookresearch/EGG/blob/main/docs/CL.md).
 
  
  

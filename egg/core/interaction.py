@@ -47,7 +47,7 @@ class LoggingStrategy:
 
     @classmethod
     def minimal(cls):
-        args = [False] * 6 + [True]
+        args = [False] * 7
         return cls(*args)
 
     @classmethod
@@ -192,13 +192,10 @@ class Interaction:
             return torch.cat(lst, dim=0).to("cpu")
 
         def send_collect_dict(d):
-            if d is None:
+            if not d or d is None:
                 return {}
 
             new_d = {}
-            if not d:
-                return new_d
-
             for k, v in d.items():
                 if v is not None:
                     v = send_collect_tensor(v)
