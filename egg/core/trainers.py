@@ -211,7 +211,6 @@ class Trainer:
         self.optimizer.zero_grad()
 
         for batch_id, batch in enumerate(self.train_data):
-            print(f"batch_id {batch_id}")
             if self.debug and batch_id == 10:
                 break
             if not isinstance(batch, Batch):

@@ -22,7 +22,7 @@ def get_data_opts(parser):
         "--image_dir", default="/private/home/rdessi/imagecode/data/images"
     )
     group.add_argument("--metadata_dir", default="/private/home/rdessi/imagecode/data")
-    group.add_argument("--num_workers", type=int, default=4)
+    group.add_argument("--num_workers", type=int, default=8)
 
 
 def get_vision_model_opts(parser):
