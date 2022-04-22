@@ -3,11 +3,17 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import clip
 import torch.nn as nn
 import torchvision
 from torch.nn.functional import cosine_similarity as cosine_sim
 
 from egg.core.interaction import LoggingStrategy
+
+
+def convert_models_to_fp32(model):
+    for p in model.parameters():
+        p.data = p.data.float()
 
 
 def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
@@ -16,7 +22,13 @@ def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
         "resnet101": torchvision.models.resnet101(pretrained=pretrained),
         "resnet152": torchvision.models.resnet152(pretrained=pretrained),
         "vgg11": torchvision.models.vgg11(pretrained=pretrained),
+        "clip_vit_b/32": clip.load("ViT-B/32")[0].visual,
+        "clip_vit_b/16": clip.load("ViT-B/16")[0].visual,
+        "clip_vit_l/14": clip.load("ViT-L/14")[0].visual,
+        "clip_resnet50": clip.load("RN50")[0].visual,
+        "clip_resnet101": clip.load("RN101")[0].visual,
     }
+
     if name not in modules:
         raise KeyError(f"{name} is not currently supported.")
 
@@ -26,9 +38,12 @@ def initialize_vision_module(name: str = "resnet50", pretrained: bool = False):
         n_features = model.fc.in_features
         model.fc = nn.Identity()
 
-    else:  # vgg11
+    elif name == "vgg11":
         n_features = model.classifier[6].in_features
         model.classifier[6] = nn.Identity()
+    else:  # clip
+        n_features = model.output_dim
+        convert_models_to_fp32(model)
 
     if pretrained:
         for param in model.parameters():
@@ -42,7 +57,7 @@ class Sender(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        vocab_size: int = 2048,
+        vocab_size: int,
         temperature: float = 1.0,
     ):
         super(Sender, self).__init__()
@@ -75,6 +90,7 @@ class Receiver(nn.Module):
         self.temperature = temperature
 
     def forward(self, message, candidates, aux_input=None):
+        candidates = self.fc(candidates)
         sims = cosine_sim(message.unsqueeze(1), candidates.unsqueeze(0), dim=2)
         return sims / self.temperature
 

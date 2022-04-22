@@ -31,8 +31,18 @@ def get_vision_model_opts(parser):
         "--vision_model",
         type=str,
         default="resnet50",
-        choices=["resnet50", "resnet101", "resnet152", "vgg11"],
-        help="Model name for the encoder",
+        choices=[
+            "resnet50",
+            "resnet101",
+            "resnet152",
+            "vgg11",
+            "clip_vit_b/32",
+            "clip_vit_b/16",
+            "clip_vit_l/14",
+            "clip_resnet50",
+            "clip_resnet101",
+        ],
+        help="Model name for the visual encoder",
     )
     group.add_argument(
         "--pretrain_vision",
