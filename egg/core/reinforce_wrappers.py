@@ -181,8 +181,8 @@ class SymbolGameReinforce(nn.Module):
             sender_input, message, receiver_input, receiver_output, labels, aux_input
         )
 
-        if self.training:
-            _verify_batch_sizes(loss, sender_log_prob, receiver_log_prob)
+        # if self.training:
+        #     _verify_batch_sizes(loss, sender_log_prob, receiver_log_prob)
 
         policy_loss = (
             (loss.detach() - self.baseline.predict(loss.detach()))

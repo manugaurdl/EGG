@@ -11,6 +11,11 @@ from egg.core.gs_wrappers import (
     SymbolReceiverWrapper,
     SymbolGameGS,
 )
+from egg.core.reinforce_wrappers import (
+    ReinforceWrapper,
+    ReinforceDeterministicWrapper,
+    SymbolGameReinforce,
+)
 from egg.zoo.contextual_game.archs import (
     Receiver,
     Sender,
@@ -42,12 +47,7 @@ def build_game(opts):
         opts.vision_model, opts.pretrain_vision
     )
 
-    sender = Sender(
-        input_dim=visual_feats_size,
-        vocab_size=opts.vocab_size,
-    )
-    sender = GumbelSoftmaxWrapper(sender, temperature=opts.gs_temperature)
-
+    sender = Sender(input_dim=visual_feats_size, vocab_size=opts.vocab_size)
     receiver = Receiver(
         input_dim=visual_feats_size,
         hidden_dim=opts.recv_hidden_dim,
@@ -60,7 +60,16 @@ def build_game(opts):
         opts.recv_output_dim,
     )
 
-    game = SymbolGameGS(sender=sender, receiver=receiver, loss=loss)
+    if opts.mode.lower() == "gs":
+        sender = GumbelSoftmaxWrapper(sender, temperature=opts.gs_temperature)
+        game = SymbolGameGS(sender=sender, receiver=receiver, loss=loss)
+    elif opts.mode.lower() == "rf":
+        sender = ReinforceWrapper(sender)
+        receiver = ReinforceDeterministicWrapper(receiver)
+        game = SymbolGameReinforce(sender, receiver, loss)
+    else:
+        raise RuntimeError("cannot recognize training mode {opts.mode}")
+
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
 

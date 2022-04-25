@@ -87,6 +87,11 @@ def get_common_opts(params):
         help="Weight decay used for SGD",
     )
     parser.add_argument(
+        "--mode",
+        default="gs",
+        help="Training mode: Gumbel-based (gs) or Reinforce (rf). Default: gs",
+    )
+    parser.add_argument(
         "--gs_temperature",
         type=float,
         default=1.0,
