@@ -46,7 +46,16 @@ class ImageCodeDataset(torch.utils.data.Dataset):
 
         ground_truth = torch.tensor([img_idx]).long()
 
-        return images, ground_truth, images, {"captions": [text]}
+        return (
+            images,
+            ground_truth,
+            images,
+            {
+                "captions": text,
+                "is_video": "open-images" in img_dir,
+                "input_images": images,
+            },
+        )
 
 
 def collate(batch):
@@ -60,7 +69,7 @@ def collate(batch):
             storage = elem.storage()._new_shared(numel)
             out = elem.new(storage)
         return torch.cat(batch, 0, out=out)
-    elif isinstance(elem, str):
+    elif isinstance(elem, bool) or isinstance(elem, str):
         return batch
     elif isinstance(elem, dict):
         return {key: collate([d[key] for d in batch]) for key in elem}
@@ -98,14 +107,14 @@ def get_dataloader(
     sampler = None
     if is_distributed:
         sampler = torch.utils.data.distributed.DistributedSampler(
-            dataset, shuffle=True, drop_last=True, seed=seed
+            dataset, shuffle=(split != "valid"), drop_last=True, seed=seed
         )
 
-    # TODO: not using batch size due to nature of the task
+    # Not using batch size due to nature of the task
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
-        shuffle=(sampler is None),
+        shuffle=sampler is None and split != "valid",
         sampler=sampler,
         collate_fn=collate,
         num_workers=num_workers,

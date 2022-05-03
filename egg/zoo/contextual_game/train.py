@@ -10,7 +10,6 @@ import torch
 import egg.core as core
 from egg.core import ConsoleLogger
 
-# from egg.core.callbacks import WandbLogger
 from egg.zoo.contextual_game.data import get_dataloader
 from egg.zoo.contextual_game.callbacks import (
     BestStatsTracker,
@@ -67,7 +66,6 @@ def main(params):
     callbacks = [
         ConsoleLogger(as_json=True, print_train_loss=True),
         BestStatsTracker(),
-        # WandbLogger(opts),
     ]
 
     if opts.distributed_context.is_distributed:
@@ -81,7 +79,8 @@ def main(params):
         callbacks=callbacks,
         debug=opts.debug,
     )
-    trainer.train(n_epochs=opts.n_epochs)
+    if not opts.eval_only:
+        trainer.train(n_epochs=opts.n_epochs)
 
     # TEST
     test_loader = get_dataloader(

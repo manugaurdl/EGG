@@ -87,6 +87,12 @@ def get_common_opts(params):
         help="Weight decay used for SGD",
     )
     parser.add_argument(
+        "--eval_only",
+        action="store_true",
+        default=False,
+        help="Skip training and evaluate from checkopoint",
+    )
+    parser.add_argument(
         "--mode",
         default="gs",
         help="Training mode: Gumbel-based (gs) or Reinforce (rf). Default: gs",
