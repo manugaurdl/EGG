@@ -554,3 +554,224 @@ class SenderReceiverRnnGS(nn.Module):
         )
 
         return loss.mean(), interaction
+
+
+class RnnSenderFixedLengthGS(nn.Module):
+    """
+    Gumbel Softmax wrapper for Sender that outputs fixed-length sequence of symbols.
+    The user-defined `agent` takes an input and outputs an initial hidden state vector for the RNN cell;
+    `RnnSenderGS` then unrolls this RNN for the `max_len` symbols.
+    Supports vanilla RNN ('rnn'), GRU ('gru'), and LSTM ('lstm') cells.
+
+    >>> class Sender(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.fc_out = nn.Linear(10, 5) #  input size 10, the RNN's hidden size is 5
+    ...     def forward(self, x, _aux_input=None):
+    ...         return self.fc_out(x)
+    >>> agent = Sender()
+    >>> agent = RnnSenderGS(agent, vocab_size=2, embed_dim=10, hidden_size=5, max_len=3, temperature=1.0, cell='lstm')
+    >>> output = agent(torch.ones((1, 10)))
+    >>> output.size()  # batch size x max_len+1 x vocab_size
+    torch.Size([1, 4, 2])
+    """
+
+    def __init__(
+        self,
+        agent,
+        vocab_size,
+        embed_dim,
+        hidden_size,
+        max_len,
+        temperature,
+        cell="rnn",
+        trainable_temperature=False,
+        straight_through=False,
+    ):
+        super(RnnSenderFixedLengthGS, self).__init__()
+        self.agent = agent
+
+        assert max_len >= 1, "Cannot have a max_len below 1"
+        self.max_len = max_len
+
+        self.hidden_to_output = nn.Linear(hidden_size, vocab_size)
+        self.embedding = nn.Linear(vocab_size, embed_dim)
+        self.sos_embedding = nn.Parameter(torch.zeros(embed_dim))
+        self.embed_dim = embed_dim
+        self.vocab_size = vocab_size
+
+        if not trainable_temperature:
+            self.temperature = temperature
+        else:
+            self.temperature = torch.nn.Parameter(
+                torch.tensor([temperature]), requires_grad=True
+            )
+
+        self.straight_through = straight_through
+        self.cell = None
+
+        cell = cell.lower()
+
+        if cell == "rnn":
+            self.cell = nn.RNNCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "gru":
+            self.cell = nn.GRUCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "lstm":
+            self.cell = nn.LSTMCell(input_size=embed_dim, hidden_size=hidden_size)
+        else:
+            raise ValueError(f"Unknown RNN Cell: {cell}")
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.normal_(self.sos_embedding, 0.0, 0.01)
+
+    def forward(self, x, aux_input=None):
+        prev_hidden = self.agent(x, aux_input)
+        prev_c = torch.zeros_like(prev_hidden)  # only for LSTM
+
+        e_t = torch.stack([self.sos_embedding] * prev_hidden.size(0))
+        sequence = []
+
+        for step in range(self.max_len):
+            if isinstance(self.cell, nn.LSTMCell):
+                h_t, prev_c = self.cell(e_t, (prev_hidden, prev_c))
+            else:
+                h_t = self.cell(e_t, prev_hidden)
+
+            step_logits = self.hidden_to_output(h_t)
+            x = gumbel_softmax_sample(
+                step_logits, self.temperature, self.training, self.straight_through
+            )
+
+            prev_hidden = h_t
+            e_t = self.embedding(x)
+            sequence.append(x)
+
+        sequence = torch.stack(sequence).permute(1, 0, 2)
+
+        return sequence
+
+
+class RnnReceiverFixedLengthGS(nn.Module):
+    """
+    Gumbel Softmax-based wrapper for Receiver agent in fixed-length communication game. The user implemented logic
+    is passed in `agent` and is responsible for mapping (RNN's hidden state + Receiver's optional input)
+    into the output vector.
+    """
+
+    def __init__(self, agent, vocab_size, embed_dim, hidden_size, cell="rnn"):
+        super(RnnReceiverFixedLengthGS, self).__init__()
+        self.agent = agent
+
+        self.cell = None
+        cell = cell.lower()
+        if cell == "rnn":
+            self.cell = nn.RNNCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "gru":
+            self.cell = nn.GRUCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "lstm":
+            self.cell = nn.LSTMCell(input_size=embed_dim, hidden_size=hidden_size)
+        else:
+            raise ValueError(f"Unknown RNN Cell: {cell}")
+
+        self.embedding = nn.Linear(vocab_size, embed_dim)
+
+    def forward(self, message, input=None, aux_input=None):
+        emb = self.embedding(message)
+
+        prev_hidden = None
+        prev_c = None
+
+        # to get an access to the hidden states, we have to unroll the cell ourselves
+        for step in range(message.size(1)):
+            e_t = emb[:, step, ...]
+            if isinstance(self.cell, nn.LSTMCell):
+                h_t, prev_c = (
+                    self.cell(e_t, (prev_hidden, prev_c))
+                    if prev_hidden is not None
+                    else self.cell(e_t)
+                )
+            else:
+                h_t = self.cell(e_t, prev_hidden)
+
+            prev_hidden = h_t
+
+        output = self.agent(h_t, input, aux_input)
+
+        return output
+
+
+class SenderReceiverRnnFixedLengthGS(nn.Module):
+    """
+    This class implements the Sender/Receiver game mechanics for the Sender/Receiver game with fixed-length
+    communication messages and Gumbel-Softmax relaxation of the channel.
+    """
+
+    def __init__(
+        self,
+        sender,
+        receiver,
+        loss,
+        train_logging_strategy: Optional[LoggingStrategy] = None,
+        test_logging_strategy: Optional[LoggingStrategy] = None,
+    ):
+        """
+        :param sender: sender agent
+        :param receiver: receiver agent
+        :param loss:  the optimized loss that accepts
+            sender_input: input of Sender
+            message: the is sent by Sender
+            receiver_input: input of Receiver from the dataset
+            receiver_output: output of Receiver
+            labels: labels assigned to Sender's input data
+          and outputs a tuple of (1) a loss tensor of shape (batch size, 1) (2) the dict with auxiliary information
+          of the same shape. The loss will be minimized during training, and the auxiliary information aggregated over
+          all batches in the dataset.
+        :param train_logging_strategy, test_logging_strategy: specify what parts of interactions to persist for
+            later analysis in the callbacks.
+        """
+        super(SenderReceiverRnnFixedLengthGS, self).__init__()
+        self.sender = sender
+        self.receiver = receiver
+        self.loss = loss
+        self.train_logging_strategy = (
+            LoggingStrategy()
+            if train_logging_strategy is None
+            else train_logging_strategy
+        )
+        self.test_logging_strategy = (
+            LoggingStrategy()
+            if test_logging_strategy is None
+            else test_logging_strategy
+        )
+
+    def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
+        message = self.sender(sender_input, aux_input)
+        receiver_output = self.receiver(message, receiver_input, aux_input)
+
+        loss, aux = self.loss(
+            sender_input,
+            message,
+            receiver_input,
+            receiver_output,
+            labels,
+            aux_input,
+        )
+
+        logging_strategy = (
+            self.train_logging_strategy if self.training else self.test_logging_strategy
+        )
+        msg_len = torch.ones(message.size(0)).to(sender_input.device) * message.size(1)
+        interaction = logging_strategy.filtered_interaction(
+            sender_input=sender_input,
+            receiver_input=receiver_input,
+            labels=labels,
+            aux_input=aux_input,
+            receiver_output=receiver_output.detach(),
+            message=message.detach(),
+            message_length=msg_len,
+            aux=aux,
+        )
+
+        return loss.mean(), interaction
