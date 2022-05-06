@@ -191,8 +191,10 @@ class ClipReceiver(nn.Module):
         if not model:
             model = clip.load(model_name)[0]
 
-        for p in model.parameters():
-            p.requires_grad = True if finetune_weights else False
+        for name, param in model.named_parameters():
+            if "visual" in name or "token_embedding" in name:
+                continue
+            param.requires_grad = True if finetune_weights else False
 
         if embeddings is None:
             embeddings = ClipEmbeddingLoader(model, freeze_embeddings).embeddings

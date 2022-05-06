@@ -63,8 +63,9 @@ def initialize_clip(name: str = "ViT-B/16", pretrained: bool = False):
     convert_models_to_fp32(model)
 
     if pretrained:
-        for param in model.parameters():
-            param.requires_grad = False
+        for name, param in model.named_parameters():
+            if "visual" in name:
+                param.requires_grad = False
         model = model.eval()
 
     return model, n_features
