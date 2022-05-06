@@ -30,7 +30,7 @@ def get_vision_model_opts(parser):
     group.add_argument(
         "--vision_model",
         type=str,
-        default="resnet50",
+        default="clip_vit_b/16",
         choices=[
             "resnet50",
             "resnet101",
@@ -52,6 +52,28 @@ def get_vision_model_opts(parser):
     )
 
 
+def get_clip_opts(parser):
+    group = parser.add_argument_group("clip opts")
+    group.add_argument(
+        "--add_clip_tokens",
+        default=False,
+        action="store_true",
+        help="Add clip special tokens for sos and eos to each emergent message",
+    )
+    group.add_argument(
+        "--finetune_clip",
+        default=False,
+        action="store_true",
+        help="Update clip weights during the referential game",
+    )
+    group.add_argument(
+        "--freeze_clip_embeddings",
+        default=False,
+        action="store_true",
+        help="Freeze pretrained clip embeddings during the referential game",
+    )
+
+
 def get_game_opts(parser):
     group = parser.add_argument_group("game opts")
     group.add_argument(
@@ -65,9 +87,22 @@ def get_game_opts(parser):
         default=2048,
     )
     group.add_argument(
-        "--recv_temperature",
-        type=float,
-        default=0.1,
+        "--clip_receiver",
+        default=False,
+        action="store_true",
+        help="Use a CLIP model as receiver",
+    )
+    group.add_argument(
+        "--use_clip_embeddings",
+        default=False,
+        action="store_true",
+        help="Use clip embeddings as symbol representations",
+    )
+    group.add_argument(
+        "--use_mlp_recv",
+        default=False,
+        action="store_true",
+        help="Use an mlp in the recv arch when transforming the extracted visual feats (if fale nn.Identity is used)",
     )
 
 
@@ -93,20 +128,22 @@ def get_common_opts(params):
         help="Skip training and evaluate from checkopoint",
     )
     parser.add_argument(
-        "--mode",
-        default="gs",
-        help="Training mode: Gumbel-based (gs) or Reinforce (rf). Default: gs",
-    )
-    parser.add_argument(
         "--gs_temperature",
         type=float,
         default=1.0,
         help="gs temperature used in the relaxation layer",
     )
+    parser.add_argument(
+        "--straight_through",
+        default=False,
+        action="store_true",
+        help="use straight through gumbel softmax estimator",
+    )
 
     get_data_opts(parser)
     get_vision_model_opts(parser)
     get_game_opts(parser)
+    get_clip_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)
     return opts

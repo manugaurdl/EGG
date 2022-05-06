@@ -106,6 +106,7 @@ def main(params):
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
+    # torch.set_deterministic(True)
     import sys
 
     main(sys.argv[1:])

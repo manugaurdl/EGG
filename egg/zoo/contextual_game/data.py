@@ -110,7 +110,7 @@ def get_dataloader(
             dataset, shuffle=(split != "valid"), drop_last=True, seed=seed
         )
 
-    # Not using batch size due to nature of the task
+    # Setting batch to 1 since batching is handled by the update_freq EGG parameter
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
