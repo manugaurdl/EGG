@@ -113,7 +113,9 @@ def build_game(opts):
         )
 
     if opts.use_clip_embeddings or opts.clip_receiver:
-        embedding_loader = ClipEmbeddingLoader(clip_model, opts.freeze_clip_embeddings)
+        embedding_loader = ClipEmbeddingLoader(
+            clip_model, opts.freeze_clip_embeddings, max_vocab=opts.max_clip_vocab
+        )
 
         pretrained_embeddings = embedding_loader.embeddings
         vocab_size = embedding_loader.vocab_size
@@ -144,6 +146,7 @@ def build_game(opts):
                 add_clip_tokens=opts.add_clip_tokens,
                 finetune_weights=opts.finetune_clip,
                 freeze_embeddings=opts.freeze_clip_embeddings,
+                max_clip_vocab=opts.max_clip_vocab,
             )
         else:
             receiver = SymbolReceiverWrapper(

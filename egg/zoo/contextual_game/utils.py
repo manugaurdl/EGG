@@ -72,6 +72,12 @@ def get_clip_opts(parser):
         action="store_true",
         help="Freeze pretrained clip embeddings during the referential game",
     )
+    group.add_argument(
+        "--max_clip_vocab",
+        type=int,
+        default=None,
+        help="Max num di embeddings to use from clip",
+    )
 
 
 def get_game_opts(parser):

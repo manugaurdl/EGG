@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -20,23 +21,22 @@ class ClipEmbeddingLoader:
         self,
         clip_model: Optional[nn.Module] = None,
         freeze_embeddings: bool = True,
+        max_vocab: int = None,
         data_path: str = "/private/home/rdessi/imagecode/data/",
     ):
         self.data_path = Path(data_path)
 
         self.freeze_embeddings = freeze_embeddings
-        self.tokenizer = clip.simple_tokenizer.SimpleTokenizer()
 
         self.clip_model = clip_model if clip_model else clip.load("ViT-B/16")[0]
+
+        if max_vocab:
+            assert max_vocab > 0
+        self.max_vocab = max_vocab
 
         self._load_embeddings()
 
     def _load_embeddings(self):
-        token_set = {
-            self.tokenizer.encoder["<|startoftext|>"],
-            self.tokenizer.encoder["<|endoftext|>"],
-        }
-
         # not including the test set since it is unlabeled and not used
         with open(self.data_path / "train_data.json") as fd:
             train = json.load(fd)
@@ -45,20 +45,17 @@ class ClipEmbeddingLoader:
 
         train_and_valid = {**train, **valid}
 
-        all_sents = []
+        token_list = []
         for _, captions in train_and_valid.items():
             for caption in captions.values():
-                all_sents.append(caption)
-                tokens = clip.tokenize(caption, truncate=True).unique().tolist()
-                token_set.update(tokens)
+                token_list.extend(clip.tokenize(caption, truncate=True)[0].tolist())
+
+        token_counter = Counter(token_list)
+        most_freq_tokens = [x[0] for x in token_counter.most_common(self.max_vocab)]
 
         embeddings = self.clip_model.token_embedding
-
-        token_list = list(token_set)
-        token_list.sort()
-
         self.embeddings = RelaxedEmbedding.from_pretrained(
-            embeddings.weight[token_list], freeze=self.freeze_embeddings
+            embeddings.weight[most_freq_tokens], freeze=self.freeze_embeddings
         )
 
         self.vocab_size, self.embedding_size = self.embeddings.weight.shape
@@ -186,6 +183,7 @@ class ClipReceiver(nn.Module):
         input_len: int = 77,  # clip defaul input len
         finetune_weights: bool = False,
         freeze_embeddings: bool = False,
+        max_clip_vocab: int = None,
     ):
         super(ClipReceiver, self).__init__()
         if not model:
@@ -197,7 +195,9 @@ class ClipReceiver(nn.Module):
             param.requires_grad = True if finetune_weights else False
 
         if embeddings is None:
-            embeddings = ClipEmbeddingLoader(model, freeze_embeddings).embeddings
+            embeddings = ClipEmbeddingLoader(
+                model, freeze_embeddings, max_clip_vocab
+            ).embeddings
 
         model.token_embedding = embeddings
         self.model = model  # adding the model so its parameter are in the optimizer
