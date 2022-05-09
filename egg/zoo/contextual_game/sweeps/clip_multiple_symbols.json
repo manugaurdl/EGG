@@ -18,5 +18,5 @@
     "sender_cell": ["gru"],
     "recv_cell": ["gru"],
     "sender_clip_embeddings": [true],
-    "pretrain_vision": ["true]
+    "pretrain_vision": [true]
 }
