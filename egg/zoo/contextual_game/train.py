@@ -67,8 +67,9 @@ def main(params):
     callbacks = [
         ConsoleLogger(as_json=True, print_train_loss=True),
         BestStatsTracker(),
-        WandbLogger(opts=opts, project="contexualized_emcomm"),
     ]
+    if opts.wandb:
+        callbacks.append(WandbLogger(opts=opts, project="contexualized_emcomm"))
 
     if opts.distributed_context.is_distributed:
         callbacks.append(DistributedSamplerEpochSetter())

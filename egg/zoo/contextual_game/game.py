@@ -129,8 +129,16 @@ def build_sender(visual_feats_size, vocab_size, pretrained_embeddings, opts):
 def build_receiver(
     visual_feats_size, vocab_size, clip_model, pretrained_embeddings, opts
 ):
+    receiver = Receiver(
+        input_dim=visual_feats_size,
+        hidden_dim=opts.recv_hidden_dim,
+        output_dim=opts.recv_output_dim,
+        use_mlp=opts.use_mlp_recv,
+        temperature=opts.loss_temperature,
+    )
     if opts.clip_receiver:
         receiver = ClipReceiver(
+            receiver,
             model=clip_model,
             embeddings=pretrained_embeddings,
             add_clip_tokens=opts.add_clip_tokens,
@@ -139,12 +147,6 @@ def build_receiver(
             max_clip_vocab=opts.max_clip_vocab,
         )
     else:
-        receiver = Receiver(
-            input_dim=visual_feats_size,
-            hidden_dim=opts.recv_hidden_dim,
-            output_dim=opts.recv_output_dim,
-            use_mlp=opts.use_mlp_recv,
-        )
         if opts.max_len == 1:
             receiver = SymbolReceiverWrapper(
                 receiver,
@@ -182,6 +184,7 @@ def build_game(opts):
         embedding_loader = ClipEmbeddingLoader(
             clip_model, opts.freeze_clip_embeddings, max_vocab=opts.max_clip_vocab
         )
+        print("| Done loading clip embeddings")
 
         pretrained_embeddings = embedding_loader.embeddings
         vocab_size = embedding_loader.vocab_size

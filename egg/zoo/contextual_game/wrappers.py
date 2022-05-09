@@ -36,8 +36,6 @@ class ClipEmbeddingLoader:
 
         self._load_embeddings()
 
-        print("|    Done loadind clip embeddings")
-
     def _load_embeddings(self):
         # not including the test set since it is unlabeled and not used
         with open(self.data_path / "train_data.json") as fd:
@@ -112,7 +110,6 @@ class SymbolReceiverWrapper(nn.Module):
         embeddings: nn.Module = None,
     ):
         super(SymbolReceiverWrapper, self).__init__()
-        print(f"|   Using single symbol with recv of class {type(self).__name__}")
         self.agent = agent
 
         self.embedding = (
@@ -140,7 +137,6 @@ class RnnSenderFixedLengthGS(nn.Module):
         straight_through: bool = False,
     ):
         super(RnnSenderFixedLengthGS, self).__init__()
-        print(f"|   Using multiple symbols with sender of class {type(self).__name__}")
         self.agent = agent
 
         assert max_len >= 1, "Cannot have a max_len below 1"
@@ -226,7 +222,6 @@ class RnnReceiverFixedLengthGS(nn.Module):
         freeze_embeddings: bool = False,
     ):
         super(RnnReceiverFixedLengthGS, self).__init__()
-        print(f"|   Using multiple symbols with recv of class {type(self).__name__}")
         self.agent = agent
 
         self.cell = None
@@ -270,6 +265,7 @@ class RnnReceiverFixedLengthGS(nn.Module):
 class ClipReceiver(nn.Module):
     def __init__(
         self,
+        agent: nn.Module,
         model: Optional[nn.Module] = None,
         embeddings: Optional[torch.Tensor] = None,
         model_name: str = "VIT-B/16",
@@ -280,7 +276,7 @@ class ClipReceiver(nn.Module):
         max_clip_vocab: int = None,
     ):
         super(ClipReceiver, self).__init__()
-        print("|   Using CLIP receiver")
+        self.agent = agent
         if not model:
             model = clip.load(model_name)[0]
 
@@ -320,7 +316,7 @@ class ClipReceiver(nn.Module):
             out[:, 0, self.sos_idx] = 1
             out[:, msg_len + 1, self.eos_idx] = 1
 
-        return self.text_encoder(out)
+        return self.agent(self.text_encoder(out), image_features, aux_input)
 
 
 class VisionGame(nn.Module):

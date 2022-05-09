@@ -109,6 +109,12 @@ def get_game_opts(parser):
         action="store_true",
         help="Use an mlp in the recv arch when transforming the extracted visual feats (if fale nn.Identity is used)",
     )
+    parser.add_argument(
+        "--loss_temperature",
+        type=float,
+        default=1.0,
+        help="loss temperature used when comparing image and text embeddings",
+    )
 
     # multi symbol RNN options
     group.add_argument(
@@ -177,6 +183,12 @@ def get_common_opts(params):
         default=False,
         action="store_true",
         help="use straight through gumbel softmax estimator",
+    )
+    parser.add_argument(
+        "--wandb",
+        action="store_true",
+        default=False,
+        help="Enable wandb logging",
     )
 
     get_data_opts(parser)
