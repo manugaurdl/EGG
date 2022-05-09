@@ -9,13 +9,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
-from egg.core.gs_wrappers import GumbelSoftmaxWrapper
 from egg.zoo.contextual_game.archs import Receiver, Sender
 from egg.zoo.contextual_game.wrappers import (
     ClipEmbeddingLoader,
     ClipReceiver,
-    # RnnReceiverFixedLengthGS,
-    # RnnSenderFixedLengthGS,
+    GumbelSoftmaxWrapper,
+    RnnReceiverFixedLengthGS,
+    RnnSenderFixedLengthGS,
     SymbolReceiverWrapper,
     VisionGame,
 )
@@ -100,6 +100,72 @@ def initialize_resnet(name: str = "resnet50", pretrained: bool = False):
     return model, n_features
 
 
+def build_sender(visual_feats_size, vocab_size, pretrained_embeddings, opts):
+    sender = Sender(
+        input_dim=visual_feats_size,
+        output_dim=vocab_size if opts.max_len == 1 else opts.sender_rnn_hidden_size,
+    )
+
+    len2sender = {1: GumbelSoftmaxWrapper}
+
+    sender = len2sender.get(opts.max_len, RnnSenderFixedLengthGS)(
+        sender,
+        temperature=opts.gs_temperature,
+        straight_through=opts.straight_through,
+        vocab_size=vocab_size,
+        embed_dim=opts.sender_rnn_embed_dim,
+        hidden_size=opts.sender_rnn_hidden_size,
+        max_len=opts.max_len,
+        embeddings=pretrained_embeddings if opts.sender_clip_embeddings else None,
+        freeze_embeddings=opts.freeze_clip_embeddings,
+        cell=opts.sender_cell,
+    )
+
+    print(f"| Using {opts.max_len} symbols, sender of class {type(sender).__name__}")
+
+    return sender
+
+
+def build_receiver(
+    visual_feats_size, vocab_size, clip_model, pretrained_embeddings, opts
+):
+    if opts.clip_receiver:
+        receiver = ClipReceiver(
+            model=clip_model,
+            embeddings=pretrained_embeddings,
+            add_clip_tokens=opts.add_clip_tokens,
+            finetune_weights=opts.finetune_clip,
+            freeze_embeddings=opts.freeze_clip_embeddings,
+            max_clip_vocab=opts.max_clip_vocab,
+        )
+    else:
+        receiver = Receiver(
+            input_dim=visual_feats_size,
+            hidden_dim=opts.recv_hidden_dim,
+            output_dim=opts.recv_output_dim,
+            use_mlp=opts.use_mlp_recv,
+        )
+        if opts.max_len == 1:
+            receiver = SymbolReceiverWrapper(
+                receiver,
+                vocab_size=vocab_size,
+                embeddings=pretrained_embeddings,
+                agent_input_size=opts.recv_output_dim,
+            )
+        else:
+            receiver = RnnReceiverFixedLengthGS(
+                receiver,
+                vocab_size=vocab_size,
+                embeddings=pretrained_embeddings if opts.recv_clip_embeddings else None,
+                embed_dim=opts.recv_rnn_embed_dim,
+                hidden_size=opts.recv_rnn_hidden_size,
+                cell=opts.sender_cell,
+                freeze_embeddings=opts.freeze_clip_embeddings,
+            )
+    print(f"| Using {opts.max_len} symbols, recv of class {type(receiver).__name__}")
+    return receiver
+
+
 def build_game(opts):
     clip_model = None
     if "clip" in opts.vision_model:
@@ -112,7 +178,7 @@ def build_game(opts):
             opts.vision_model, opts.pretrain_vision
         )
 
-    if opts.use_clip_embeddings or opts.clip_receiver:
+    if opts.sender_clip_embeddings or opts.recv_clip_embeddings or opts.clip_receiver:
         embedding_loader = ClipEmbeddingLoader(
             clip_model, opts.freeze_clip_embeddings, max_vocab=opts.max_clip_vocab
         )
@@ -123,41 +189,12 @@ def build_game(opts):
         pretrained_embeddings = None
         vocab_size = opts.vocab_size
 
-    sender = Sender(input_dim=visual_feats_size, vocab_size=vocab_size)
-    receiver = Receiver(
-        input_dim=visual_feats_size,
-        hidden_dim=opts.recv_hidden_dim,
-        output_dim=opts.recv_output_dim,
-        use_mlp=opts.use_mlp_recv,
-    )
-
     assert opts.max_len > 0
-    if opts.max_len == 1:
-        sender = GumbelSoftmaxWrapper(
-            sender,
-            temperature=opts.gs_temperature,
-            straight_through=opts.straight_through,
-        )
 
-        if opts.clip_receiver:
-            receiver = ClipReceiver(
-                model=clip_model,
-                embeddings=pretrained_embeddings,
-                add_clip_tokens=opts.add_clip_tokens,
-                finetune_weights=opts.finetune_clip,
-                freeze_embeddings=opts.freeze_clip_embeddings,
-                max_clip_vocab=opts.max_clip_vocab,
-            )
-        else:
-            receiver = SymbolReceiverWrapper(
-                agent=receiver,
-                vocab_size=vocab_size,
-                agent_input_size=opts.recv_output_dim,
-                embeddings=pretrained_embeddings,
-            )
-    else:
-        # TODO: option to share embeddings between sender and receiver
-        raise RuntimeError("max_len > 1 currently not supported")
+    sender = build_sender(visual_feats_size, vocab_size, pretrained_embeddings, opts)
+    receiver = build_receiver(
+        visual_feats_size, vocab_size, clip_model, pretrained_embeddings, opts
+    )
     game = VisionGame(vision_model, sender, receiver, loss)
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)

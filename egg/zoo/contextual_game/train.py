@@ -9,6 +9,7 @@ import torch
 
 import egg.core as core
 from egg.core import ConsoleLogger
+from egg.core.callbacks import WandbLogger
 
 from egg.zoo.contextual_game.data import get_dataloader
 from egg.zoo.contextual_game.callbacks import (
@@ -16,10 +17,10 @@ from egg.zoo.contextual_game.callbacks import (
     DistributedSamplerEpochSetter,
 )
 from egg.zoo.contextual_game.game import build_game
+from egg.zoo.contextual_game.opts import get_common_opts
 from egg.zoo.contextual_game.utils import (
     add_weight_decay,
     dump_interaction,
-    get_common_opts,
     get_sha,
     log_stats,
     setup_for_distributed,
@@ -66,6 +67,7 @@ def main(params):
     callbacks = [
         ConsoleLogger(as_json=True, print_train_loss=True),
         BestStatsTracker(),
+        WandbLogger(opts=opts, project="contexualized_emcomm"),
     ]
 
     if opts.distributed_context.is_distributed:
@@ -106,7 +108,7 @@ def main(params):
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
-    # torch.set_deterministic(True)
+    torch.set_deterministic(True)
     import sys
 
     main(sys.argv[1:])

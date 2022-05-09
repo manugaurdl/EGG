@@ -9,11 +9,11 @@ import torch.nn as nn
 
 
 class Sender(nn.Module):
-    def __init__(self, input_dim: int, vocab_size: int):
+    def __init__(self, input_dim: int, output_dim: int):
         super(Sender, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, vocab_size),
-            nn.BatchNorm1d(vocab_size),
+            nn.Linear(input_dim, output_dim),
+            nn.BatchNorm1d(output_dim),
         )
 
     def forward(self, resnet_output, aux_input=None):

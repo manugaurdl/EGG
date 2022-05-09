@@ -36,6 +36,8 @@ class ClipEmbeddingLoader:
 
         self._load_embeddings()
 
+        print("|    Done loadind clip embeddings")
+
     def _load_embeddings(self):
         # not including the test set since it is unlabeled and not used
         with open(self.data_path / "train_data.json") as fd:
@@ -61,9 +63,43 @@ class ClipEmbeddingLoader:
         self.vocab_size, self.embedding_size = self.embeddings.weight.shape
 
 
+class GumbelSoftmaxWrapper(nn.Module):
+    """
+    Gumbel-Softmax Wrapper for an agent that outputs a single symbol. Assumes that during the forward pass,
+    the agent returns log-probabilities over the potential output symbols. During training, the wrapper
+    transforms them into a sample from the Gumbel Softmax (GS) distribution;
+    eval-time it returns greedy one-hot encoding of the same shape.
+    """
+
+    def __init__(
+        self,
+        agent,
+        temperature=1.0,
+        trainable_temperature=False,
+        straight_through=False,
+        **kwargs,
+    ):
+        super(GumbelSoftmaxWrapper, self).__init__()
+        self.agent = agent
+        self.straight_through = straight_through
+        if not trainable_temperature:
+            self.temperature = temperature
+        else:
+            self.temperature = torch.nn.Parameter(
+                torch.tensor([temperature]), requires_grad=True
+            )
+
+    def forward(self, *args, **kwargs):
+        logits = self.agent(*args, **kwargs)
+        sample = gumbel_softmax_sample(
+            logits, self.temperature, self.training, self.straight_through
+        )
+        return sample
+
+
 class SymbolReceiverWrapper(nn.Module):
     """
-    An optional wrapper for single-symbol Receiver, both Gumbel-Softmax and Reinforce. Receives a message, embeds it,
+    A wrapper for single-symbol Receiver, both Gumbel-Softmax and Reinforce. Receives a message, embeds it,
     and passes to the wrapped agent. Same as the one in core with the additional
     option of using pretrained embeddings
     """
@@ -76,6 +112,7 @@ class SymbolReceiverWrapper(nn.Module):
         embeddings: nn.Module = None,
     ):
         super(SymbolReceiverWrapper, self).__init__()
+        print(f"|   Using single symbol with recv of class {type(self).__name__}")
         self.agent = agent
 
         self.embedding = (
@@ -90,19 +127,20 @@ class SymbolReceiverWrapper(nn.Module):
 class RnnSenderFixedLengthGS(nn.Module):
     def __init__(
         self,
-        agent,
-        vocab_size,
-        embed_dim,
-        hidden_size,
-        max_len,
-        temperature,
-        pretrained_embeddings=None,
-        freeze_embeddings=False,
-        cell="rnn",
-        trainable_temperature=False,
-        straight_through=False,
+        agent: nn.Module,
+        vocab_size: int,
+        embed_dim: int,
+        hidden_size: int,
+        max_len: int,
+        embeddings: Optional[nn.Module] = None,
+        freeze_embeddings: bool = False,
+        cell: str = "rnn",
+        trainable_temperature: bool = False,
+        temperature: float = 1.0,
+        straight_through: bool = False,
     ):
         super(RnnSenderFixedLengthGS, self).__init__()
+        print(f"|   Using multiple symbols with sender of class {type(self).__name__}")
         self.agent = agent
 
         assert max_len >= 1, "Cannot have a max_len below 1"
@@ -110,10 +148,7 @@ class RnnSenderFixedLengthGS(nn.Module):
 
         self.hidden_to_output = nn.Linear(hidden_size, vocab_size)
 
-        if pretrained_embeddings:
-            self.embedding = pretrained_embeddings
-        else:
-            self.embedding = nn.Linear(vocab_size, embed_dim)
+        self.embedding = embeddings if embeddings else nn.Linear(vocab_size, embed_dim)
 
         self.sos_embedding = nn.Parameter(torch.zeros(embed_dim))
 
@@ -173,6 +208,65 @@ class RnnSenderFixedLengthGS(nn.Module):
         return sequence
 
 
+class RnnReceiverFixedLengthGS(nn.Module):
+    """
+    Gumbel Softmax-based wrapper for Receiver agent in fixed-length communication game. The user implemented logic
+    is passed in `agent` and is responsible for mapping (RNN's hidden state + Receiver's optional input)
+    into the output vector.
+    """
+
+    def __init__(
+        self,
+        agent: nn.Module,
+        vocab_size: int,
+        embed_dim: int,
+        hidden_size: int,
+        cell: str = "rnn",
+        embeddings: torch.Tensor = None,
+        freeze_embeddings: bool = False,
+    ):
+        super(RnnReceiverFixedLengthGS, self).__init__()
+        print(f"|   Using multiple symbols with recv of class {type(self).__name__}")
+        self.agent = agent
+
+        self.cell = None
+        cell = cell.lower()
+        if cell == "rnn":
+            self.cell = nn.RNNCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "gru":
+            self.cell = nn.GRUCell(input_size=embed_dim, hidden_size=hidden_size)
+        elif cell == "lstm":
+            self.cell = nn.LSTMCell(input_size=embed_dim, hidden_size=hidden_size)
+        else:
+            raise ValueError(f"Unknown RNN Cell: {cell}")
+
+        self.embedding = embeddings if embeddings else nn.Linear(vocab_size, embed_dim)
+
+    def forward(self, message, input=None, aux_input=None):
+        emb = self.embedding(message)
+
+        prev_hidden = None
+        prev_c = None
+
+        # to get an access to the hidden states, we have to unroll the cell ourselves
+        for step in range(message.size(1)):
+            e_t = emb[:, step, ...]
+            if isinstance(self.cell, nn.LSTMCell):
+                h_t, prev_c = (
+                    self.cell(e_t, (prev_hidden, prev_c))
+                    if prev_hidden is not None
+                    else self.cell(e_t)
+                )
+            else:
+                h_t = self.cell(e_t, prev_hidden)
+
+            prev_hidden = h_t
+
+        output = self.agent(h_t, input, aux_input)
+
+        return output
+
+
 class ClipReceiver(nn.Module):
     def __init__(
         self,
@@ -186,6 +280,7 @@ class ClipReceiver(nn.Module):
         max_clip_vocab: int = None,
     ):
         super(ClipReceiver, self).__init__()
+        print("|   Using CLIP receiver")
         if not model:
             model = clip.load(model_name)[0]
 
@@ -226,67 +321,6 @@ class ClipReceiver(nn.Module):
             out[:, msg_len + 1, self.eos_idx] = 1
 
         return self.text_encoder(out)
-
-
-class RnnReceiverFixedLengthGS(nn.Module):
-    """
-    Gumbel Softmax-based wrapper for Receiver agent in fixed-length communication game. The user implemented logic
-    is passed in `agent` and is responsible for mapping (RNN's hidden state + Receiver's optional input)
-    into the output vector.
-    """
-
-    def __init__(
-        self,
-        agent: nn.Module,
-        vocab_size: int,
-        embed_dim: int,
-        hidden_size: int,
-        cell: str = "rnn",
-        pretrained_embeddings: torch.Tensor = None,
-        freeze_embeddings: bool = False,
-    ):
-        super(RnnReceiverFixedLengthGS, self).__init__()
-        self.agent = agent
-
-        self.cell = None
-        cell = cell.lower()
-        if cell == "rnn":
-            self.cell = nn.RNNCell(input_size=embed_dim, hidden_size=hidden_size)
-        elif cell == "gru":
-            self.cell = nn.GRUCell(input_size=embed_dim, hidden_size=hidden_size)
-        elif cell == "lstm":
-            self.cell = nn.LSTMCell(input_size=embed_dim, hidden_size=hidden_size)
-        else:
-            raise ValueError(f"Unknown RNN Cell: {cell}")
-
-        if pretrained_embeddings:
-            self.embedding = pretrained_embeddings
-        else:
-            self.embedding = nn.Linear(vocab_size, embed_dim)
-
-    def forward(self, message, input=None, aux_input=None):
-        emb = self.embedding(message)
-
-        prev_hidden = None
-        prev_c = None
-
-        # to get an access to the hidden states, we have to unroll the cell ourselves
-        for step in range(message.size(1)):
-            e_t = emb[:, step, ...]
-            if isinstance(self.cell, nn.LSTMCell):
-                h_t, prev_c = (
-                    self.cell(e_t, (prev_hidden, prev_c))
-                    if prev_hidden is not None
-                    else self.cell(e_t)
-                )
-            else:
-                h_t = self.cell(e_t, prev_hidden)
-
-            prev_hidden = h_t
-
-        output = self.agent(h_t, input, aux_input)
-
-        return output
 
 
 class VisionGame(nn.Module):

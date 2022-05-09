@@ -1,0 +1,22 @@
+{
+    "random_seed": [111],
+    "n_epoch": [25],
+    "straight_through": [false],
+    "gs_temperature": [1.0, 3.0, 5.0],
+    "lr": [0.01, 0.005, 0.001, 0.0005],
+    "update_freq": [1, 10, 36, 128],
+    "add_clip_tokens": [true],
+    "clip_receiver": [true],
+    "vision_model": ["clip_vit_b/16"],
+    "freeze_clip_embeddings": [true],
+    "max_clip_vocab": [3000],
+    "max_len": [2, 3, 4, 5],
+    "sender_rnn_embed_dim": [512],
+    "recv_rnn_embed_dim": [512],
+    "sender_rnn_hidden_size": [1024],
+    "recv_rnn_hidden_size": [1024],
+    "sender_cell": ["gru"],
+    "recv_cell": ["gru"],
+    "sender_clip_embeddings": [true],
+    "pretrain_vision": ["true]
+}
