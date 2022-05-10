@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import copy
 import json
 from collections import Counter
 from pathlib import Path
@@ -268,7 +269,7 @@ class ClipReceiver(nn.Module):
         agent: nn.Module,
         model: Optional[nn.Module] = None,
         embeddings: Optional[torch.Tensor] = None,
-        model_name: str = "VIT-B/16",
+        model_name: str = "ViT-B/16",
         add_clip_tokens: bool = False,
         input_len: int = 77,  # clip defaul input len
         finetune_weights: bool = False,
@@ -329,31 +330,46 @@ class VisionGame(nn.Module):
         freeze_vision: Optional[str] = None,
     ):
         super(VisionGame, self).__init__()
-        self.visual_encoder = visual_encoder
+        self._setup_visual_encoders(visual_encoder, freeze_vision)
 
         self.sender = sender
         self.receiver = receiver
         self.loss = loss
 
-        self.freeze_vision = freeze_vision
-        self.visual_encoder.train() if self.freeze_vision else self.visual_encoder.eval()
-
         self.train_logging_strategy = LoggingStrategy().minimal()
         self.test_logging_strategy = LoggingStrategy()
 
-    def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
-        if self.freeze_vision:
-            input = self.visual_encoder(sender_input)
-            sender_input = (
-                input if self.freeze_vision == "recv_only" else input.detach()
-            )
-            recv_input = (
-                input if self.freeze_vision == "sender_only" else input.detach()
-            )
-        else:
-            with torch.no_grad():
-                sender_input = self.visual_encoder(sender_input)
-            recv_input = sender_input
+    def _setup_visual_encoders(self, visual_encoder, freeze_vision):
+        if freeze_vision:
+            if freeze_vision == "both":
+                visual_encoder.eval()
+                for param in visual_encoder.parameters():
+                    param.requires_grad = False
+                self.sender_visual_encoder = self.recv_visual_encoder = visual_encoder
+
+            else:
+                model_w_grad = copy.deepcopy(visual_encoder)
+                model_w_grad.train()
+
+                for param in visual_encoder.parameters():
+                    param.requires_grad = False
+                model_wo_grad = visual_encoder
+                model_wo_grad.eval()
+
+                if freeze_vision == "recv_only":
+                    self.sender_visual_encoder = model_w_grad
+                    self.recv_visual_encoder = model_wo_grad
+                else:  # freeze_vision == sender_only
+                    self.sender_visual_encoder = model_wo_grad
+                    self.recv_visual_encoder = model_w_grad
+
+        else:  # train_both (shared vision)
+            visual_encoder.train()
+            self.sender_visual_encoder = self.recv_visual_encoder = visual_encoder
+
+    def forward(self, input_images, labels, receiver_input=None, aux_input=None):
+        sender_input = self.sender_visual_encoder(input_images)
+        recv_input = self.recv_visual_encoder(input_images)
 
         message = self.sender(sender_input, aux_input)
         receiver_output = self.receiver(message, recv_input, aux_input)

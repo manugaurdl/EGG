@@ -40,7 +40,7 @@ def get_vision_model_opts(parser):
     group.add_argument(
         "--freeze_vision",
         default=None,
-        choices=["sender_only", "recv_only"],
+        choices=["sender_only", "recv_only", "both"],
         help="If set, pretrained vision modules will be used",
     )
 
