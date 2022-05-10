@@ -6,11 +6,11 @@
 import time
 
 import torch
+import wandb
 
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.core.callbacks import WandbLogger
-
 from egg.zoo.contextual_game.data import get_dataloader
 from egg.zoo.contextual_game.callbacks import (
     BestStatsTracker,
@@ -69,7 +69,11 @@ def main(params):
         BestStatsTracker(),
     ]
     if opts.wandb:
-        callbacks.append(WandbLogger(opts=opts, project="contexualized_emcomm"))
+        callbacks.append(
+            WandbLogger(
+                opts=opts, tags=[opts.wandb_tag], project="contexualized_emcomm"
+            )
+        )
 
     if opts.distributed_context.is_distributed:
         callbacks.append(DistributedSamplerEpochSetter())
@@ -101,6 +105,9 @@ def main(params):
     log_stats(test_interaction, "TEST SET")
     if opts.distributed_context.is_leader:
         dump_interaction(test_interaction, opts)
+
+    if opts.wandb:
+        wandb.log({"test_acc": test_interaction.aux["acc"]}.mean().item(), commit=True)
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")

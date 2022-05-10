@@ -10,7 +10,7 @@ import pathlib
 import re
 import sys
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Union
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Union
 
 import torch
 import wandb
@@ -120,6 +120,7 @@ class WandbLogger(Callback):
     def __init__(
         self,
         opts: Union[argparse.ArgumentParser, Dict, str, None] = None,
+        tags: Optional[Sequence] = None,
         project: Optional[str] = None,
         run_id: Optional[str] = None,
         **kwargs,
@@ -132,7 +133,7 @@ class WandbLogger(Callback):
         self.opts = opts
         self.last_train_acc = 0.0
 
-        wandb.init(project=project, id=run_id, **kwargs)
+        wandb.init(project=project, tags=tags, id=run_id, **kwargs)
         wandb.config.update(opts)
 
     @staticmethod
@@ -148,13 +149,16 @@ class WandbLogger(Callback):
     ):
         if is_training and self.trainer.distributed_context.is_leader:
             self.log_to_wandb({"batch_loss": loss}, commit=True)
+            self.log_to_wandb({"batch_acc": logs.aux["acc"].mean().item()}, commit=True)
 
     def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
         self.last_train_acc = logs.aux["acc"].mean().item()
 
         if self.trainer.distributed_context.is_leader:
             self.log_to_wandb({"train_loss": loss, "epoch": epoch}, commit=True)
-            self.log_to_wandb({"train_acc": self.last_train_acc, "epoch": epoch}, commit=True)
+            self.log_to_wandb(
+                {"train_acc": self.last_train_acc, "epoch": epoch}, commit=True
+            )
 
     def on_validation_end(self, loss: float, logs: Interaction, epoch: int):
         if self.trainer.distributed_context.is_leader:

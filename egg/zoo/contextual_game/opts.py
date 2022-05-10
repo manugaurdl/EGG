@@ -190,6 +190,7 @@ def get_common_opts(params):
         default=False,
         help="Enable wandb logging",
     )
+    parser.add_argument("--wandb_tag", default=None)
 
     get_data_opts(parser)
     get_vision_model_opts(parser)
