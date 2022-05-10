@@ -14,8 +14,8 @@
     "sender_rnn_hidden_size": [512],
     "sender_cell": ["gru"],
     "sender_clip_embeddings": [true],
-    "freeze_clip_embeddings": [true, false],
-    "freeze_vision": ["recv_only"],
+    "freeze_clip_embeddings": [false],
+    "finetune_clip": [true],
     "wandb": [true],
-    "wandb_tag": ["paper_replica_frozen"]
+    "wandb_tag": ["paper_replica_finetune"]
 }
