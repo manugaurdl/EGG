@@ -29,7 +29,6 @@ class Receiver(nn.Module):
         hidden_dim: int = 2048,
         output_dim: int = 2048,
         use_mlp: bool = False,
-        temperature: float = 1.0,
     ):
         super(Receiver, self).__init__()
         if use_mlp:
@@ -43,7 +42,6 @@ class Receiver(nn.Module):
             self.fc = nn.Identity()
 
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
-        self.temperature = temperature
 
     def forward(self, text_features, image_features, aux_input=None):
         image_features = self.fc(image_features)

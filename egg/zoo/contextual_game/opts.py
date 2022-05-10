@@ -38,9 +38,9 @@ def get_vision_model_opts(parser):
         help="Model name for the visual encoder",
     )
     group.add_argument(
-        "--pretrain_vision",
-        default=False,
-        action="store_true",
+        "--freeze_vision",
+        default=None,
+        choices=["sender_only", "recv_only"],
         help="If set, pretrained vision modules will be used",
     )
 
@@ -108,12 +108,6 @@ def get_game_opts(parser):
         default=False,
         action="store_true",
         help="Use an mlp in the recv arch when transforming the extracted visual feats (if fale nn.Identity is used)",
-    )
-    parser.add_argument(
-        "--loss_temperature",
-        type=float,
-        default=1.0,
-        help="loss temperature used when comparing image and text embeddings",
     )
 
     # multi symbol RNN options

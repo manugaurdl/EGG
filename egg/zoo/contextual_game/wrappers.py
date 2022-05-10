@@ -326,6 +326,7 @@ class VisionGame(nn.Module):
         sender: nn.Module,
         receiver: nn.Module,
         loss: Callable,
+        freeze_vision: Optional[str] = None,
     ):
         super(VisionGame, self).__init__()
         self.visual_encoder = visual_encoder
@@ -334,15 +335,28 @@ class VisionGame(nn.Module):
         self.receiver = receiver
         self.loss = loss
 
+        self.freeze_vision = freeze_vision
+        self.visual_encoder.train() if self.freeze_vision else self.visual_encoder.eval()
+
         self.train_logging_strategy = LoggingStrategy().minimal()
         self.test_logging_strategy = LoggingStrategy()
 
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
-        # TODO: currently there's no support for non-shared vision modules
-        visual_feats = self.visual_encoder(sender_input)
+        if self.freeze_vision:
+            input = self.visual_encoder(sender_input)
+            sender_input = (
+                input if self.freeze_vision == "recv_only" else input.detach()
+            )
+            recv_input = (
+                input if self.freeze_vision == "sender_only" else input.detach()
+            )
+        else:
+            with torch.no_grad():
+                sender_input = self.visual_encoder(sender_input)
+            recv_input = sender_input
 
-        message = self.sender(visual_feats, aux_input)
-        receiver_output = self.receiver(message, visual_feats, aux_input)
+        message = self.sender(sender_input, aux_input)
+        receiver_output = self.receiver(message, recv_input, aux_input)
 
         loss, aux = self.loss(
             sender_input, message, receiver_input, receiver_output, labels, aux_input

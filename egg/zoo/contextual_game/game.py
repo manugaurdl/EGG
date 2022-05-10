@@ -45,7 +45,7 @@ def convert_models_to_fp32(model):
         p.data = p.data.float()
 
 
-def initialize_clip(name: str = "ViT-B/16", pretrained: bool = False):
+def initialize_clip(name: str = "ViT-B/16"):
     modules = {
         "clip_vit_b/32": clip.load("ViT-B/32")[0],
         "clip_vit_b/16": clip.load("ViT-B/16")[0],
@@ -62,21 +62,15 @@ def initialize_clip(name: str = "ViT-B/16", pretrained: bool = False):
     n_features = model.visual.output_dim
     convert_models_to_fp32(model)
 
-    if pretrained:
-        for name, param in model.named_parameters():
-            if "visual" in name:
-                param.requires_grad = False
-        model = model.eval()
-
     return model, n_features
 
 
-def initialize_resnet(name: str = "resnet50", pretrained: bool = False):
+def initialize_resnet(name: str = "resnet50"):
     modules = {
-        "resnet50": torchvision.models.resnet50(pretrained=pretrained),
-        "resnet101": torchvision.models.resnet101(pretrained=pretrained),
-        "resnet152": torchvision.models.resnet152(pretrained=pretrained),
-        "vgg11": torchvision.models.vgg11(pretrained=pretrained),
+        "resnet50": torchvision.models.resnet50(),
+        "resnet101": torchvision.models.resnet101(),
+        "resnet152": torchvision.models.resnet152(),
+        "vgg11": torchvision.models.vgg11(),
     }
 
     if name not in modules:
@@ -91,11 +85,6 @@ def initialize_resnet(name: str = "resnet50", pretrained: bool = False):
     else:  # vgg11
         n_features = model.classifier[6].in_features
         model.classifier[6] = nn.Identity()
-
-    if pretrained:
-        for param in model.parameters():
-            param.requires_grad = False
-        model = model.eval()
 
     return model, n_features
 
@@ -134,7 +123,6 @@ def build_receiver(
         hidden_dim=opts.recv_hidden_dim,
         output_dim=opts.recv_output_dim,
         use_mlp=opts.use_mlp_recv,
-        temperature=opts.loss_temperature,
     )
     if opts.clip_receiver:
         receiver = ClipReceiver(
@@ -171,14 +159,10 @@ def build_receiver(
 def build_game(opts):
     clip_model = None
     if "clip" in opts.vision_model:
-        clip_model, visual_feats_size = initialize_clip(
-            opts.vision_model, opts.pretrain_vision
-        )
+        clip_model, visual_feats_size = initialize_clip(opts.vision_model)
         vision_model = clip_model.visual
     else:
-        vision_model, visual_feats_size = initialize_resnet(
-            opts.vision_model, opts.pretrain_vision
-        )
+        vision_model, visual_feats_size = initialize_resnet(opts.vision_model)
 
     if opts.sender_clip_embeddings or opts.recv_clip_embeddings or opts.clip_receiver:
         embedding_loader = ClipEmbeddingLoader(
@@ -198,7 +182,7 @@ def build_game(opts):
     receiver = build_receiver(
         visual_feats_size, vocab_size, clip_model, pretrained_embeddings, opts
     )
-    game = VisionGame(vision_model, sender, receiver, loss)
+    game = VisionGame(vision_model, sender, receiver, loss, opts.freeze_vision)
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
 
