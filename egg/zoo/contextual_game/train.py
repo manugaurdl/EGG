@@ -10,16 +10,15 @@ import wandb
 
 import egg.core as core
 from egg.core import ConsoleLogger
-from egg.core.callbacks import WandbLogger
 from egg.zoo.contextual_game.data import get_dataloader
 from egg.zoo.contextual_game.callbacks import (
     BestStatsTracker,
     DistributedSamplerEpochSetter,
+    WandbLogger,
 )
 from egg.zoo.contextual_game.game import build_game
 from egg.zoo.contextual_game.opts import get_common_opts
 from egg.zoo.contextual_game.utils import (
-    add_weight_decay,
     dump_interaction,
     get_sha,
     log_stats,
@@ -50,18 +49,21 @@ def main(params):
         is_distributed=opts.distributed_context.is_distributed,
         seed=opts.random_seed,
     )
+    valid_loader = get_dataloader(
+        image_dir=opts.image_dir,
+        metadata_dir=opts.metadata_dir,
+        batch_size=opts.batch_size,
+        image_size=opts.image_size,
+        split="valid",
+        num_workers=opts.num_workers,
+        is_distributed=opts.distributed_context.is_distributed,
+        seed=opts.random_seed,
+    )
 
     game = build_game(opts)
 
-    model_parameters = add_weight_decay(game, opts.weight_decay, skip_name="bn")
-
-    optimizer = torch.optim.SGD(
-        model_parameters,
-        lr=opts.lr,
-        momentum=0.9,
-    )
-    optimizer_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=opts.n_epochs
+    optimizer = torch.optim.Adam(
+        game.parameters(), lr=opts.lr, betas=(0.9, 0.98), eps=1e-6, weight_decay=0.2
     )
 
     callbacks = [
@@ -70,9 +72,7 @@ def main(params):
     ]
     if opts.wandb:
         callbacks.append(
-            WandbLogger(
-                opts=opts, tags=[opts.wandb_tag], project="contexualized_emcomm"
-            )
+            WandbLogger(opts=opts, tags=[opts.wandb_tag], project="clip_context")
         )
 
     if opts.distributed_context.is_distributed:
@@ -81,8 +81,8 @@ def main(params):
     trainer = core.Trainer(
         game=game,
         optimizer=optimizer,
-        optimizer_scheduler=optimizer_scheduler,
         train_data=train_loader,
+        validation_data=valid_loader,
         callbacks=callbacks,
         debug=opts.debug,
     )
@@ -95,7 +95,7 @@ def main(params):
         metadata_dir=opts.metadata_dir,
         batch_size=opts.batch_size,
         image_size=opts.image_size,
-        split="valid",
+        split="test",
         num_workers=opts.num_workers,
         is_distributed=opts.distributed_context.is_distributed,
         seed=opts.random_seed,
@@ -107,7 +107,7 @@ def main(params):
         dump_interaction(test_interaction, opts)
 
     if opts.wandb:
-        wandb.log({"test_acc": test_interaction.aux["acc"]}.mean().item(), commit=True)
+        wandb.log({"test_acc": test_interaction.aux["acc"].mean().item()}, commit=True)
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")

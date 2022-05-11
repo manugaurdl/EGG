@@ -3,20 +3,17 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import copy
+
 import clip
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
 
-from egg.zoo.contextual_game.archs import Receiver, Sender
-from egg.zoo.contextual_game.wrappers import (
+from egg.zoo.contextual_game.archs import (
     ClipEmbeddingLoader,
     ClipReceiver,
-    GumbelSoftmaxWrapper,
-    RnnReceiverFixedLengthGS,
     RnnSenderFixedLengthGS,
-    SymbolReceiverWrapper,
+    Sender,
     VisionGame,
 )
 
@@ -59,130 +56,114 @@ def initialize_clip(name: str = "ViT-B/16"):
 
     model = modules[name].train()
 
-    n_features = model.visual.output_dim
     convert_models_to_fp32(model)
 
-    return model, n_features
+    return model
 
 
-def initialize_resnet(name: str = "resnet50"):
-    modules = {
-        "resnet50": torchvision.models.resnet50(),
-        "resnet101": torchvision.models.resnet101(),
-        "resnet152": torchvision.models.resnet152(),
-        "vgg11": torchvision.models.vgg11(),
-    }
+def get_clip_embeddings(
+    clip_model,
+    freeze_sender_embeddings,
+    freeze_recv_embeddings,
+    share_embeddings,
+    max_clip_vocab: int = 3000,
+):
+    embeddings = clip_model.token_embedding
+    embedding_loader = ClipEmbeddingLoader(embeddings, max_vocab=max_clip_vocab)
 
-    if name not in modules:
-        raise KeyError(f"{name} is not currently supported.")
+    pretrained_embeddings = embedding_loader.embeddings
+    vocab_size = embedding_loader.vocab_size
 
-    model = modules[name]
+    if freeze_sender_embeddings and freeze_recv_embeddings:
+        pretrained_embeddings.weight.requires_grad = False
+        sender_embeddings = recv_embeddings = pretrained_embeddings
+    elif not (freeze_sender_embeddings and freeze_recv_embeddings):
+        pretrained_embeddings.weight.requires_grad = True
+        sender_embeddings = pretrained_embeddings
 
-    if name in ["resnet50", "resnet101", "resnet152"]:
-        n_features = model.fc.in_features
-        model.fc = nn.Identity()
+        recv_embeddings = (
+            pretrained_embeddings
+            if share_embeddings
+            else copy.deepcopy(pretrained_embeddings)
+        )
+    else:
+        sender_embeddings = pretrained_embeddings
+        recv_embeddings = copy.deepcopy(pretrained_embeddings)
 
-    else:  # vgg11
-        n_features = model.classifier[6].in_features
-        model.classifier[6] = nn.Identity()
+        sender_embeddings.weight.requires_grad = not freeze_sender_embeddings
+        recv_embeddings.weight.requires_grad = not freeze_recv_embeddings
 
-    return model, n_features
+    return sender_embeddings, recv_embeddings, vocab_size
 
 
-def build_sender(visual_feats_size, vocab_size, pretrained_embeddings, opts):
-    sender = Sender(
-        input_dim=visual_feats_size,
-        output_dim=vocab_size if opts.max_len == 1 else opts.sender_rnn_hidden_size,
+def get_visual_encoders(
+    visual_encoder,
+    freeze_sender_encoder,
+    freeze_recv_encoder,
+    share_encoders,
+):
+    if freeze_sender_encoder and freeze_recv_encoder:
+        visual_encoder.eval()
+        for param in visual_encoder.parameters():
+            param.requires_grad = False
+        sender_visual_encoder = recv_visual_encoder = visual_encoder
+    elif not (freeze_sender_encoder and freeze_recv_encoder):
+        for param in visual_encoder.parameters():
+            param.requires_grad = False
+
+        sender_visual_encoder = visual_encoder
+        recv_visual_encoder = (
+            visual_encoder if share_encoders else copy.deepcopy(visual_encoder)
+        )
+    else:
+        sender_visual_encoder = visual_encoder
+        recv_visual_encoder = copy.deepcopy(visual_encoder)
+
+        for param in sender_visual_encoder.parameters():
+            param.requires_grad = not freeze_sender_encoder
+        for param in recv_visual_encoder.parameters():
+            param.requires_grad = not freeze_recv_encoder
+    return sender_visual_encoder, recv_visual_encoder
+
+
+def build_game(opts):
+    clip_model = initialize_clip(opts.vision_model)
+
+    vision_model = clip_model.visual
+
+    sender_encoder, recv_encoder = get_visual_encoders(
+        vision_model,
+        opts.freeze_sender_encoder,
+        opts.freeze_recv_encoder,
+        opts.share_visual_encoders,
     )
 
-    len2sender = {1: GumbelSoftmaxWrapper}
+    sender_emb, recv_emb, vocab_size = get_clip_embeddings(
+        clip_model,
+        opts.freeze_sender_embeddings,
+        opts.freeze_recv_embeddings,
+        opts.share_embeddings,
+        opts.max_clip_vocab,
+    )
 
-    sender = len2sender.get(opts.max_len, RnnSenderFixedLengthGS)(
-        sender,
+    sender = RnnSenderFixedLengthGS(
+        agent=Sender(
+            input_dim=clip_model.visual.output_dim,
+            output_dim=opts.sender_rnn_hidden_size,
+        ),
         temperature=opts.gs_temperature,
         straight_through=opts.straight_through,
         vocab_size=vocab_size,
         embed_dim=opts.sender_rnn_embed_dim,
         hidden_size=opts.sender_rnn_hidden_size,
         max_len=opts.max_len,
-        embeddings=pretrained_embeddings if opts.sender_clip_embeddings else None,
-        freeze_embeddings=opts.freeze_clip_embeddings,
+        embeddings=sender_emb,
         cell=opts.sender_cell,
     )
 
-    print(f"| Using {opts.max_len} symbols, sender of class {type(sender).__name__}")
+    receiver = ClipReceiver(clip_model, recv_emb, finetune_weights=opts.finetune_clip)
 
-    return sender
-
-
-def build_receiver(
-    visual_feats_size, vocab_size, clip_model, pretrained_embeddings, opts
-):
-    receiver = Receiver(
-        input_dim=visual_feats_size,
-        hidden_dim=opts.recv_hidden_dim,
-        output_dim=opts.recv_output_dim,
-        use_mlp=opts.use_mlp_recv,
-    )
-    if opts.clip_receiver:
-        receiver = ClipReceiver(
-            receiver,
-            model=clip_model,
-            embeddings=pretrained_embeddings,
-            add_clip_tokens=opts.add_clip_tokens,
-            finetune_weights=opts.finetune_clip,
-            freeze_embeddings=opts.freeze_clip_embeddings,
-            max_clip_vocab=opts.max_clip_vocab,
-        )
-    else:
-        if opts.max_len == 1:
-            receiver = SymbolReceiverWrapper(
-                receiver,
-                vocab_size=vocab_size,
-                embeddings=pretrained_embeddings,
-                agent_input_size=opts.recv_output_dim,
-            )
-        else:
-            receiver = RnnReceiverFixedLengthGS(
-                receiver,
-                vocab_size=vocab_size,
-                embeddings=pretrained_embeddings if opts.recv_clip_embeddings else None,
-                embed_dim=opts.recv_rnn_embed_dim,
-                hidden_size=opts.recv_rnn_hidden_size,
-                cell=opts.sender_cell,
-                freeze_embeddings=opts.freeze_clip_embeddings,
-            )
-    print(f"| Using {opts.max_len} symbols, recv of class {type(receiver).__name__}")
-    return receiver
-
-
-def build_game(opts):
-    clip_model = None
-    if "clip" in opts.vision_model:
-        clip_model, visual_feats_size = initialize_clip(opts.vision_model)
-        vision_model = clip_model.visual
-    else:
-        vision_model, visual_feats_size = initialize_resnet(opts.vision_model)
-
-    if opts.sender_clip_embeddings or opts.recv_clip_embeddings or opts.clip_receiver:
-        embedding_loader = ClipEmbeddingLoader(
-            clip_model, opts.freeze_clip_embeddings, max_vocab=opts.max_clip_vocab
-        )
-        print("| Done loading clip embeddings")
-
-        pretrained_embeddings = embedding_loader.embeddings
-        vocab_size = embedding_loader.vocab_size
-    else:
-        pretrained_embeddings = None
-        vocab_size = opts.vocab_size
-
-    assert opts.max_len > 0
-
-    sender = build_sender(visual_feats_size, vocab_size, pretrained_embeddings, opts)
-    receiver = build_receiver(
-        visual_feats_size, vocab_size, clip_model, pretrained_embeddings, opts
-    )
-    game = VisionGame(vision_model, sender, receiver, loss, opts.freeze_vision)
+    game = VisionGame(sender_encoder, recv_encoder, sender, receiver, loss)
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
 

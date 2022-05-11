@@ -19,15 +19,15 @@ def img_loader(path: str) -> Image.Image:
 
 class ImageCodeDataset(torch.utils.data.Dataset):
     def __init__(self, image_dir, metadata_dir, split, transform):
-        assert split in ["train", "valid"]
+        assert split in ["train", "valid", "test"]
 
         self.image_dir = image_dir
         with open(Path(metadata_dir) / f"{split}_data.json", "r") as fd:
             data = json.load(fd)
 
         self.samples = []
-        for img_dir, data in data.items():
-            for img_idx, text in data.items():
+        for img_dir, sents in data.items():
+            for img_idx, text in sents.items():
                 self.samples.append((img_dir, int(img_idx), text))
 
         self.transform = transform
@@ -107,14 +107,14 @@ def get_dataloader(
     sampler = None
     if is_distributed:
         sampler = torch.utils.data.distributed.DistributedSampler(
-            dataset, shuffle=(split != "valid"), drop_last=True, seed=seed
+            dataset, shuffle=(split != "test"), drop_last=True, seed=seed
         )
 
     # Setting batch to 1 since batching is handled by the update_freq EGG parameter
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
-        shuffle=sampler is None and split != "valid",
+        shuffle=sampler is None and split != "test",
         sampler=sampler,
         collate_fn=collate,
         num_workers=num_workers,

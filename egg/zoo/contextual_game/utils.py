@@ -24,27 +24,6 @@ def store_job_and_task_id(opts):
     return job_id, task_id
 
 
-def add_weight_decay(model, weight_decay=1e-5, skip_name=""):
-    decay = []
-    no_decay = []
-    grad, no_grad = [], []
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            no_grad.append(name)
-            continue
-        if len(param.shape) == 1 or skip_name in name:
-            no_decay.append(param)
-        else:
-            decay.append(param)
-        grad.append(name)
-    print(f"GRAD {grad}")
-    print(f"NO GRAD {no_grad}")
-    return [
-        {"params": no_decay, "weight_decay": 0.0},
-        {"params": decay, "weight_decay": weight_decay},
-    ]
-
-
 def log_stats(interaction, mode):
     dump = dict((k, v.mean().item()) for k, v in interaction.aux.items())
     dump.update(dict(mode=mode))
