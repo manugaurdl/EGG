@@ -9,9 +9,11 @@ import clip
 import torch
 import torch.nn.functional as F
 
+from egg.core.gs_wrappers import RelaxedEmbedding
 from egg.zoo.contextual_game.archs import (
     ClipEmbeddingLoader,
     ClipReceiver,
+    InformedRnnSenderFixedLengthGS,
     RnnSenderFixedLengthGS,
     Sender,
     VisionGame,
@@ -146,11 +148,21 @@ def build_game(opts):
         opts.max_clip_vocab,
     )
 
-    sender = RnnSenderFixedLengthGS(
-        agent=Sender(
-            input_dim=clip_model.visual.output_dim,
-            output_dim=opts.sender_rnn_hidden_size,
-        ),
+    agent = Sender(
+        input_dim=clip_model.visual.output_dim,
+        output_dim=opts.sender_rnn_hidden_size,
+    )
+
+    if opts.informed_sender:
+        sender_wrapper = InformedRnnSenderFixedLengthGS
+        sender_emb = RelaxedEmbedding.from_pretrained(
+            sender_emb.weight.t(), freeze=opts.freeze_sender_embeddings
+        )
+    else:
+        sender_wrapper = RnnSenderFixedLengthGS
+
+    sender = sender_wrapper(
+        agent=agent,
         temperature=opts.gs_temperature,
         straight_through=opts.straight_through,
         vocab_size=vocab_size,

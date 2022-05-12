@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Callable
 
 import clip
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -140,6 +139,84 @@ class RnnSenderFixedLengthGS(nn.Module):
         return sequence
 
 
+class InformedRnnSenderFixedLengthGS(nn.Module):
+    def __init__(
+        self,
+        agent: nn.Module,
+        vocab_size: int,
+        embed_dim: int,
+        hidden_size: int,
+        max_len: int,
+        embeddings: nn.Module,
+        cell: str = "rnn",
+        temperature: float = 1.0,
+        straight_through: bool = False,
+    ):
+        super(InformedRnnSenderFixedLengthGS, self).__init__()
+        self.agent = agent
+
+        assert max_len >= 1, "Cannot have a max_len below 1"
+        self.max_len = max_len
+
+        # embeddings of shape hidden_size X vocab_size
+        self.hidden_to_output = embeddings
+
+        self.embedding = RelaxedEmbedding(vocab_size, embed_dim)
+
+        self.prev_hidden = nn.Parameter(torch.zeros(hidden_size))
+        self.sos_embedding = nn.Parameter(torch.zeros(embed_dim))
+
+        self.temperature = temperature
+        self.straight_through = straight_through
+
+        self.cell = None
+
+        cell = cell.lower()
+
+        if cell == "rnn":
+            self.cell = nn.RNNCell(input_size=embed_dim * 2, hidden_size=hidden_size)
+        elif cell == "gru":
+            self.cell = nn.GRUCell(input_size=embed_dim * 2, hidden_size=hidden_size)
+        elif cell == "lstm":
+            self.cell = nn.LSTMCell(input_size=embed_dim * 2, hidden_size=hidden_size)
+        else:
+            raise ValueError(f"Unknown RNN Cell: {cell}")
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.normal_(self.sos_embedding, 0.0, 0.01)
+
+    def forward(self, x, aux_input=None):
+        image_features = self.agent(x, aux_input)
+
+        e_t = torch.stack([self.sos_embedding] * image_features.size(0))
+
+        prev_hidden = torch.stack([self.prev_hidden] * image_features.size(0))
+        e_t = torch.cat([e_t, image_features], dim=1)
+        prev_c = torch.zeros_like(prev_hidden)  # only for LSTM
+
+        sequence = []
+        for step in range(self.max_len):
+            if isinstance(self.cell, nn.LSTMCell):
+                h_t, prev_c = self.cell(e_t, (prev_hidden, prev_c))
+            else:
+                h_t = self.cell(e_t, prev_hidden)
+
+            step_logits = self.hidden_to_output(h_t)
+            x = gumbel_softmax_sample(
+                step_logits, self.temperature, self.training, self.straight_through
+            )
+
+            prev_hidden = h_t
+            e_t = torch.cat([self.embedding(x), image_features], dim=1)
+            sequence.append(x)
+
+        sequence = torch.stack(sequence).permute(1, 0, 2)
+
+        return sequence
+
+
 class ClipReceiver(nn.Module):
     def __init__(
         self,
@@ -162,7 +239,6 @@ class ClipReceiver(nn.Module):
         self.eos_idx = vocab_size - 1
 
         self.input_len = input_len
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
     def forward(self, message, image_features, aux_input=None):
         if len(message.shape) == 2:  # one-symbol messages
@@ -182,8 +258,7 @@ class ClipReceiver(nn.Module):
         text_features = text_features / text_features.norm(dim=1, keepdim=True)
 
         # cosine similarity as logits
-        logit_scale = self.logit_scale.exp()
-        logits_per_text = logit_scale * text_features @ image_features.t()
+        logits_per_text = text_features @ image_features.t()
         return logits_per_text
 
 

@@ -27,6 +27,17 @@ from egg.zoo.contextual_game.utils import (
 )
 
 
+def print_grad_info(model):
+    grad, no_grad = [], []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            no_grad.append(name)
+            continue
+        grad.append(name)
+    print(f"GRAD {grad}")
+    print(f"NO GRAD {no_grad}")
+
+
 def main(params):
     start = time.time()
     opts = get_common_opts(params=params)
@@ -61,6 +72,7 @@ def main(params):
     )
 
     game = build_game(opts)
+    print_grad_info(game)
 
     optimizer = torch.optim.Adam(
         game.parameters(), lr=opts.lr, betas=(0.9, 0.98), eps=1e-6, weight_decay=0.2
@@ -72,7 +84,7 @@ def main(params):
     ]
     if opts.wandb:
         callbacks.append(
-            WandbLogger(opts=opts, tags=[opts.wandb_tag], project="clip_context")
+            WandbLogger(opts=opts, tags=[opts.wandb_tag], project=opts.wandb_project)
         )
 
     if opts.distributed_context.is_distributed:

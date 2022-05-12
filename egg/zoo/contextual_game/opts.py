@@ -71,6 +71,11 @@ def get_game_opts(parser):
         default="gru",
         help="Type of the cell used for Sender {rnn, gru, lstm} (default: rnn)",
     )
+    parser.add_argument(
+        "--informed_sender",
+        action="store_true",
+        default=False,
+    )
 
 
 def get_common_opts(params):
@@ -106,7 +111,8 @@ def get_common_opts(params):
         default=False,
         help="Enable wandb logging",
     )
-    parser.add_argument("--wandb_tag", default=None)
+    parser.add_argument("--wandb_tag", default="default")
+    parser.add_argument("--wandb_project", default="playground")
 
     get_data_opts(parser)
     get_vision_model_opts(parser)
