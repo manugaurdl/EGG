@@ -5,12 +5,11 @@
     "cell": ["gru"],
     "finetune_clip": [true],
     "informed_sender": [true],
-    "straight_through": [false, true],
+    "straight_through": [false],
     "gs_temperature": [1.0, 3.0, 5.0],
-    "lr": [0.0005, 0.0001],
+    "lr": [0.0005, 0.0001, 0.00005],
     "update_freq": [1, 32],
     "max_len": [3, 5, 10],
-    "informed_sender": [true],
     "wandb": [true],
     "wandb_project": ["clip_multiple_symbol"]
 }

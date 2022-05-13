@@ -81,10 +81,10 @@ def get_visual_encoders(visual_encoder, freeze_sender, freeze_recv):
         for param in visual_encoder.parameters():
             param.requires_grad = False
         sender_visual_encoder = recv_visual_encoder = visual_encoder
-    elif not (freeze_sender and freeze_recv):
+    elif (not freeze_sender) and (not freeze_recv):
         visual_encoder.train()
         for param in visual_encoder.parameters():
-            param.requires_grad = False
+            param.requires_grad = True
 
         sender_visual_encoder = recv_visual_encoder = visual_encoder
 
@@ -113,9 +113,13 @@ def build_game(opts):
         opts.max_clip_vocab,
     )
 
-    encoder = nn.Linear(sender_encoder.output_dim, clip_embed_dim)
+    encoder = nn.Sequential(
+        nn.Linear(sender_encoder.output_dim, clip_embed_dim), nn.Tanh()
+    )
     if opts.max_len == 1:
-        sender_emb = RelaxedEmbedding.from_pretrained(sender_emb.weight.t())
+        sender_emb = RelaxedEmbedding.from_pretrained(
+            sender_emb.weight.t(), freeze=False
+        )
         sender = SymbolSender(
             encoder,
             sender_emb,
@@ -125,7 +129,9 @@ def build_game(opts):
     else:
         if opts.informed_sender:
             sender_wrapper = InformedRnnSenderFixedLengthGS
-            sender_emb = RelaxedEmbedding.from_pretrained(sender_emb.weight.t())
+            sender_emb = RelaxedEmbedding.from_pretrained(
+                sender_emb.weight.t(), freeze=False
+            )
         else:
             sender_wrapper = RnnSenderFixedLengthGS
 

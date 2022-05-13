@@ -18,7 +18,7 @@ class WandbLogger(Callback):
         project=None,
         **kwargs,
     ):
-        wandb.init(resume=True, project=project, tags=tags, **kwargs)
+        wandb.init(project=project, tags=tags, **kwargs)
         wandb.config.update(opts)
 
     @staticmethod

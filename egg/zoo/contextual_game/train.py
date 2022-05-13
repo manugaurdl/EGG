@@ -47,8 +47,8 @@ def main(params):
     print(opts)
     print(get_sha())
 
-    # if not opts.distributed_context.is_distributed and opts.debug:
-    # breakpoint()
+    if not opts.distributed_context.is_distributed and opts.debug:
+        breakpoint()
 
     train_loader = get_dataloader(
         image_dir=opts.image_dir,
