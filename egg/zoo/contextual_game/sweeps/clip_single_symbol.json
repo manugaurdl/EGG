@@ -1,0 +1,15 @@
+{
+    "random_seed": [111],
+    "n_epoch": [30],
+    "max_clip_vocab": [3000],
+    "cell": ["gru"],
+    "finetune_clip": [true],
+    "informed_sender": [true],
+    "straight_through": [false, true],
+    "gs_temperature": [1.0, 3.0, 5.0],
+    "lr": [0.0005, 0.0001],
+    "update_freq": [1, 32],
+    "max_len": [1],
+    "wandb": [true],
+    "wandb_project": ["clip_single_symbol"]
+}

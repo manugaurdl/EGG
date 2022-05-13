@@ -12,20 +12,8 @@ import clip
 import torch
 import torch.nn as nn
 
-from egg.core.gs_wrappers import RelaxedEmbedding, gumbel_softmax_sample
+from egg.core.gs_wrappers import RelaxedEmbedding, gumbel_softmax_sample as gs
 from egg.core.interaction import LoggingStrategy
-
-
-class Sender(nn.Module):
-    def __init__(self, input_dim: int, output_dim: int):
-        super(Sender, self).__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(input_dim, output_dim),
-            nn.BatchNorm1d(output_dim),
-        )
-
-    def forward(self, resnet_output, aux_input=None):
-        return self.fc(resnet_output)
 
 
 class ClipEmbeddingLoader:
@@ -34,11 +22,14 @@ class ClipEmbeddingLoader:
         pretrained_embeddings: torch.Tensor,
         freeze_embeddings: bool = False,
         max_vocab: int = None,
+        include_special_symbols: bool = False,
         data_path: str = "/private/home/rdessi/imagecode/data/",
     ):
         self.data_path = Path(data_path)
 
         assert max_vocab is None or max_vocab > 0
+
+        self.include_special_symbols = include_special_symbols
 
         self._load_embeddings(pretrained_embeddings, freeze_embeddings, max_vocab)
 
@@ -57,14 +48,43 @@ class ClipEmbeddingLoader:
                 token_list.extend(clip.tokenize(caption, truncate=True)[0].tolist())
 
         token_counter = Counter(token_list)
-        most_freq_tokens = [x[0] for x in token_counter.most_common(max_vocab)]
+
+        max_vocab = max_vocab if max_vocab else len(token_counter)
+        most_freq_tokens = [
+            x[0]
+            for x in token_counter.most_common(max_vocab + 3)
+            if x[0] not in [49406, 49407, 0]  # eos, sos and pad
+        ]
+
+        if self.include_special_symbols:
+            most_freq_tokens.extend([0, 49406, 49407])
 
         self.embeddings = RelaxedEmbedding.from_pretrained(
             pretrained_embeddings.weight[most_freq_tokens],
             freeze=freeze_embeddings,
         )
 
-        self.vocab_size = self.embeddings.weight.shape[0]
+
+class SymbolSender(nn.Module):
+    def __init__(
+        self,
+        agent: nn.Module,
+        fc: nn.Module,
+        temperature=1.0,
+        straight_through=False,
+        **kwargs,
+    ):
+        super(SymbolSender, self).__init__()
+        self.agent = agent
+        self.fc = fc
+
+        self.straight_through = straight_through
+        self.temperature = temperature
+
+    def forward(self, image_features, aux_input=None):
+        x = self.agent(image_features)
+        logits = self.fc(x)
+        return gs(logits, self.temperature, self.training, self.straight_through)
 
 
 class RnnSenderFixedLengthGS(nn.Module):
@@ -82,8 +102,6 @@ class RnnSenderFixedLengthGS(nn.Module):
     ):
         super(RnnSenderFixedLengthGS, self).__init__()
         self.agent = agent
-
-        assert max_len >= 1, "Cannot have a max_len below 1"
         self.max_len = max_len
 
         self.hidden_to_output = nn.Linear(hidden_size, vocab_size)
@@ -95,26 +113,19 @@ class RnnSenderFixedLengthGS(nn.Module):
         self.temperature = temperature
         self.straight_through = straight_through
 
-        self.cell = None
+        name2cell = {"rnn": nn.RNNCell, "gru": nn.GRUCell, "lstm": nn.LSTMCell}
 
-        cell = cell.lower()
-
-        if cell == "rnn":
-            self.cell = nn.RNNCell(input_size=embed_dim, hidden_size=hidden_size)
-        elif cell == "gru":
-            self.cell = nn.GRUCell(input_size=embed_dim, hidden_size=hidden_size)
-        elif cell == "lstm":
-            self.cell = nn.LSTMCell(input_size=embed_dim, hidden_size=hidden_size)
-        else:
-            raise ValueError(f"Unknown RNN Cell: {cell}")
+        self.cell = name2cell[cell.lower()](
+            input_size=embed_dim, hidden_size=hidden_size
+        )
 
         self.reset_parameters()
 
     def reset_parameters(self):
         nn.init.normal_(self.sos_embedding, 0.0, 0.01)
 
-    def forward(self, x, aux_input=None):
-        prev_hidden = self.agent(x, aux_input)
+    def forward(self, image_features, aux_input=None):
+        prev_hidden = self.agent(image_features)
         prev_c = torch.zeros_like(prev_hidden)  # only for LSTM
 
         e_t = torch.stack([self.sos_embedding] * prev_hidden.size(0))
@@ -126,9 +137,7 @@ class RnnSenderFixedLengthGS(nn.Module):
                 h_t = self.cell(e_t, prev_hidden)
 
             step_logits = self.hidden_to_output(h_t)
-            x = gumbel_softmax_sample(
-                step_logits, self.temperature, self.training, self.straight_through
-            )
+            x = gs(step_logits, self.temperature, self.training, self.straight_through)
 
             prev_hidden = h_t
             e_t = self.embedding(x)
@@ -144,8 +153,8 @@ class InformedRnnSenderFixedLengthGS(nn.Module):
         self,
         agent: nn.Module,
         vocab_size: int,
-        embed_dim: int,
-        hidden_size: int,
+        embed_dim: int,  # must be the same as output dim of the agent
+        hidden_size: int,  # must be the same as clip embedding dim (512)
         max_len: int,
         embeddings: nn.Module,
         cell: str = "rnn",
@@ -154,47 +163,31 @@ class InformedRnnSenderFixedLengthGS(nn.Module):
     ):
         super(InformedRnnSenderFixedLengthGS, self).__init__()
         self.agent = agent
-
-        assert max_len >= 1, "Cannot have a max_len below 1"
         self.max_len = max_len
 
-        # embeddings of shape hidden_size X vocab_size
-        self.hidden_to_output = embeddings
+        self.hidden_to_output = embeddings  # shape is hidden_size X vocab_size
 
         self.embedding = RelaxedEmbedding(vocab_size, embed_dim)
 
         self.prev_hidden = nn.Parameter(torch.zeros(hidden_size))
-        self.sos_embedding = nn.Parameter(torch.zeros(embed_dim))
 
         self.temperature = temperature
         self.straight_through = straight_through
 
-        self.cell = None
+        name2cell = {"rnn": nn.RNNCell, "gru": nn.GRUCell, "lstm": nn.LSTMCell}
 
-        cell = cell.lower()
+        self.cell = name2cell[cell.lower()](
+            input_size=embed_dim, hidden_size=hidden_size
+        )
 
-        if cell == "rnn":
-            self.cell = nn.RNNCell(input_size=embed_dim * 2, hidden_size=hidden_size)
-        elif cell == "gru":
-            self.cell = nn.GRUCell(input_size=embed_dim * 2, hidden_size=hidden_size)
-        elif cell == "lstm":
-            self.cell = nn.LSTMCell(input_size=embed_dim * 2, hidden_size=hidden_size)
-        else:
-            raise ValueError(f"Unknown RNN Cell: {cell}")
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.normal_(self.sos_embedding, 0.0, 0.01)
-
-    def forward(self, x, aux_input=None):
-        image_features = self.agent(x, aux_input)
-
-        e_t = torch.stack([self.sos_embedding] * image_features.size(0))
+    def forward(self, image_features, aux_input=None):
+        img_feats = self.agent(image_features)
 
         prev_hidden = torch.stack([self.prev_hidden] * image_features.size(0))
-        e_t = torch.cat([e_t, image_features], dim=1)
         prev_c = torch.zeros_like(prev_hidden)  # only for LSTM
+
+        sos_embedding = torch.zeros_like(img_feats)
+        e_t = sos_embedding + img_feats
 
         sequence = []
         for step in range(self.max_len):
@@ -204,12 +197,10 @@ class InformedRnnSenderFixedLengthGS(nn.Module):
                 h_t = self.cell(e_t, prev_hidden)
 
             step_logits = self.hidden_to_output(h_t)
-            x = gumbel_softmax_sample(
-                step_logits, self.temperature, self.training, self.straight_through
-            )
+            x = gs(step_logits, self.temperature, self.training, self.straight_through)
 
             prev_hidden = h_t
-            e_t = torch.cat([self.embedding(x), image_features], dim=1)
+            e_t = self.embedding(x) + img_feats
             sequence.append(x)
 
         sequence = torch.stack(sequence).permute(1, 0, 2)
@@ -223,6 +214,9 @@ class ClipReceiver(nn.Module):
         model: nn.Module,
         embeddings: torch.Tensor,
         finetune_weights: bool,
+        pad_idx: int = 49405,  # clip pad
+        sos_idx: int = 49406,  # clip sos
+        eos_idx: int = 49407,  # clip eos
         input_len: int = 77,  # clip defaul input len
     ):
         super(ClipReceiver, self).__init__()
@@ -230,13 +224,13 @@ class ClipReceiver(nn.Module):
             if "visual" in name or "token_embedding" in name:
                 continue
             param.requires_grad = True if finetune_weights else False
+
         model.token_embedding = embeddings
         self.model = model  # adding the model so its parameter are in the optimizer
 
-        vocab_size = embeddings.weight.shape[0]
-        # sos and eos idx are the last two in clip vocab
-        self.sos_idx = vocab_size - 2
-        self.eos_idx = vocab_size - 1
+        self.sos_idx = sos_idx
+        self.eos_idx = eos_idx
+        self.pad_idx = pad_idx
 
         self.input_len = input_len
 
@@ -247,9 +241,13 @@ class ClipReceiver(nn.Module):
 
         out = torch.zeros(bsz, self.input_len, embed_dim, device=message.device)
         out[:, 1 : msg_len + 1] = message
+        out = torch.cat(
+            [out, torch.zeros(bsz, self.input_len, 3, device=message.device)], dim=-1
+        )
 
         out[:, 0, self.sos_idx] = 1
         out[:, msg_len + 1, self.eos_idx] = 1
+        out[:, msg_len + 2 :, self.pad_idx] = 1
 
         text_features = self.model.encode_text(out)
 

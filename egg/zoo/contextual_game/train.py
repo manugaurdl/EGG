@@ -47,8 +47,8 @@ def main(params):
     print(opts)
     print(get_sha())
 
-    if not opts.distributed_context.is_distributed and opts.debug:
-        breakpoint()
+    # if not opts.distributed_context.is_distributed and opts.debug:
+    # breakpoint()
 
     train_loader = get_dataloader(
         image_dir=opts.image_dir,
@@ -82,7 +82,7 @@ def main(params):
         ConsoleLogger(as_json=True, print_train_loss=True),
         BestStatsTracker(),
     ]
-    if opts.wandb:
+    if opts.wandb and opts.distributed_context.is_leader:
         callbacks.append(
             WandbLogger(opts=opts, tags=[opts.wandb_tag], project=opts.wandb_project)
         )
@@ -118,7 +118,7 @@ def main(params):
     if opts.distributed_context.is_leader:
         dump_interaction(test_interaction, opts)
 
-    if opts.wandb:
+    if opts.wandb and opts.distributed_context.is_leader:
         wandb.log({"test_acc": test_interaction.aux["acc"].mean().item()}, commit=True)
 
     end = time.time()

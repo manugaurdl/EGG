@@ -37,18 +37,11 @@ def get_vision_model_opts(parser):
         help="Model name for the visual encoder",
     )
     group.add_argument("--freeze_sender_encoder", default=False, action="store_true")
-    group.add_argument("--freeze_recv_encoder", default=False, action="store_true")
-    group.add_argument("--share_visual_encoders", default=False, action="store_true")
 
 
 def get_clip_opts(parser):
     group = parser.add_argument_group("clip opts")
     group.add_argument("--finetune_clip", default=False, action="store_true")
-
-    group.add_argument("--freeze_sender_embeddings", default=False, action="store_true")
-    group.add_argument("--freeze_recv_embeddings", default=False, action="store_true")
-    group.add_argument("--share_embeddings", default=False, action="store_true")
-
     group.add_argument("--max_clip_vocab", type=int, default=None)
 
 
@@ -56,22 +49,12 @@ def get_game_opts(parser):
     group = parser.add_argument_group("game opts")
     # multi symbol RNN options
     group.add_argument(
-        "--sender_rnn_embed_dim",
-        type=int,
-        default=512,
-    )
-    group.add_argument(
-        "--sender_rnn_hidden_size",
-        type=int,
-        default=512,
-    )
-    parser.add_argument(
-        "--sender_cell",
+        "--cell",
         choices=["rnn", "lstm", "gru"],
         default="gru",
         help="Type of the cell used for Sender {rnn, gru, lstm} (default: rnn)",
     )
-    parser.add_argument(
+    group.add_argument(
         "--informed_sender",
         action="store_true",
         default=False,

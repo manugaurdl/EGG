@@ -16,13 +16,9 @@ class WandbLogger(Callback):
         opts=None,
         tags=None,
         project=None,
-        run_id=None,
         **kwargs,
     ):
-        self.opts = opts
-        self.last_train_acc = 0.0
-
-        wandb.init(project=project, tags=tags, id=run_id, **kwargs)
+        wandb.init(resume=True, project=project, tags=tags, **kwargs)
         wandb.config.update(opts)
 
     @staticmethod
@@ -41,21 +37,18 @@ class WandbLogger(Callback):
             self.log_to_wandb({"batch_acc": logs.aux["acc"].mean().item()}, commit=True)
 
     def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
-        self.last_train_acc = logs.aux["acc"].mean().item()
-
         if self.trainer.distributed_context.is_leader:
+            acc = logs.aux["acc"].mean().item()
+
             self.log_to_wandb({"train_loss": loss, "epoch": epoch}, commit=True)
-            self.log_to_wandb(
-                {"train_acc": self.last_train_acc, "epoch": epoch}, commit=True
-            )
+            self.log_to_wandb({"train_acc": acc, "epoch": epoch}, commit=True)
 
     def on_validation_end(self, loss: float, logs: Interaction, epoch: int):
         if self.trainer.distributed_context.is_leader:
+            acc = logs.aux["acc"].mean().item()
+
             self.log_to_wandb({"validation_loss": loss, "epoch": epoch}, commit=True)
-            self.log_to_wandb(
-                {"validation_acc": logs.aux["acc"].mean().item(), "epoch": epoch},
-                commit=True,
-            )
+            self.log_to_wandb({"validation_acc": acc, "epoch": epoch}, commit=True)
 
 
 class BestStatsTracker(Callback):

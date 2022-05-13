@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from PIL import Image
 
+import clip
 import torch
 from torchvision import transforms
 
@@ -31,6 +32,7 @@ class ImageCodeDataset(torch.utils.data.Dataset):
                 self.samples.append((img_dir, int(img_idx), text))
 
         self.transform = transform
+        self.tokenizer = clip.simple_tokenizer.SimpleTokenizer()
 
     def __len__(self):
         return len(self.samples)
@@ -51,8 +53,8 @@ class ImageCodeDataset(torch.utils.data.Dataset):
             ground_truth,
             images,
             {
-                "captions": text,
-                "is_video": "open-images" in img_dir,
+                "captions": torch.Tensor(self.tokenizer.encode(text)),
+                "is_video": torch.Tensor(["open-images" in img_dir]),
                 "input_images": images,
             },
         )
