@@ -3,7 +3,7 @@
     "n_epoch": [30],
     "max_clip_vocab": [3000],
     "cell": ["gru"],
-    "finetune_clip": [true],
+    "finetune": [true],
     "informed_sender": [true],
     "straight_through": [false],
     "gs_temperature": [1.0, 3.0, 5.0],
