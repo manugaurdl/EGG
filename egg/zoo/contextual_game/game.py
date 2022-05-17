@@ -3,8 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import copy
-
 import clip
 import torch
 import torch.nn as nn
@@ -16,6 +14,7 @@ from egg.zoo.contextual_game.archs import (
     ClipReceiver,
     InformedRnnSenderFixedLengthGS,
     RnnSenderFixedLengthGS,
+    Sender,
     SymbolSender,
     VisionGame,
 )
@@ -35,9 +34,9 @@ def loss(
     all_img_labels = torch.arange(receiver_output.shape[0]).to(receiver_output.device)
     all_imgs_acc = (receiver_output.argmax(dim=1) == all_img_labels).detach().float()
 
-    loss = F.cross_entropy(captioned_img, labels, reduction="none")
+    loss = F.cross_entropy(receiver_output, all_img_labels, reduction="none")
 
-    return loss, {"acc": captioned_img_acc, "all_accs": all_imgs_acc}
+    return loss, {"acc": all_imgs_acc, "captioned_img_acc": captioned_img_acc}
 
 
 def convert_models_to_fp32(model):
@@ -75,51 +74,39 @@ def get_clip_embeddings(embeddings, freeze_recv, max_clip_vocab: int = 3000):
     return sender_embeddings, recv_embeddings, sender_embeddings.weight.shape[1]
 
 
-def get_visual_encoders(visual_encoder, freeze_sender, freeze_recv):
-    if freeze_sender and freeze_recv:
-        visual_encoder.eval()
-        for param in visual_encoder.parameters():
-            param.requires_grad = False
-        sender_visual_encoder = recv_visual_encoder = visual_encoder
-    elif (not freeze_sender) and (not freeze_recv):
+def get_visual_encoder(visual_encoder, finetune):
+    if finetune:
         visual_encoder.train()
-        for param in visual_encoder.parameters():
-            param.requires_grad = True
+        return visual_encoder
 
-        sender_visual_encoder = recv_visual_encoder = visual_encoder
-
-    else:
-        sender_visual_encoder = visual_encoder
-        recv_visual_encoder = copy.deepcopy(visual_encoder)
-
-        for param in sender_visual_encoder.parameters():
-            param.requires_grad = not freeze_sender
-        for param in recv_visual_encoder.parameters():
-            param.requires_grad = not freeze_recv
-
-    return sender_visual_encoder, recv_visual_encoder
+    visual_encoder.eval()
+    for param in visual_encoder.parameters():
+        param.requires_grad = False
+    return visual_encoder
 
 
 def build_game(opts):
     clip_model = initialize_clip(opts.vision_model)
 
-    sender_encoder, recv_encoder = get_visual_encoders(
-        clip_model.visual, opts.freeze_sender_encoder, not opts.finetune_clip
-    )
+    visual_encoder = get_visual_encoder(clip_model.visual, opts.finetune)
 
     sender_emb, recv_emb, clip_embed_dim = get_clip_embeddings(
         clip_model.token_embedding,
-        not opts.finetune_clip,
+        not opts.finetune,
         opts.max_clip_vocab,
     )
 
-    encoder = nn.Sequential(
-        nn.Linear(sender_encoder.output_dim, clip_embed_dim), nn.Tanh()
-    )
     if opts.max_len == 1:
-        sender_emb = RelaxedEmbedding.from_pretrained(
-            sender_emb.weight.t(), freeze=False
-        )
+        if opts.informed_sender:
+            encoder = Sender(visual_encoder.output_dim, clip_embed_dim, opts.num_layers)
+            sender_emb = RelaxedEmbedding.from_pretrained(
+                sender_emb.weight.t(), freeze=False
+            )
+        else:
+            encoder = Sender(
+                visual_encoder.output_dim, opts.max_clip_vocab, opts.num_layers
+            )
+            sender_emb = nn.Identity()
         sender = SymbolSender(
             encoder,
             sender_emb,
@@ -127,6 +114,7 @@ def build_game(opts):
             straight_through=opts.straight_through,
         )
     else:
+        encoder = Sender(visual_encoder.output_dim, clip_embed_dim, opts.num_layers)
         if opts.informed_sender:
             sender_wrapper = InformedRnnSenderFixedLengthGS
             sender_emb = RelaxedEmbedding.from_pretrained(
@@ -151,13 +139,13 @@ def build_game(opts):
     receiver = ClipReceiver(
         clip_model,
         recv_emb,
-        finetune_weights=opts.finetune_clip,
+        finetune_weights=opts.finetune,
         pad_idx=vocab_size,
         sos_idx=vocab_size + 1,
         eos_idx=vocab_size + 2,
     )
 
-    game = VisionGame(sender_encoder, recv_encoder, sender, receiver, loss)
+    game = VisionGame(visual_encoder, sender, receiver, loss)
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
 

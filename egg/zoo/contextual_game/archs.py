@@ -16,6 +16,28 @@ from egg.core.gs_wrappers import RelaxedEmbedding, gumbel_softmax_sample as gs
 from egg.core.interaction import LoggingStrategy
 
 
+class Sender(nn.Module):
+    def __init__(self, input_dim: int, output_dim: int, num_layers: int = 1):
+        super(Sender, self).__init__()
+        encoder_hidden_sizes = [input_dim] * num_layers
+        encoder_layer_dimensions = [(input_dim, encoder_hidden_sizes[0])]
+
+        for i, hidden_size in enumerate(encoder_hidden_sizes[1:]):
+            hidden_shape = (encoder_hidden_sizes[i], hidden_size)
+            encoder_layer_dimensions.append(hidden_shape)
+
+        encoder_layer_dimensions.append((input_dim, output_dim))
+
+        self.encoder_hidden_layers = nn.ModuleList(
+            [nn.Linear(*dimensions) for dimensions in encoder_layer_dimensions]
+        )
+
+    def forward(self, x, aux_input=None):
+        for hidden_layer in self.encoder_hidden_layers[:-1]:
+            x = torch.tanh(hidden_layer(x))
+        return self.encoder_hidden_layers[-1](x)
+
+
 class ClipEmbeddingLoader:
     def __init__(
         self,
@@ -256,15 +278,14 @@ class ClipReceiver(nn.Module):
         text_features = text_features / text_features.norm(dim=1, keepdim=True)
 
         # cosine similarity as logits
-        logits_per_text = text_features @ image_features.t()
+        logits_per_text = text_features @ image_features.t() / 0.1
         return logits_per_text
 
 
 class VisionGame(nn.Module):
     def __init__(
         self,
-        sender_visual_encoder: nn.Module,
-        recv_visual_encoder: nn.Module,
+        visual_encoder: nn.Module,
         sender: nn.Module,
         receiver: nn.Module,
         loss: Callable,
@@ -274,29 +295,28 @@ class VisionGame(nn.Module):
         self.receiver = receiver
         self.loss = loss
 
-        self.sender_visual_encoder = sender_visual_encoder
-        self.recv_visual_encoder = recv_visual_encoder
+        self.visual_encoder = visual_encoder
 
         self.train_logging_strategy = LoggingStrategy().minimal()
-        self.test_logging_strategy = LoggingStrategy()
+        self.test_logging_strategy = LoggingStrategy(
+            False, False, True, True, True, True, False
+        )
 
     def forward(self, input_images, labels, receiver_input=None, aux_input=None):
-        sender_input = self.sender_visual_encoder(input_images)
-        recv_input = self.recv_visual_encoder(input_images)
-
-        message = self.sender(sender_input, aux_input)
-        receiver_output = self.receiver(message, recv_input, aux_input)
+        image_feats = self.visual_encoder(input_images)
+        message = self.sender(image_feats, aux_input)
+        receiver_output = self.receiver(message, image_feats, aux_input)
 
         loss, aux = self.loss(
-            sender_input, message, receiver_input, receiver_output, labels, aux_input
+            image_feats, message, image_feats, receiver_output, labels, aux_input
         )
 
         logging_strategy = (
             self.train_logging_strategy if self.training else self.test_logging_strategy
         )
         interaction = logging_strategy.filtered_interaction(
-            sender_input=sender_input,
-            receiver_input=receiver_input,
+            sender_input=image_feats,
+            receiver_input=image_feats,
             labels=labels,
             aux_input=aux_input,
             receiver_output=receiver_output.detach(),

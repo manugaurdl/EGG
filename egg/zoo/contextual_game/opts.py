@@ -36,12 +36,10 @@ def get_vision_model_opts(parser):
         ],
         help="Model name for the visual encoder",
     )
-    group.add_argument("--freeze_sender_encoder", default=False, action="store_true")
 
 
 def get_clip_opts(parser):
     group = parser.add_argument_group("clip opts")
-    group.add_argument("--finetune_clip", default=False, action="store_true")
     group.add_argument("--max_clip_vocab", type=int, default=None)
 
 
@@ -54,6 +52,7 @@ def get_game_opts(parser):
         default="gru",
         help="Type of the cell used for Sender {rnn, gru, lstm} (default: rnn)",
     )
+    group.add_argument("--num_layers", default=1, type=int)
     group.add_argument(
         "--informed_sender",
         action="store_true",
@@ -88,6 +87,7 @@ def get_common_opts(params):
         action="store_true",
         help="use straight through gumbel softmax estimator",
     )
+    parser.add_argument("--finetune", default=False, action="store_true")
     parser.add_argument(
         "--wandb",
         action="store_true",

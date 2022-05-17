@@ -9,7 +9,5 @@
     "gs_temperature": [1.0, 3.0, 5.0],
     "lr": [0.0005, 0.0001, 0.00005],
     "update_freq": [1, 32],
-    "max_len": [1],
-    "wandb": [true],
-    "wandb_project": ["clip_single_symbol"]
+    "max_len": [1, 3, 5, 10]
 }

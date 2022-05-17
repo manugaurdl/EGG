@@ -11,11 +11,12 @@ import clip
 import torch
 from torchvision import transforms
 
+try:
+    from torchvision.transforms import InterpolationMode
 
-def img_loader(path: str) -> Image.Image:
-    with open(path, "rb") as f:
-        img = Image.open(f)
-        return img.convert("RGB")
+    BICUBIC = InterpolationMode.BICUBIC
+except ImportError:
+    BICUBIC = Image.BICUBIC
 
 
 class ImageCodeDataset(torch.utils.data.Dataset):
@@ -43,7 +44,7 @@ class ImageCodeDataset(torch.utils.data.Dataset):
         img_files = list((Path(self.image_dir) / img_dir).glob("*.jpg"))
         img_files.sort(key=lambda x: int(str(x).split("/")[-1].split(".")[0][3:]))
 
-        images = [img_loader(photo_file) for photo_file in img_files]
+        images = [Image.open(photo_file) for photo_file in img_files]
         images = torch.stack([self.transform(photo) for photo in images])
 
         ground_truth = torch.tensor([img_idx]).long()
@@ -87,6 +88,10 @@ def collate(batch):
     raise RuntimeError("Cannot collate batch")
 
 
+def _convert_image_to_rgb(image: Image.Image):
+    return image.convert("RGB")
+
+
 def get_dataloader(
     image_dir: str,
     metadata_dir: str,
@@ -98,9 +103,14 @@ def get_dataloader(
     seed: int = 111,
 ):
     transformations = [
-        transforms.Resize(size=(image_size, image_size)),
+        transforms.Resize(image_size, interpolation=BICUBIC),
+        transforms.CenterCrop(image_size),
+        _convert_image_to_rgb,
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.Normalize(
+            (0.48145466, 0.4578275, 0.40821073),
+            (0.26862954, 0.26130258, 0.27577711),
+        ),
     ]
     transformations = transforms.Compose(transformations)
 
