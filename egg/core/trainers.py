@@ -221,10 +221,10 @@ class Trainer:
             with context:
                 optimized_loss, interaction = self.game(*batch)
 
-                if self.update_freq > 1:
-                    # throughout EGG, we minimize _mean_ loss, not sum
-                    # hence, we need to account for that when aggregating grads
-                    optimized_loss = optimized_loss / self.update_freq
+                # if self.update_freq > 1:
+                # throughout EGG, we minimize _mean_ loss, not sum
+                # hence, we need to account for that when aggregating grads
+                #    optimized_loss = optimized_loss / self.update_freq
 
             if self.scaler:
                 self.scaler.scale(optimized_loss).backward()

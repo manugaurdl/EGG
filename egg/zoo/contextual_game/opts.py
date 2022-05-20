@@ -21,23 +21,6 @@ def get_data_opts(parser):
     group.add_argument("--num_workers", type=int, default=8)
 
 
-def get_vision_model_opts(parser):
-    group = parser.add_argument_group("vision model options")
-    group.add_argument(
-        "--vision_model",
-        type=str,
-        default="clip_vit_b/16",
-        choices=[
-            "clip_vit_b/32",
-            "clip_vit_b/16",
-            "clip_vit_l/14",
-            "clip_resnet50",
-            "clip_resnet101",
-        ],
-        help="Model name for the visual encoder",
-    )
-
-
 def get_clip_opts(parser):
     group = parser.add_argument_group("clip opts")
     group.add_argument("--max_clip_vocab", type=int, default=None)
@@ -48,16 +31,12 @@ def get_game_opts(parser):
     # multi symbol RNN options
     group.add_argument(
         "--cell",
-        choices=["rnn", "lstm", "gru"],
-        default="gru",
-        help="Type of the cell used for Sender {rnn, gru, lstm} (default: rnn)",
+        choices=["rnn", "gru"],
+        default="rnn",
+        help="Type of the cell used for Sender {rnn, gru} (default: rnn)",
     )
+    group.add_argument("--sender_embed_dim", type=int, default=256)
     group.add_argument("--num_layers", default=1, type=int)
-    group.add_argument(
-        "--informed_sender",
-        action="store_true",
-        default=False,
-    )
 
 
 def get_common_opts(params):
@@ -98,7 +77,6 @@ def get_common_opts(params):
     parser.add_argument("--wandb_project", default="playground")
 
     get_data_opts(parser)
-    get_vision_model_opts(parser)
     get_game_opts(parser)
     get_clip_opts(parser)
 

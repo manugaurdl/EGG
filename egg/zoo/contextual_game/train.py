@@ -75,7 +75,7 @@ def main(params):
     print_grad_info(game)
 
     optimizer = torch.optim.Adam(
-        game.parameters(), lr=opts.lr, betas=(0.9, 0.98), eps=1e-6, weight_decay=0.2
+        game.parameters(), lr=opts.lr, betas=(0.9, 0.98), eps=1e-6  # , weight_decay=0.2
     )
 
     callbacks = [
