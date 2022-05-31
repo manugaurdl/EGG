@@ -52,7 +52,11 @@ class ClipEmbeddingLoader:
                 token_list.extend(clip.tokenize(caption, truncate=True)[0].tolist())
 
         token_counter = Counter(token_list)
-        most_freq_tokens = [x[0] for x in token_counter.most_common(self.max_vocab)]
+        most_freq_tokens = [
+            x[0]
+            for x in token_counter.most_common(self.max_vocab + 3)
+            # if x[0] not in [49406, 49407, 0]  # eos, sos and pad
+        ]
 
         embeddings = self.clip_model.token_embedding
         self.embeddings = RelaxedEmbedding.from_pretrained(
