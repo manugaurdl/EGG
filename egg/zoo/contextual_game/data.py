@@ -7,9 +7,10 @@ import json
 from pathlib import Path
 from PIL import Image
 
-import clip
 import torch
+from torch.nn.functional import pad
 from torchvision import transforms
+from transformers import BartTokenizer
 
 try:
     from torchvision.transforms import InterpolationMode
@@ -20,7 +21,15 @@ except ImportError:
 
 
 class ImageCodeDataset(torch.utils.data.Dataset):
-    def __init__(self, image_dir, metadata_dir, split, transform):
+    def __init__(
+        self,
+        image_dir,
+        metadata_dir,
+        split,
+        transform,
+        tokenizer_model="facebook/bart-base",
+        max_caption_len=150,
+    ):
         assert split in ["train", "valid", "test"]
 
         self.image_dir = image_dir
@@ -33,7 +42,9 @@ class ImageCodeDataset(torch.utils.data.Dataset):
                 self.samples.append((img_dir, int(img_idx), text))
 
         self.transform = transform
-        self.tokenizer = clip.simple_tokenizer.SimpleTokenizer()
+
+        self.bart_tokenizer = BartTokenizer.from_pretrained(tokenizer_model)
+        self.max_caption_len = max_caption_len
 
     def __len__(self):
         return len(self.samples)
@@ -47,14 +58,26 @@ class ImageCodeDataset(torch.utils.data.Dataset):
         images = [Image.open(photo_file) for photo_file in img_files]
         images = torch.stack([self.transform(photo) for photo in images])
 
+        tokenized_text = self.bart_tokenizer(
+            [text],
+            max_length=self.max_caption_len,
+            truncation=True,
+            return_tensors="pt",
+        )
+        caption_len = tokenized_text["input_ids"].shape[1]
+
         ground_truth = torch.tensor([img_idx]).long()
 
         return (
-            images,
+            {**tokenized_text},  # hf tokenizer returns custom type, avoid collate error
             ground_truth,
             images,
             {
-                "captions": torch.Tensor(self.tokenizer.encode(text)),
+                "captions": pad(
+                    tokenized_text["input_ids"],
+                    pad=(0, max(0, self.max_caption_len - caption_len)),
+                    value=1,
+                ),
                 "is_video": torch.Tensor(["open-images" in img_dir]),
                 "input_images": images,
             },
@@ -98,6 +121,7 @@ def get_dataloader(
     batch_size: int = 32,
     image_size: int = 32,
     num_workers: int = 0,
+    bart_tokenizer_name: str = "facebook/bart-base",
     split: str = "train",
     is_distributed: bool = False,
     seed: int = 111,
@@ -114,7 +138,9 @@ def get_dataloader(
     ]
     transformations = transforms.Compose(transformations)
 
-    dataset = ImageCodeDataset(image_dir, metadata_dir, split, transformations)
+    dataset = ImageCodeDataset(
+        image_dir, metadata_dir, split, transformations, bart_tokenizer_name
+    )
 
     sampler = None
     if is_distributed:

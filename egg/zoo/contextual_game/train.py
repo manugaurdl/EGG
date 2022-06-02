@@ -7,35 +7,20 @@ import time
 
 import torch
 import wandb
+from transformers import BartTokenizer
 
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.contextual_game.data import get_dataloader
-from egg.zoo.contextual_game.callbacks import (
-    BestStatsTracker,
-    DistributedSamplerEpochSetter,
-    WandbLogger,
-)
+from egg.zoo.contextual_game.callbacks import WandbLogger
 from egg.zoo.contextual_game.game import build_game
 from egg.zoo.contextual_game.opts import get_common_opts
 from egg.zoo.contextual_game.utils import (
     dump_interaction,
     get_sha,
     log_stats,
-    setup_for_distributed,
     store_job_and_task_id,
 )
-
-
-def print_grad_info(model):
-    grad, no_grad = [], []
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            no_grad.append(name)
-            continue
-        grad.append(name)
-    print(f"GRAD {grad}")
-    print(f"NO GRAD {no_grad}")
 
 
 def main(params):
@@ -43,79 +28,62 @@ def main(params):
     opts = get_common_opts(params=params)
 
     store_job_and_task_id(opts)
-    setup_for_distributed(opts.distributed_context.is_leader)
     print(opts)
     print(get_sha())
 
     if not opts.distributed_context.is_distributed and opts.debug:
         breakpoint()
 
-    train_loader = get_dataloader(
-        image_dir=opts.image_dir,
-        metadata_dir=opts.metadata_dir,
-        batch_size=opts.batch_size,
-        image_size=opts.image_size,
-        split="train",
-        num_workers=opts.num_workers,
-        is_distributed=opts.distributed_context.is_distributed,
-        seed=opts.random_seed,
-    )
-    valid_loader = get_dataloader(
-        image_dir=opts.image_dir,
-        metadata_dir=opts.metadata_dir,
-        batch_size=opts.batch_size,
-        image_size=opts.image_size,
-        split="valid",
-        num_workers=opts.num_workers,
-        is_distributed=opts.distributed_context.is_distributed,
-        seed=opts.random_seed,
-    )
-
-    game = build_game(opts)
-    print_grad_info(game)
-
-    optimizer = torch.optim.Adam(
-        game.parameters(), lr=opts.lr, betas=(0.9, 0.98), eps=1e-6  # , weight_decay=0.2
-    )
-
-    callbacks = [
-        ConsoleLogger(as_json=True, print_train_loss=True),
-        BestStatsTracker(),
-    ]
-    if opts.wandb and opts.distributed_context.is_leader:
-        callbacks.append(
-            WandbLogger(opts=opts, tags=[opts.wandb_tag], project=opts.wandb_project)
-        )
-
-    if opts.distributed_context.is_distributed:
-        callbacks.append(DistributedSamplerEpochSetter())
-
-    trainer = core.Trainer(
-        game=game,
-        optimizer=optimizer,
-        train_data=train_loader,
-        validation_data=valid_loader,
-        callbacks=callbacks,
-        debug=opts.debug,
-    )
-    if not opts.eval_only:
-        trainer.train(n_epochs=opts.n_epochs)
-
-    # TEST
     test_loader = get_dataloader(
         image_dir=opts.image_dir,
         metadata_dir=opts.metadata_dir,
         batch_size=opts.batch_size,
         image_size=opts.image_size,
+        bart_tokenizer_name=opts.bart_model,
         split="test",
         num_workers=opts.num_workers,
         is_distributed=opts.distributed_context.is_distributed,
         seed=opts.random_seed,
     )
 
+    game = build_game(opts)
+
+    optimizer = torch.optim.Adam(
+        game.parameters(), lr=opts.lr, betas=(0.9, 0.98), eps=1e-6, weight_decay=0.2
+    )
+
+    callbacks = [ConsoleLogger(as_json=True, print_train_loss=True)]
+    if opts.wandb and opts.distributed_context.is_leader:
+        callbacks.append(
+            WandbLogger(opts=opts, tags=[opts.wandb_tag], project=opts.wandb_project)
+        )
+
+    trainer = core.Trainer(
+        game=game,
+        optimizer=optimizer,
+        train_data=None,
+        callbacks=callbacks,
+        debug=opts.debug,
+    )
+
     _, test_interaction = trainer.eval(test_loader)
     log_stats(test_interaction, "TEST SET")
     if opts.distributed_context.is_leader:
+        bart_tokenizer = BartTokenizer.from_pretrained(opts.bart_model)
+
+        decoded_captions = bart_tokenizer.batch_decode(
+            test_interaction.sender_input,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
+        decoded_messages = bart_tokenizer.batch_decode(
+            test_interaction.message,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
+        test_interaction.aux_input["decoded_captions"] = decoded_captions
+        test_interaction.aux_input["decoded_messages"] = decoded_messages
+
         dump_interaction(test_interaction, opts)
 
     if opts.wandb and opts.distributed_context.is_leader:

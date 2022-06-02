@@ -8,6 +8,7 @@ from typing import Dict, Iterable, Optional
 
 import torch
 import torch.distributed as distrib
+from torch.nn.utils.rnn import pad_sequence as pad
 
 from egg.core.batch import Batch
 
@@ -164,12 +165,18 @@ class Interaction:
         for k in interactions[0].aux:
             aux[k] = _check_cat([x.aux[k] for x in interactions])
 
+        s_inp = [x.sender_input.squeeze() for x in interactions]
+        s_inp = pad(s_inp, batch_first=True, padding_value=1.0)
+
+        msg = [x.message.squeeze() for x in interactions]
+        msg = pad(msg, batch_first=True, padding_value=1.0)
+
         return Interaction(
-            sender_input=_check_cat([x.sender_input for x in interactions]),
+            sender_input=s_inp,
             receiver_input=_check_cat([x.receiver_input for x in interactions]),
             labels=_check_cat([x.labels for x in interactions]),
             aux_input=aux_input,
-            message=_check_cat([x.message for x in interactions]),
+            message=msg,
             message_length=_check_cat([x.message_length for x in interactions]),
             receiver_output=_check_cat([x.receiver_output for x in interactions]),
             aux=aux,

@@ -195,6 +195,9 @@ class Trainer:
 
                 interactions.append(interaction)
                 n_batches += 1
+                print(
+                    f"| batch {n_batches}, acc: {interaction.aux['acc'].mean().item()}"
+                )
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)

@@ -3,20 +3,97 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import json
-from collections import Counter
-from pathlib import Path
-
 import clip
 import torch
-import torch.nn.functional as F
+import torch.nn as nn
+from transformers import BartForConditionalGeneration, BartTokenizer
 
-from egg.core.gs_wrappers import RelaxedEmbedding
-from egg.zoo.contextual_game.archs import (
-    ClipReceiver,
-    InformedRnnSenderFixedLengthGS,
-    VisionGame,
-)
+from typing import Callable
+
+from egg.core.interaction import LoggingStrategy
+
+
+class BartSender(nn.Module):
+    def __init__(
+        self,
+        bart_model: str = "eugenesiow/bart-paraphrase",  # "facebook/bart-base"
+        num_beams: int = 4,
+    ):
+        super(BartSender, self).__init__()
+        self.bart_tokenizer = BartTokenizer.from_pretrained(bart_model)
+        bart = BartForConditionalGeneration.from_pretrained(bart_model).eval()
+        self.bart = bart
+
+        self.num_beams = num_beams
+
+    def forward(self, inputs, aux_input=None):
+        # 75 is clip max_len w/o counting sos and eos
+        generated_ids = self.bart.generate(
+            inputs["input_ids"], num_beams=self.num_beams, max_length=75
+        )
+
+        generated_text = self.bart_tokenizer.batch_decode(
+            generated_ids,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
+        return generated_text, generated_ids
+
+
+class ClipReceiver(nn.Module):
+    def __init__(
+        self,
+        clip_model: nn.Module,
+    ):
+        super(ClipReceiver, self).__init__()
+        self.clip = clip_model
+        self.clip.eval()
+
+    def forward(self, message, images, aux_input=None):
+        text = clip.tokenize(message, truncate=True).to(images.device)
+        _, clip_logits = self.clip(images, text)
+        return clip_logits
+
+
+class Game(nn.Module):
+    def __init__(
+        self,
+        sender: nn.Module,
+        receiver: nn.Module,
+        loss: Callable,
+    ):
+        super(Game, self).__init__()
+        self.sender = sender
+        self.receiver = receiver
+        self.loss = loss
+
+        self.train_logging_strategy = LoggingStrategy().minimal()
+        self.test_logging_strategy = LoggingStrategy(
+            True, False, True, True, True, True, False
+        )
+
+    def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
+        message, message_ids = self.sender(sender_input, aux_input)
+        receiver_output = self.receiver(message, receiver_input, aux_input)
+
+        loss, aux = self.loss(
+            sender_input, message, receiver_input, receiver_output, labels, aux_input
+        )
+
+        logging_strategy = (
+            self.train_logging_strategy if self.training else self.test_logging_strategy
+        )
+        interaction = logging_strategy.filtered_interaction(
+            sender_input=sender_input["input_ids"],
+            receiver_input=receiver_input,
+            labels=labels,
+            aux_input=aux_input,
+            receiver_output=receiver_output.detach(),
+            message=message_ids.detach(),
+            message_length=torch.ones(message_ids.size(0)),
+            aux=aux,
+        )
+        return loss.sum(), interaction
 
 
 def loss(
@@ -24,17 +101,12 @@ def loss(
     _message,
     _receiver_input,
     receiver_output,
-    _labels,
+    labels,
     _aux_input,
 ):
-
-    labels = torch.arange(receiver_output.shape[0]).to(receiver_output.device)
-
+    loss = torch.zeros(1).to(receiver_output.device)
     acc = (receiver_output.argmax(dim=1) == labels).detach().float()
-    loss = F.cross_entropy(receiver_output, labels, reduction="none")
-
-    captioned_acc = (receiver_output[_labels].argmax(dim=1) == _labels).detach().float()
-    return loss, {"acc": acc, "captioned_acc": captioned_acc}
+    return loss, {"acc": acc}
 
 
 def convert_models_to_fp32(model):
@@ -42,81 +114,15 @@ def convert_models_to_fp32(model):
         p.data = p.data.float()
 
 
-def extract_most_frequent_embeddings(
-    pretrained_embeddings: torch.Tensor,
-    max_vocab: int = None,
-    data_path: str = "/private/home/rdessi/imagecode/data/",
-):
-    data_path = Path(data_path)
-
-    assert max_vocab is None or max_vocab > 0
-
-    # not including the test set since it is unlabeled and not used
-    with open(data_path / "train_data.json") as fd:
-        train = json.load(fd)
-    with open(data_path / "valid_data.json") as fd:
-        valid = json.load(fd)
-
-    train_and_valid = {**train, **valid}
-
-    token_list = []
-    for _, captions in train_and_valid.items():
-        for caption in captions.values():
-            token_list.extend(clip.tokenize(caption, truncate=True)[0].tolist())
-
-    token_counter = Counter(token_list)
-
-    max_vocab = max_vocab if max_vocab else len(token_counter)
-    # adding eos, sos and pad at the end
-    most_freq_tokens = [
-        x[0]
-        for x in token_counter.most_common(max_vocab)
-        if x[0] not in [49406, 49407, 0]
-    ] + [0, 49406, 49407]
-
-    embeddings = pretrained_embeddings.weight[most_freq_tokens]
-    return embeddings, embeddings.shape[1]
-
-
 def build_game(opts):
+
+    sender = BartSender(opts.bart_model, num_beams=opts.num_beams)
+
     clip_model = clip.load("ViT-B/16")[0]
-
-    clip_model.train()
     convert_models_to_fp32(clip_model)
+    receiver = ClipReceiver(clip_model)
 
-    if not opts.finetune:
-        clip_model.eval()
-        for param in clip_model.parameters():
-            param.requires_grad = False
-
-    embeddings, clip_embed_dim = extract_most_frequent_embeddings(
-        clip_model.token_embedding,
-        opts.max_clip_vocab,
-    )
-
-    embeddings = RelaxedEmbedding.from_pretrained(embeddings, freeze=not opts.finetune)
-    clip_model.token_embedding = embeddings
-    sender = InformedRnnSenderFixedLengthGS(
-        input_dim=clip_model.visual.output_dim,
-        num_encoder_layers=opts.num_layers,
-        vocab_size=opts.max_clip_vocab,
-        embed_dim=opts.sender_embed_dim,
-        hidden_size=clip_embed_dim,
-        max_len=opts.max_len,
-        embeddings=embeddings,
-        cell=opts.cell,
-        temperature=opts.gs_temperature,
-        straight_through=opts.straight_through,
-    )
-
-    receiver = ClipReceiver(
-        clip_model,
-        pad_idx=opts.max_clip_vocab - 3,
-        sos_idx=opts.max_clip_vocab - 2,
-        eos_idx=opts.max_clip_vocab - 1,
-    )
-
-    game = VisionGame(sender, receiver, loss)
+    game = Game(sender, receiver, loss)
     if opts.distributed_context.is_distributed:
         game = torch.nn.SyncBatchNorm.convert_sync_batchnorm(game)
 

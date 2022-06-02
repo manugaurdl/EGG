@@ -21,22 +21,15 @@ def get_data_opts(parser):
     group.add_argument("--num_workers", type=int, default=8)
 
 
-def get_clip_opts(parser):
-    group = parser.add_argument_group("clip opts")
-    group.add_argument("--max_clip_vocab", type=int, default=None)
+def get_bart_opts(parser):
+    group = parser.add_argument_group("bart opts")
 
-
-def get_game_opts(parser):
-    group = parser.add_argument_group("game opts")
-    # multi symbol RNN options
     group.add_argument(
-        "--cell",
-        choices=["rnn", "gru"],
-        default="rnn",
-        help="Type of the cell used for Sender {rnn, gru} (default: rnn)",
+        "--bart_model",
+        choices=["facebook/bart-base", "eugenesiow/bart-paraphrase"],
+        default="eugenesiow/bart-paraphrase",
     )
-    group.add_argument("--sender_embed_dim", type=int, default=256)
-    group.add_argument("--num_layers", default=1, type=int)
+    group.add_argument("--num_beams", type=int, default=4)
 
 
 def get_common_opts(params):
@@ -49,25 +42,6 @@ def get_common_opts(params):
         help="Run the game with pdb enabled",
     )
     parser.add_argument(
-        "--eval_only",
-        action="store_true",
-        default=False,
-        help="Skip training and evaluate from checkopoint",
-    )
-    parser.add_argument(
-        "--gs_temperature",
-        type=float,
-        default=1.0,
-        help="gs temperature used in the relaxation layer",
-    )
-    parser.add_argument(
-        "--straight_through",
-        default=False,
-        action="store_true",
-        help="use straight through gumbel softmax estimator",
-    )
-    parser.add_argument("--finetune", default=False, action="store_true")
-    parser.add_argument(
         "--wandb",
         action="store_true",
         default=False,
@@ -77,8 +51,7 @@ def get_common_opts(params):
     parser.add_argument("--wandb_project", default="playground")
 
     get_data_opts(parser)
-    get_game_opts(parser)
-    get_clip_opts(parser)
+    get_bart_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)
     return opts
