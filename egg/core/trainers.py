@@ -214,6 +214,7 @@ class Trainer:
         self.optimizer.zero_grad()
 
         for batch_id, batch in enumerate(self.train_data):
+            print(f"| Batch {batch_id +1}")
             if self.debug and batch_id == 10:
                 break
             if not isinstance(batch, Batch):
@@ -248,6 +249,9 @@ class Trainer:
                 else:
                     self.optimizer.step()
 
+                if self.optimizer_scheduler:
+                    self.optimizer_scheduler.step()
+
                 self.optimizer.zero_grad()
 
             n_batches += 1
@@ -263,9 +267,6 @@ class Trainer:
                 callback.on_batch_end(interaction, optimized_loss, batch_id)
 
             interactions.append(interaction)
-
-        if self.optimizer_scheduler:
-            self.optimizer_scheduler.step()
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)

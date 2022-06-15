@@ -165,14 +165,17 @@ class Interaction:
         for k in interactions[0].aux:
             aux[k] = _check_cat([x.aux[k] for x in interactions])
 
-        s_inp = [x.sender_input.squeeze() for x in interactions]
-        s_inp = pad(s_inp, batch_first=True, padding_value=1.0)
-
-        msg = [x.message.squeeze() for x in interactions]
-        msg = pad(msg, batch_first=True, padding_value=1.0)
+        msg = None
+        if interactions[0].message is not None:
+            if isinstance(interactions[0].message, torch.Tensor):
+                msg = pad(
+                    [x.message.squeeze() for x in interactions],
+                    batch_first=True,
+                    padding_value=-1,
+                )
 
         return Interaction(
-            sender_input=s_inp,
+            sender_input=_check_cat([x.sender_input for x in interactions]),
             receiver_input=_check_cat([x.receiver_input for x in interactions]),
             labels=_check_cat([x.labels for x in interactions]),
             aux_input=aux_input,

@@ -21,15 +21,19 @@ def get_data_opts(parser):
     group.add_argument("--num_workers", type=int, default=8)
 
 
-def get_bart_opts(parser):
-    group = parser.add_argument_group("bart opts")
-
+def get_clipclap_opts(parser):
+    group = parser.add_argument_group("clipclap opts")
+    group.add_argument("--clipclap_model_path", default=None)
+    group.add_argument("--mapping_type", choices=["mlp", "transformer"], default="mlp")
+    group.add_argument("--clip_prefix_tokens", type=int, default=10)
+    group.add_argument("--constant_prefix_tokens", type=int, default=10)
+    group.add_argument("--num_transformer_layers", type=int, default=8)
     group.add_argument(
-        "--bart_model",
-        choices=["facebook/bart-base", "eugenesiow/bart-paraphrase"],
-        default="eugenesiow/bart-paraphrase",
+        "--clip_model", choices=["ViT-B/32", "RN50x4"], default="ViT-B/32"
     )
-    group.add_argument("--num_beams", type=int, default=4)
+    group.add_argument("--use_beam_search", action="store_true", default=False)
+    group.add_argument("--num_beams", type=int, default=5)
+    group.add_argument("--prefix_only", action="store_true", default=False)
 
 
 def get_common_opts(params):
@@ -41,17 +45,10 @@ def get_common_opts(params):
         default=False,
         help="Run the game with pdb enabled",
     )
-    parser.add_argument(
-        "--wandb",
-        action="store_true",
-        default=False,
-        help="Enable wandb logging",
-    )
-    parser.add_argument("--wandb_tag", default="default")
-    parser.add_argument("--wandb_project", default="playground")
+    parser.add_argument("--warmup_steps", type=int, default=5000)
 
     get_data_opts(parser)
-    get_bart_opts(parser)
+    get_clipclap_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)
     return opts
