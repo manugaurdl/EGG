@@ -1,0 +1,7 @@
+{
+    "n_epoch": [10],
+    "update_freq": [40],
+    "lr": [0.00002],
+    "random_seed": [111],
+    "mapping_type": ["mlp"]
+}

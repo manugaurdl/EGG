@@ -1,0 +1,8 @@
+{
+    "n_epoch": [10],
+    "update_freq": [40],
+    "lr": [0.00002],
+    "random_seed": [111],
+    "mapping_type": ["mlp"],
+    "clipclap_model_path": ["/private/home/rdessi/EGG/egg/zoo/contextual_game/clipclap_models/coco_weights.pt"]
+}

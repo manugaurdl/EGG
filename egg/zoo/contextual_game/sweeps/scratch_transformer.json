@@ -1,0 +1,11 @@
+{
+    "n_epoch": [10],
+    "update_freq": [40],
+    "lr": [0.00002],
+    "random_seed": [111],
+    "mapping_type": ["transformer"],
+    "constant_prefix_tokens": [40],
+    "clip_prefix_tokens": [40],
+    "image_size": [288],
+    "clip_model": ["RN50x4"]
+}
