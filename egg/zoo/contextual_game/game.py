@@ -184,6 +184,11 @@ class ClipClapSenderInference(ClipClapSenderTrain):
             return generate2(self.clipclap_model, self.tokenizer, embed=prefix_embed)
 
 
+class HumanSender(nn.Module):
+    def forward(self, image, aux_input=None):
+        return aux_input["text"]
+
+
 class Game(nn.Module):
     def __init__(
         self,
@@ -236,7 +241,7 @@ class Game(nn.Module):
             labels=labels,
             aux_input=aux_input,
             receiver_output=receiver_output.detach(),
-            message=message.detach(),
+            message=message,
             message_length=None,
             aux=aux,
         )
@@ -247,17 +252,24 @@ def build_game(opts):
     clip_model = clip.load(opts.clip_model)[0]
     convert_models_to_fp32(clip_model)
 
-    sender = ClipClapSenderInference(
-        model_path=opts.clipclap_model_path,
-        mapping_type=opts.mapping_type,
-        constant_prefix_tokens=opts.constant_prefix_tokens,
-        clip_prefix_tokens=opts.clip_prefix_tokens,
-        clip_prefix_size=clip_model.visual.output_dim,
-        num_layers=opts.num_transformer_layers,
-        clip_model=opts.clip_model,
-        use_beam_search=opts.use_beam_search,
-        num_beams=opts.num_beams,
-    )
+    if opts.sender == "clipcap":
+        print("clipcap")
+        sender = ClipClapSenderInference(
+            model_path=opts.clipclap_model_path,
+            mapping_type=opts.mapping_type,
+            constant_prefix_tokens=opts.constant_prefix_tokens,
+            clip_prefix_tokens=opts.clip_prefix_tokens,
+            clip_prefix_size=clip_model.visual.output_dim,
+            num_layers=opts.num_transformer_layers,
+            clip_model=opts.clip_model,
+            use_beam_search=opts.use_beam_search,
+            num_beams=opts.num_beams,
+        )
+    elif opts.sender == "human":
+        print("human")
+        sender = HumanSender()
+    else:
+        raise RuntimeError
 
     receiver = ClipReceiver(clip_model)
 

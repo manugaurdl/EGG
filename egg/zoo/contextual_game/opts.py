@@ -45,6 +45,7 @@ def get_common_opts(params):
         default=False,
         help="Run the game with pdb enabled",
     )
+    parser.add_argument("--sender", choices=["human", "clipcap"], default="clipcap")
     parser.add_argument("--warmup_steps", type=int, default=5000)
 
     get_data_opts(parser)

@@ -86,6 +86,7 @@ class CocoDataset(CocoCaptions):
                     pad=(0, max(0, 200 - caption_len)),
                     value=-1,
                 ),
+                "text": captions[0],
             },
         )
 

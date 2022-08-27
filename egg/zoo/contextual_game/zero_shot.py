@@ -37,7 +37,10 @@ def main(params):
     image_dir = "/datasets01/COCO/060817/val2014"
     metadata_dir = "/datasets01/COCO/060817/annotations/captions_val2014.json"
     test_loader = get_dataloader(
-        image_dir=image_dir, metadata_dir=metadata_dir, batch_size=1
+        image_dir=image_dir,
+        metadata_dir=metadata_dir,
+        batch_size=1,
+        image_size=opts.image_size,
     )
     """
     test_loader = get_dataloader(
@@ -56,7 +59,7 @@ def main(params):
 
     trainer = core.Trainer(
         game=game,
-        optimizer=AdamW(game.parameters(), lr=opts.lr),
+        optimizer=AdamW(game.receiver.parameters(), lr=opts.lr),
         train_data=None,
         callbacks=[ConsoleLogger(as_json=True, print_train_loss=True)],
         debug=opts.debug,
