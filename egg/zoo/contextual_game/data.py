@@ -26,7 +26,8 @@ class ImageCodeDataset(torch.utils.data.Dataset):
         image_dir,
         metadata_dir,
         split,
-        transform,
+        transform_target,
+        transform_lineup=None,
         max_caption_len=150,
     ):
         assert split in ["train", "valid", "test"]
@@ -40,7 +41,10 @@ class ImageCodeDataset(torch.utils.data.Dataset):
             for img_idx, text in sents.items():
                 self.samples.append((img_dir, int(img_idx), text))
 
-        self.transform = transform
+        self.transform_target = transform_target
+        self.transform_lineup = (
+            transform_lineup if transform_lineup is not None else transform_target
+        )
 
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         print(f"| INFO: dataloader uses {type(self.tokenizer).__name__}")
@@ -54,9 +58,12 @@ class ImageCodeDataset(torch.utils.data.Dataset):
         img_dir, img_idx, text = self.samples[idx]
         img_files = list((Path(self.image_dir) / img_dir).glob("*.jpg"))
         img_files.sort(key=lambda x: int(str(x).split("/")[-1].split(".")[0][3:]))
+        ground_truth = torch.tensor([img_idx]).long()
 
         images = [Image.open(photo_file) for photo_file in img_files]
-        images = torch.stack([self.transform(photo) for photo in images])
+
+        lineup = torch.stack([self.transform_lineup(photo) for photo in images])
+        target = self.transform_target(images[ground_truth]).unsqueeze(0)
 
         tokenized_text = self.tokenizer(
             [text],
@@ -66,12 +73,10 @@ class ImageCodeDataset(torch.utils.data.Dataset):
         )
         caption_len = tokenized_text["input_ids"].shape[1]
 
-        ground_truth = torch.tensor([img_idx]).long()
-
         return (
-            images[ground_truth],
+            target,
             ground_truth,
-            images,
+            lineup,
             {
                 "captions": pad(
                     tokenized_text["input_ids"],
@@ -115,6 +120,19 @@ def _convert_image_to_rgb(image: Image.Image):
     return image.convert("RGB")
 
 
+def get_transformations(image_size):
+    return [
+        transforms.Resize(image_size, interpolation=BICUBIC),
+        transforms.CenterCrop(image_size),
+        _convert_image_to_rgb,
+        transforms.ToTensor(),
+        transforms.Normalize(
+            (0.48145466, 0.4578275, 0.40821073),
+            (0.26862954, 0.26130258, 0.27577711),
+        ),
+    ]
+
+
 def get_dataloader(
     image_dir: str,
     metadata_dir: str,
@@ -125,18 +143,15 @@ def get_dataloader(
     is_distributed: bool = False,
     seed: int = 111,
 ):
-    transformations = [
-        transforms.Resize(image_size, interpolation=BICUBIC),
-        transforms.CenterCrop(image_size),
-        _convert_image_to_rgb,
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.48145466, 0.4578275, 0.40821073),
-            (0.26862954, 0.26130258, 0.27577711),
-        ),
-    ]
-    transformations = transforms.Compose(transformations)
-    dataset = ImageCodeDataset(image_dir, metadata_dir, split, transformations)
+    transformations_target = get_transformations(image_size)
+    transformations_target = transforms.Compose(transformations_target)
+    print("| Warning: hardcoding image size for receiver input. Change if you change the recv clip model")
+    transformations_lineup = get_transformations(224)
+    transformations_lineup = transforms.Compose(transformations_lineup)
+
+    dataset = ImageCodeDataset(
+        image_dir, metadata_dir, split, transformations_target, transformations_lineup
+    )
 
     sampler = None
     if is_distributed:

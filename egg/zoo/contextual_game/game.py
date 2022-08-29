@@ -253,7 +253,6 @@ def build_game(opts):
     convert_models_to_fp32(clip_model)
 
     if opts.sender == "clipcap":
-        print("clipcap")
         sender = ClipClapSenderInference(
             model_path=opts.clipclap_model_path,
             mapping_type=opts.mapping_type,
@@ -266,12 +265,19 @@ def build_game(opts):
             num_beams=opts.num_beams,
         )
     elif opts.sender == "human":
-        print("human")
         sender = HumanSender()
     else:
         raise RuntimeError
 
-    receiver = ClipReceiver(clip_model)
+    # clip_model_recv = clip_model
+    print("Receiver using ViT-B/32 model")
+    if opts.clip_model == "ViT-B/32":
+        clip_model_recv = clip_model
+    else:
+        print("Not same clip model between sender and receiver")
+        clip_model_recv = clip.load("ViT-B/32")[0]
+        convert_models_to_fp32(clip_model_recv)
+    receiver = ClipReceiver(clip_model_recv)
 
     game = Game(sender, receiver, loss)
 
