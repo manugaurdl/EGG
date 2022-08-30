@@ -12,7 +12,8 @@ import egg.core as core
 from egg.core import ConsoleLogger
 
 # from egg.zoo.contextual_game.data import get_dataloader
-from egg.zoo.contextual_game.coco_dataloader import get_dataloader
+# from egg.zoo.contextual_game.coco_dataloader import get_dataloader
+from egg.zoo.contextual_game.flickr_dataloader import get_dataloader
 from egg.zoo.contextual_game.game import build_game
 from egg.zoo.contextual_game.opts import get_common_opts
 from egg.zoo.contextual_game.utils import (
@@ -34,6 +35,9 @@ def main(params):
     if not opts.distributed_context.is_distributed and opts.debug:
         breakpoint()
 
+    test_loader = get_dataloader(image_size=opts.image_size, split="test", batch_size=1)
+
+    """
     image_dir = "/datasets01/COCO/060817/val2014"
     metadata_dir = "/datasets01/COCO/060817/annotations/captions_val2014.json"
     test_loader = get_dataloader(
@@ -42,7 +46,6 @@ def main(params):
         batch_size=1,
         image_size=opts.image_size,
     )
-    """
     test_loader = get_dataloader(
         image_dir=opts.image_dir,
         metadata_dir=opts.metadata_dir,
