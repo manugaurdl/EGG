@@ -14,7 +14,6 @@ from egg.zoo.emergent_captioner.dataloaders import (
     CocoWrapper,
     ConceptualCaptionsWrapper,
     FlickrWrapper,
-    NoCapsWrapper,
 )
 from egg.zoo.emergent_captioner.finetuning.game import build_game
 from egg.zoo.emergent_captioner.finetuning.opts import get_common_opts
@@ -120,13 +119,6 @@ def main(params):
 
     log_stats(test_interaction, "TEST SET")
     dump_interaction(test_interaction, opts, name="finetuned_")
-
-    for split in ["in-domain", "near-domain", "out-domain"]:
-        nocaps_wrapper = NoCapsWrapper()
-        loader = nocaps_wrapper.get_split(split=split, **data_kwargs)
-        _, interaction = trainer.eval(loader)
-        log_stats(interaction, f"NOCAPS {split} TEST SET")
-        dump_interaction(interaction, opts, name=f"evaluation_{split}_")
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")

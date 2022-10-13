@@ -119,6 +119,7 @@ class ReinforceCaptionGame(nn.Module):
         receiver: nn.Module,
         loss: Callable,
         sender_entropy_coeff: float = 0.0,
+        kl_div_coeff: float = 0.0,
         baseline: str = "no",
         train_logging_strategy: LoggingStrategy = None,
         test_logging_strategy: LoggingStrategy = None,
@@ -132,6 +133,7 @@ class ReinforceCaptionGame(nn.Module):
         self.baseline = {"no": NoBaseline, "mean": MeanBaseline}[baseline]()
 
         self.sender_entropy_coeff = sender_entropy_coeff
+        self.kl_div_coeff = kl_div_coeff
 
         self.train_logging_strategy = (
             LoggingStrategy().minimal()
@@ -144,11 +146,8 @@ class ReinforceCaptionGame(nn.Module):
             else test_logging_strategy
         )
 
-        # self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        # self.tokenizer.pad_token = self.tokenizer.eos_token
-
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
-        captions, log_prob, entropy, msg_lengths = self.sender(sender_input, aux_input)
+        captions, log_prob, entropy, kl_div = self.sender(sender_input, aux_input)
 
         with torch.no_grad():
             receiver_output = self.receiver(captions, receiver_input, aux_input)
@@ -162,29 +161,18 @@ class ReinforceCaptionGame(nn.Module):
             )
 
         weighted_entropy = entropy * self.sender_entropy_coeff
+        weighted_kl_div = self.kl_div_coeff * kl_div
 
         baseline = self.baseline.predict(loss.detach())
 
         policy_loss = ((loss.detach() - baseline) * log_prob).mean()
 
-        optimized_loss = policy_loss - weighted_entropy
+        optimized_loss = policy_loss - weighted_entropy + weighted_kl_div
 
         if self.training:
             self.baseline.update(loss)
 
         aux_info["sender_entropy"] = entropy
-
-        """
-        captions = self.tokenizer(
-            captions, padding="max_length", max_length=300
-        ).input_ids
-        captions = torch.tensor(captions)
-
-        gt_captions = self.tokenizer(
-            aux_input["caption"], padding="max_length", max_length=300
-        ).input_ids
-        aux_input["caption"] = torch.tensor(gt_captions)
-        """
 
         logging_strategy = (
             self.train_logging_strategy if self.training else self.test_logging_strategy
@@ -196,7 +184,7 @@ class ReinforceCaptionGame(nn.Module):
             aux_input=aux_input,
             message=captions,
             receiver_output=receiver_output.detach(),
-            message_length=msg_lengths,
+            message_length=None,
             aux=aux_info,
         )
 
@@ -208,7 +196,6 @@ def get_loss(
     num_hard_negatives: int,
     in_batch_negatives: bool,
     dataset: str,
-    split: str,
     num_return_sequences: int = 1,
     test_w_negatives: bool = False,
     logit_scale: float = 1.0,
@@ -216,9 +203,9 @@ def get_loss(
     if loss_type.lower() != "discriminative":
         assert RuntimeError("loss {loss_type} not implemented yet")
 
-    assert dataset in ["flickr", "coco", "conceptual", "nocaps"]
-    if dataset == "nocaps":
-        dataset == "_".join([dataset, split])
+    # still not supporting nocaps
+    # TODO fix the loss problem
+    assert dataset in ["flickr", "coco", "conceptual"]
 
     train_emb, test_emb, train_nns, test_nns = dataset2paths[dataset.lower()]
 
@@ -268,7 +255,6 @@ def build_game(opts):
         num_hard_negatives=opts.num_hard_negatives,
         in_batch_negatives=opts.in_batch_negatives,
         dataset=opts.dataset,
-        split=opts.split,
         num_return_sequences=opts.num_return_sequences,
         test_w_negatives=opts.test_w_negatives,
         logit_scale=receiver.clip.logit_scale,
@@ -279,6 +265,7 @@ def build_game(opts):
         loss=loss,
         baseline=opts.baseline,
         sender_entropy_coeff=opts.sender_entropy_coeff,
+        kl_div_coeff=opts.kl_div_coeff,
         test_logging_strategy=test_logging_strategy,
     )
     return game

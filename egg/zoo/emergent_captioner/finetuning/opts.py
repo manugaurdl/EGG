@@ -71,6 +71,7 @@ def get_game_opts(parser):
         default=0.0,
         help="The entropy regularization coefficient for Sender used in reinforce",
     )
+    group.add_argument("--kl_div_coeff", type=float, default=0.0)
 
 
 def get_optimizer_opts(parser):

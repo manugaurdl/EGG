@@ -104,33 +104,14 @@ class CocoWrapper:
 
 
 if __name__ == "__main__":
-    import clip
-
-    def convert_models_to_fp32(model):
-        for p in model.parameters():
-            p.data = p.data.float()
-
     wrapper = CocoWrapper()
     dl = wrapper.get_split(
-        split="train",
+        split="test",
         batch_size=10,
         image_size=224,
         shuffle=False,
         num_workers=8,
     )
 
-    nns = torch.load(
-        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/coco/train_coco.nns.pt"
-    )
-    batch_emb = torch.load(
-        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/coco/train_coco.emb.pt"
-    ).to("cuda")
-    clip = clip.load("ViT-B/32")[0]
-    convert_models_to_fp32(clip)
-    clip.eval()
-
     for i, elem in enumerate(dl):
-        s_inp, labels, r_in, aux = elem
-        feats = clip.encode_image(s_inp.to("cuda"))
-        feats /= feats.norm(dim=-1, keepdim=True)
         breakpoint()

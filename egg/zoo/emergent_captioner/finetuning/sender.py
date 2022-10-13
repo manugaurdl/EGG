@@ -20,6 +20,30 @@ from transformers import (
 from egg.zoo.emergent_captioner.utils import convert_models_to_fp32
 
 
+class KLRegularizer:
+    def __init__(self, device=torch.device("cuda")):
+        self.lm = GPT2LMHeadModel.from_pretrained("gpt2").to(device)
+
+    @torch.no_grad
+    def compute_kl_loss(self, indices, log_probs):
+        # 50256 is gpt2 beginning of sentence
+        indices = torch.cat([torch.ones_like(indices[:, :1]) * 50256, indices], dim=1)
+        # we take probs from bos until last token
+        generated = self.lm(indices)["logits"].log_softmax(-1)[:, :-1, :]
+
+        step_kl_div = []
+        for timestep in range(generated.shape[1]):
+            x = torch.nn.functional.kl_div(
+                log_probs[:, timestep],
+                generated[:, timestep],
+                log_target=True,
+                reduction="none",
+            )
+            step_kl_div.append(x.sum(-1))  # summing over vocab_dim
+        kl_div = torch.stack(step_kl_div, dim=1)
+        return kl_div
+
+
 class StopTokenLogitsProcessor(LogitsProcessor):
     def __init__(self, tokenizer, do_sample):
         self.eos_token_id = tokenizer.eos_token_id
@@ -94,29 +118,7 @@ class ClipCapModel(nn.Module):
 
         self.freeze_mapper = freeze_mapper
 
-    def maybe_patch_gpt(self, max_embeddings):
-        if not getattr(self.gpt, "_patched", False):
-            self.gpt._patched = True
-            self.gpt.resize_token_embeddings(len(self.tokenizer) + max_embeddings)
-            if self.gpt.get_output_embeddings().bias is None:
-                self.gpt.get_output_embeddings().bias = torch.nn.Parameter(
-                    torch.tensor([0.0] * (len(self.tokenizer) + max_embeddings))
-                )
-                self.gpt.get_output_embeddings().bias.requires_grad = False
-                self.gpt.get_output_embeddings().to(
-                    self.gpt.get_output_embeddings().weight.device
-                )
-                self.gpt._originally_with_no_bias = True
-            else:
-                self.gpt._originally_with_no_bias = False
-            self.gpt.get_output_embeddings().bias.data[-max_embeddings:] = float("-inf")
-
-    def maybe_unpatch_gpt(self):
-        if getattr(self.gpt, "_patched", False):
-            self.gpt._patched = False
-            self.gpt.resize_token_embeddings(len(self.tokenizer))
-            if self.gpt._originally_with_no_bias:
-                self.gpt.get_output_embeddings().bias = None
+        self.kl_regularizer = KLRegularizer()
 
     def forward(self, image_feats, aux_input=None):
         prompts = self.clip_project(image_feats)
@@ -193,7 +195,36 @@ class ClipCapModel(nn.Module):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True,
         )
-        return decoded_captions, log_probs, entropy, msg_lengths
+        # compute kl loss
+        kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
+        kl_div *= mask
+        kl_div = kl_div.sum(-1) / msg_lengths
+
+        return decoded_captions, log_probs, entropy, kl_div
+
+    def maybe_patch_gpt(self, max_embeddings):
+        if not getattr(self.gpt, "_patched", False):
+            self.gpt._patched = True
+            self.gpt.resize_token_embeddings(len(self.tokenizer) + max_embeddings)
+            if self.gpt.get_output_embeddings().bias is None:
+                self.gpt.get_output_embeddings().bias = torch.nn.Parameter(
+                    torch.tensor([0.0] * (len(self.tokenizer) + max_embeddings))
+                )
+                self.gpt.get_output_embeddings().bias.requires_grad = False
+                self.gpt.get_output_embeddings().to(
+                    self.gpt.get_output_embeddings().weight.device
+                )
+                self.gpt._originally_with_no_bias = True
+            else:
+                self.gpt._originally_with_no_bias = False
+            self.gpt.get_output_embeddings().bias.data[-max_embeddings:] = float("-inf")
+
+    def maybe_unpatch_gpt(self):
+        if getattr(self.gpt, "_patched", False):
+            self.gpt._patched = False
+            self.gpt.resize_token_embeddings(len(self.tokenizer))
+            if self.gpt._originally_with_no_bias:
+                self.gpt.get_output_embeddings().bias = None
 
     def named_parameters(self, prefix="", recurse: bool = True):
         if self.freeze_mapper:
@@ -274,5 +305,5 @@ class ClipCapSender(nn.Module):
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None):
         image_feats = self.encode_images(images)
-        captions, log_probs, entropy, msg_lengths = self.clipcap(image_feats, aux_input)
-        return captions, log_probs, entropy, msg_lengths
+        captions, log_probs, entropy, kl_div = self.clipcap(image_feats, aux_input)
+        return captions, log_probs, entropy, kl_div
