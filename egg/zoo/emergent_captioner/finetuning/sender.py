@@ -24,7 +24,7 @@ class KLRegularizer:
     def __init__(self, device=torch.device("cuda")):
         self.lm = GPT2LMHeadModel.from_pretrained("gpt2").to(device)
 
-    @torch.no_grad
+    @torch.no_grad()
     def compute_kl_loss(self, indices, log_probs):
         # 50256 is gpt2 beginning of sentence
         indices = torch.cat([torch.ones_like(indices[:, :1]) * 50256, indices], dim=1)

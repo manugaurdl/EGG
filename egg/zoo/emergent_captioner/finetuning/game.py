@@ -173,6 +173,7 @@ class ReinforceCaptionGame(nn.Module):
             self.baseline.update(loss)
 
         aux_info["sender_entropy"] = entropy
+        aux_info["kl_div"] = kl_div
 
         logging_strategy = (
             self.train_logging_strategy if self.training else self.test_logging_strategy

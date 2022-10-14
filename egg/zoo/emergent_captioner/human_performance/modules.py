@@ -9,7 +9,6 @@ import torch
 import torch.nn as nn
 
 from egg.core.interaction import LoggingStrategy
-from egg.zoo.emergent_captioner.receiver import ClipReceiver
 
 
 class ZeroShotCaptionGame(nn.Module):
@@ -61,24 +60,3 @@ class ZeroShotCaptionGame(nn.Module):
 class HumanCaptionSender(nn.Module):
     def forward(self, x, aux_input=None):
         return aux_input["caption"]
-
-
-def discriminative_loss(
-    _sender_input,
-    _message,
-    _receiver_input,
-    receiver_output,
-    _labels,
-    _aux_input,
-):
-    batch_size = receiver_output.shape[0]
-    labels = torch.arange(batch_size, device=receiver_output.device)
-
-    acc = (receiver_output.argmax(dim=1) == labels).detach().float()
-    return torch.zeros(1), {"acc": acc}
-
-
-def build_game(opts):
-    sender = HumanCaptionSender()
-    receiver = ClipReceiver(clip_model=opts.recv_clip_model)
-    return ZeroShotCaptionGame(sender, receiver, discriminative_loss)

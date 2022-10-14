@@ -6,6 +6,13 @@
 from .coco_dataloader import CocoWrapper
 from .conceptual_captions_dataloader import ConceptualCaptionsWrapper
 from .flickr_dataloader import FlickrWrapper
+from .imagecode_dataloader import ImageCodeWrapper
 from .nocaps_dataloader import NoCapsWrapper
 
-__all__ = ["CocoWrapper", "ConceptualCaptionsWrapper", "FlickrWrapper", "NoCapsWrapper"]
+__all__ = [
+    "CocoWrapper",
+    "ConceptualCaptionsWrapper",
+    "FlickrWrapper",
+    "ImageCodeWrapper",
+    "NoCapsWrapper",
+]

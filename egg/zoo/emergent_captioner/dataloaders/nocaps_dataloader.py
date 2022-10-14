@@ -32,7 +32,7 @@ class NoCapsDataset:
 
         aux = {
             "img_id": torch.tensor([image_id]),
-            "captions": captions,
+            "caption": captions[0],
             "filepath": str(file_path),
         }
 
@@ -105,7 +105,7 @@ if __name__ == "__main__":
         batch_size=10,
         image_size=224,
         shuffle=False,
-        num_workers=1,
+        num_workers=0,
     )
 
     for i, elem in enumerate(dl):
