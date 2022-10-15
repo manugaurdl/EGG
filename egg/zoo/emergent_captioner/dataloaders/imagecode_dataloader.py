@@ -82,19 +82,15 @@ class ImageCodeDataset(torch.utils.data.Dataset):
         img_files.sort(key=lambda x: int(str(x).split("/")[-1].split(".")[0][3:]))
 
         images = [Image.open(photo_file) for photo_file in img_files]
+        images[0], images[img_idx] = images[img_idx], images[0]
         images = torch.stack([self.transform(photo) for photo in images])
 
-        ground_truth = torch.tensor([img_idx]).long()
-
-        return (
-            images[ground_truth],
-            ground_truth,
-            images,
-            {
-                "caption": text,
-                "is_video": torch.Tensor(["open-images" not in set_dir]),
-            },
-        )
+        aux_input = {
+            "caption": text,
+            "is_video": torch.Tensor(["open-images" not in set_dir]),
+            "target_idx": torch.tensor([img_idx]).long(),
+        }
+        return images[torch.LongTensor([0])], torch.tensor([idx]), images, aux_input
 
 
 class ImageCodeWrapper:

@@ -18,10 +18,10 @@ from egg.zoo.emergent_captioner.dataloaders import (
     ImageCodeWrapper,
 )
 from egg.zoo.emergent_captioner.human_performance.modules import (
-    ZeroShotCaptionGame,
+    ClipReceiver,
     HumanCaptionSender,
+    ZeroShotCaptionGame,
 )
-from egg.zoo.emergent_captioner.human_performance.receiver import ClipReceiver
 from egg.zoo.emergent_captioner.utils import (
     get_sha,
     log_stats,
