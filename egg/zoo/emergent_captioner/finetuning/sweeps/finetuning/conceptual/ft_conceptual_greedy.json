@@ -10,9 +10,5 @@
     "do_sample": [false],
     "max_len":[40],
     "random_seed": [111],
-    "eval_out_of_the_box": [true],
-    "num_hard_negatives": [0],
-    "in_batch_negatives": [true],
-    "test_w_negatives": [false],
-    "load_from_checkpoint": ["/private/home/rdessi/contextual_emcomm/baselines_ft/conceptual/greedy/65034069_0/2.tar"]
+    "num_hard_negatives": [0]
 }
