@@ -29,6 +29,9 @@ class ClipReceiver(torch.nn.Module):
 
 class HumanCaptionSender(nn.Module):
     def forward(self, x, aux_input=None):
+        if isinstance(aux_input["captions"], list):
+            return aux_input["captions"][0]
+
         return aux_input["captions"]
 
 
@@ -87,7 +90,7 @@ def loss(
     _aux_input,
 ):
     batch_size = receiver_output.shape[0]
-    labels = torch.zeros(batch_size, device=receiver_output.device)
+    labels = torch.arange(batch_size, device=receiver_output.device)
 
     acc = (receiver_output.argmax(dim=1) == labels).detach().float()
     return torch.zeros(1), {"acc": acc}

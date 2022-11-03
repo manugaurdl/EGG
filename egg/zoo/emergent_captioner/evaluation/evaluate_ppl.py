@@ -1,11 +1,10 @@
-from egg.zoo.emergent_captioner.finetuning.sender import ClipCapSender
 from argparse import ArgumentParser
 import torch
-import re
 from tqdm import tqdm
 import more_itertools
 from transformers import GPT2Tokenizer, OPTForCausalLM
 from collections import namedtuple
+
 
 def read_plaintext_files(preds):
     """
@@ -16,7 +15,7 @@ def read_plaintext_files(preds):
     """
     with open(preds) as fin1:
         for p in tqdm(fin1):
-            pp = p.strip().split('\t')
+            pp = p.strip().split("\t")
             for p in pp:
                 yield p
 
@@ -45,13 +44,19 @@ def make_batches(tokenizer: GPT2Tokenizer, batch_size, iterable):
     for sequences in more_itertools.chunked(iterable, batch_size):
         sequences = list(sequences)
         max_length = max([len(seq) for seq in sequences])
-        sequences = [seq if len(seq) == max_length else seq + [tokenizer.pad_token_id] * (max_length - len(seq)) for seq in sequences]
+        sequences = [
+            seq
+            if len(seq) == max_length
+            else seq + [tokenizer.pad_token_id] * (max_length - len(seq))
+            for seq in sequences
+        ]
         input_ids = torch.tensor(sequences)
         attention_mask = (input_ids != tokenizer.pad_token_id).long()
         yield input_ids, attention_mask
 
 
-Batch = namedtuple('Batch', ['input_ids', 'attention_mask'])
+Batch = namedtuple("Batch", ["input_ids", "attention_mask"])
+
 
 @torch.no_grad()
 def ppl_scores(model, iterable):
@@ -64,14 +69,15 @@ def ppl_scores(model, iterable):
         nlls = torch.nn.functional.cross_entropy(
             logits.view(-1, logits.size(-1)),
             batch.input_ids[:, 1:].reshape(-1),
-            reduction='none'
+            reduction="none",
         )
         nlls = nlls.view(logits.size(0), logits.size(1))
         nlls = nlls[batch.attention_mask[:, :-1].bool()]
         nll = nlls.mean()
         yield nll, attention_mask.long().sum()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     parser = ArgumentParser()
 
@@ -80,7 +86,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--device",
         type=torch.device,
-        default=torch.device('cpu'),
+        default=torch.device("cpu"),
     )
     args = parser.parse_args()
 
@@ -100,6 +106,4 @@ if __name__ == '__main__':
 
     tot_nll /= tot_tokens
 
-    print('Avg PPL:', tot_nll.exp())
-
-
+    print("Avg PPL:", tot_nll.exp())

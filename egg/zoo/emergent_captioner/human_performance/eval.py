@@ -58,11 +58,7 @@ def main(params):
 
     sender = HumanCaptionSender()
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
-    logging_strategy = LoggingStrategy(False, False, True, True, True, True, False)
-
-    game = ZeroShotCaptionGame(
-        sender, receiver, loss, logging_strategy=logging_strategy
-    )
+    game = ZeroShotCaptionGame(sender, receiver, loss)
 
     print(f"| Evaluating with CLIP {opts.recv_clip_model}")
     trainer = core.Trainer(
