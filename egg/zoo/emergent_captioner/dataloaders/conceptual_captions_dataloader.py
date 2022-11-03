@@ -35,9 +35,12 @@ class ConceptualCaptionsDataset(VisionDataset):
         if split == "train":
             annotations_file = "train_conceptual_captions_paths.txt"
             self.image_folder = self.dataset_dir / "training"
+            self.captions = None
         else:
             annotations_file = "test_conceptual_captions_paths.txt"
             self.image_folder = self.dataset_dir / "validation"
+            with open(self.dataset_dir / "human_test_captions_reference.txt") as f:
+                self.captions = f.readlines()
 
         self.samples = []
         with open(self.dataset_dir / annotations_file) as f:
@@ -58,6 +61,14 @@ class ConceptualCaptionsDataset(VisionDataset):
             image = self.transform(image)
 
         aux = {"img_id": fname}
+        if self.captions:
+            try:
+                # only 13k captions, 13084 images
+                # this is not a problem if batching w/ bsz == 100 as we usually do
+                aux["captions"] = self.captions[index].strip()
+            except IndexError:
+                aux["captions"] = ""
+
         return image, torch.tensor([index]), image, aux
 
 

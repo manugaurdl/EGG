@@ -9,8 +9,8 @@ import time
 import torch
 
 import egg.core as core
-from egg.core.interaction import LoggingStrategy
 from egg.zoo.emergent_captioner.dataloaders import (  # ConceptualCaptionsWrapper,
+    ConceptualCaptionsWrapper,
     CocoWrapper,
     FlickrWrapper,
     ImageCodeWrapper,
@@ -69,7 +69,7 @@ def main(params):
     )
 
     wrappers = {
-        # "conceptual": ConceptualCaptionsWrapper,
+        "conceptual": ConceptualCaptionsWrapper,
         "coco": CocoWrapper,
         "flickr": FlickrWrapper,
         "imagecode": ImageCodeWrapper,
