@@ -34,7 +34,7 @@ class FlickrDataset:
         if self.transform is not None:
             image = self.transform(image)
 
-        aux = {"img_id": image_id, "caption": captions[0]}
+        aux = {"img_id": image_id, "captions": captions}
 
         return image, torch.tensor([idx]), image, aux
 

@@ -7,14 +7,14 @@ import json
 import os
 from collections import defaultdict
 from pathlib import Path
-from PIL import Image
 
 import torch
 import torch.distributed as dist
+from PIL import Image
 
 from egg.zoo.emergent_captioner.dataloaders.utils import (
-    get_transform,
     MyDistributedSampler,
+    get_transform,
 )
 
 
@@ -34,7 +34,7 @@ class CocoDataset:
         if self.transform is not None:
             image = self.transform(image)
 
-        aux = {"img_id": torch.tensor([image_id]), "caption": captions[0]}
+        aux = {"img_id": torch.tensor([image_id]), "captions": captions[:5]}
 
         return image, torch.tensor([idx]), image, aux
 

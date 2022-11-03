@@ -32,7 +32,7 @@ class NoCapsDataset:
 
         aux = {
             "img_id": torch.tensor([image_id]),
-            "caption": captions[0],
+            "captions": captions,
             "filepath": str(file_path),
         }
 

@@ -11,6 +11,21 @@ from pathlib import Path
 
 import torch
 
+DATASET2NEG_PATHS = {
+    "flickr": (
+        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/flickr/train_flickr.emb.pt",
+        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/flickr/train_flickr.nns.pt",
+    ),
+    "coco": (
+        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/coco/train_coco.emb.pt",
+        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/coco/train_coco.nns.pt",
+    ),
+    "conceptual": (
+        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/conceptual/train_conceptual.emb.pt",
+        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/conceptual/train_conceptual.nns.pt",
+    ),
+}
+
 
 def print_grad_info(model):
     grad = [name for name, param in model.named_parameters() if param.requires_grad]

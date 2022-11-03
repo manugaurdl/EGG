@@ -9,16 +9,12 @@ from PIL import Image
 
 import torch
 import torch.distributed as dist
-from torchvision import transforms
 
-try:
-    from torchvision.transforms import InterpolationMode
 
-    BICUBIC = InterpolationMode.BICUBIC
-except ImportError:
-    BICUBIC = Image.BICUBIC
-
-from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
+from egg.zoo.emergent_captioner.dataloaders.utils import (
+    get_transform,
+    MyDistributedSampler,
+)
 
 
 def collate(batch):
@@ -46,10 +42,6 @@ def collate(batch):
         return [collate(samples) for samples in transposed]
 
     raise RuntimeError("Cannot collate batch")
-
-
-def _convert_image_to_rgb(image: Image.Image):
-    return image.convert("RGB")
 
 
 class ImageCodeDataset(torch.utils.data.Dataset):
@@ -86,9 +78,9 @@ class ImageCodeDataset(torch.utils.data.Dataset):
         images = torch.stack([self.transform(photo) for photo in images])
 
         aux_input = {
-            "caption": text,
+            "captions": text,
             "is_video": torch.Tensor(["open-images" not in set_dir]),
-            "target_idx": torch.tensor([img_idx]).long(),
+            "target_idx_imagecode": torch.tensor([img_idx]).long(),
         }
         return images[torch.LongTensor([0])], torch.tensor([idx]), images, aux_input
 
@@ -108,18 +100,9 @@ class ImageCodeWrapper:
         shuffle: bool = None,
         seed: int = 111,
     ):
-        transformations = [
-            transforms.Resize(image_size, interpolation=BICUBIC),
-            transforms.CenterCrop(image_size),
-            _convert_image_to_rgb,
-            transforms.ToTensor(),
-            transforms.Normalize(
-                (0.48145466, 0.4578275, 0.40821073),
-                (0.26862954, 0.26130258, 0.27577711),
-            ),
-        ]
-        transformations = transforms.Compose(transformations)
-        ds = ImageCodeDataset(self.dataset_dir, split=split, transform=transformations)
+        ds = ImageCodeDataset(
+            self.dataset_dir, split=split, transform=get_transform(image_size)
+        )
 
         sampler = None
         if dist.is_initialized():
@@ -132,10 +115,9 @@ class ImageCodeWrapper:
         if shuffle is None:
             shuffle = split != "test" and sampler is None
 
-        # Setting batch to 1 since batching is handled by the update_freq EGG parameter
         loader = torch.utils.data.DataLoader(
             ds,
-            batch_size=1,
+            batch_size=1,  # image sets are already batch in groups of 10
             shuffle=sampler is None and split != "test",
             sampler=sampler,
             collate_fn=collate,

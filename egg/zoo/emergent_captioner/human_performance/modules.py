@@ -29,7 +29,7 @@ class ClipReceiver(torch.nn.Module):
 
 class HumanCaptionSender(nn.Module):
     def forward(self, x, aux_input=None):
-        return aux_input["caption"]
+        return aux_input["captions"]
 
 
 class ZeroShotCaptionGame(nn.Module):
@@ -76,3 +76,18 @@ class ZeroShotCaptionGame(nn.Module):
             aux=aux_info,
         )
         return loss.mean(), interaction
+
+
+def loss(
+    _sender_input,
+    _message,
+    _receiver_input,
+    receiver_output,
+    _labels,
+    _aux_input,
+):
+    batch_size = receiver_output.shape[0]
+    labels = torch.zeros(batch_size, device=receiver_output.device)
+
+    acc = (receiver_output.argmax(dim=1) == labels).detach().float()
+    return torch.zeros(1), {"acc": acc}

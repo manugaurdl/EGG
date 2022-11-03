@@ -10,51 +10,19 @@ import torch
 
 import egg.core as core
 from egg.core.interaction import LoggingStrategy
-from egg.zoo.emergent_captioner.dataloaders import (
+from egg.zoo.emergent_captioner.dataloaders import (  # ConceptualCaptionsWrapper,
     CocoWrapper,
-    # ConceptualCaptionsWrapper,
     FlickrWrapper,
-    NoCapsWrapper,
     ImageCodeWrapper,
+    NoCapsWrapper,
 )
 from egg.zoo.emergent_captioner.human_performance.modules import (
     ClipReceiver,
     HumanCaptionSender,
     ZeroShotCaptionGame,
+    loss,
 )
-from egg.zoo.emergent_captioner.utils import (
-    get_sha,
-    log_stats,
-    store_job_and_task_id,
-)
-
-
-def imagecode_loss(
-    _sender_input,
-    _message,
-    _receiver_input,
-    receiver_output,
-    labels,
-    _aux_input,
-):
-    loss = torch.zeros(1).to(receiver_output.device)
-    acc = (receiver_output.argmax(dim=1) == labels).detach().float()
-    return loss, {"acc": acc}
-
-
-def loss(
-    _sender_input,
-    _message,
-    _receiver_input,
-    receiver_output,
-    _labels,
-    _aux_input,
-):
-    batch_size = receiver_output.shape[0]
-    labels = torch.arange(batch_size, device=receiver_output.device)
-
-    acc = (receiver_output.argmax(dim=1) == labels).detach().float()
-    return torch.zeros(1), {"acc": acc}
+from egg.zoo.emergent_captioner.utils import get_sha, log_stats, store_job_and_task_id
 
 
 def get_opts(params):
@@ -96,6 +64,7 @@ def main(params):
         sender, receiver, loss, logging_strategy=logging_strategy
     )
 
+    print(f"| Evaluating with CLIP {opts.recv_clip_model}")
     trainer = core.Trainer(
         game=game,
         optimizer=torch.optim.Adam(game.parameters(), lr=opts.lr),
@@ -107,6 +76,7 @@ def main(params):
         # "conceptual": ConceptualCaptionsWrapper,
         "coco": CocoWrapper,
         "flickr": FlickrWrapper,
+        "imagecode": ImageCodeWrapper,
     }
 
     data_kwargs = dict(
@@ -127,21 +97,6 @@ def main(params):
         test_loader = nocaps_wrapper.get_split(split=split, **data_kwargs)
         _, interaction = trainer.eval(test_loader)
         log_stats(interaction, f"NOCAPS {split} TEST SET")
-
-    # IMAGECODE evaluation
-    n_game = ZeroShotCaptionGame(
-        sender, receiver, imagecode_loss, logging_strategy=logging_strategy
-    )
-    n_trainer = core.Trainer(
-        game=n_game,
-        optimizer=torch.optim.Adam(game.parameters(), lr=opts.lr),
-        train_data=None,
-        debug=opts.debug,
-    )
-    ic_wrapper = ImageCodeWrapper()
-    imagecode_loader = ic_wrapper.get_split(split="test", **data_kwargs)
-    _, interaction = n_trainer.eval(imagecode_loader)
-    log_stats(interaction, "IMAGECODE TEST SET")
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")
