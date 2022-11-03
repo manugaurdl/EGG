@@ -8,143 +8,107 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from egg.zoo.emergent_captioner.utils import DATASET2NEG_PATHS
+
 
 class Loss(nn.Module):
     def __init__(
         self,
-        train_emb_path: str,
-        train_nns_path: str,
-        test_emb_path: str,
-        test_nns_path: str,
-        num_hard_negatives: int = 10,
-        in_batch_negatives: bool = True,
-        test_w_negatives: bool = False,
-        num_return_sequences: int = 1,
-        logit_scale: float = 1.0,
+        train_emb_path: str = None,
+        train_nns_path: str = None,
+        num_hard_negatives: int = 0,
     ):
         super().__init__()
-        assert num_hard_negatives > 0 or in_batch_negatives
 
-        # TODO make paths to negatives optional
-        self.train_emb = torch.load(train_emb_path, map_location="cpu")
-        self.train_nns = torch.load(train_nns_path, map_location="cpu")
-        self.test_emb = torch.load(test_emb_path, map_location="cpu")
-        self.test_nns = torch.load(test_nns_path, map_location="cpu")
+        self.train_emb = None
+        self.train_nns = None
+        if train_emb_path:
+            assert train_nns_path
+            self.emb = torch.load(train_emb_path, map_location="cpu")
+            self.nns = torch.load(train_nns_path, map_location="cpu")
 
         self.num_hard_negatives = num_hard_negatives
-        self.in_batch_negatives = in_batch_negatives
 
-        self.num_return_sequences = num_return_sequences
-        self.logit_scale = logit_scale
-        self.test_w_negatives = test_w_negatives
+    def get_similarity_scores(self, text_feats, image_feats, img_idxs, aux_input=None):
+        cosine_in_batch = text_feats @ image_feats.t()
 
-    def get_similarity_scores(self, elem_idxs, text_feats, aux_input=None):
-        elem_idxs = elem_idxs.squeeze()
+        targets = cosine_in_batch.diag(0).unsqueeze(1)
+        cosine_in_batch.fill_diagonal_(float("-inf"))
+        cosine_in_batch = torch.cat([targets, cosine_in_batch], dim=1)
 
-        emb = self.train_emb if self.training else self.test_emb
-        nns = self.train_nns if self.training else self.test_nns
+        cosine_sims = cosine_in_batch
 
-        # to disable negatives: set hard negatives to 0 and in_batch_negatives to True
-        if self.training or self.test_w_negatives:
-            num_hard_negatives = self.num_hard_negatives
-            in_batch_negatives = self.in_batch_negatives
-        else:
-            num_hard_negatives = 0
-            in_batch_negatives = True
+        if self.num_hard_negatives > 0 and self.nns:
+            elem_idxs = img_idxs.squeeze()
 
-        # fetches embeddings of nearest-neighbor hard negatives
-        batch_nns = nns[elem_idxs][:, : num_hard_negatives + 1].long()
+            # fetches embeddings of nearest-neighbor hard negatives
+            batch_nns = self.nns[elem_idxs][:, 1 : self.num_hard_negatives + 1].long()
 
-        # batch x num_negatives + 1 x embed_dim
-        image_feats_negatives = emb[batch_nns].to(text_feats.device)
+            # batch x num_negatives x embed_dim
+            image_feats_negatives = self.emb[batch_nns].to(text_feats.device)[1:]
 
-        if self.training:
-            image_feats_negatives = image_feats_negatives.repeat_interleave(
-                self.num_return_sequences, 0
+            cosine_negatives = torch.einsum(
+                "be,bne->bn", text_feats, image_feats_negatives
             )
 
-        # hard negatives similarity scores
-        text_feats = text_feats / text_feats.norm(dim=-1, keepdim=True)
-        cosine_negatives = self.logit_scale.exp() * torch.einsum(
-            "be,bne->bn", text_feats, image_feats_negatives
-        )
+            cosine_sims = torch.cat([cosine_in_batch, cosine_negatives], dim=1)
 
-        cosine_sims = cosine_negatives
-        # in-batch negatives similarity scores (cat'd to hard negatives if computed)
-        if in_batch_negatives:
-            # hard negatives set to 0 is equivalent to in-batch negatives
-            cosine_in_batch = (
-                self.logit_scale.exp() * text_feats @ image_feats_negatives[:, 0].t()
-            )
-            # diag mask because we don't want to count the current element twice
-            cosine_in_batch.fill_diagonal_(float("-inf"))
-            cosine_sims = torch.cat([cosine_negatives, cosine_in_batch], dim=1)
-
-        aux_input["receiver_output"] = cosine_sims
+        aux_input["receiver_output"] = cosine_sims.detach()
 
         return cosine_sims
 
-    def forward(
-        self,
-        _sender_input,
-        _message,
-        _receiver_input,
-        receiver_output,
-        labels,
-        aux_input,
-    ):
+    def remove_fields_negatives(self):
+        self.nns = None
+        self.emb = None
+
+    def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
         raise NotImplementedError
 
 
 class DiscriminativeLoss(Loss):
-    def forward(
-        self,
-        _sender_input,
-        _message,
-        _receiver_input,
-        receiver_output,
-        labels,
-        aux_input,
-    ):
-        cosine_sims = self.get_similarity_scores(labels, receiver_output, aux_input)
+    def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
+        sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input)
 
-        labels = torch.zeros(receiver_output.shape[0]).long().to(receiver_output.device)
-
-        loss = F.cross_entropy(cosine_sims, labels, reduction="none")
-        acc = (cosine_sims.argmax(dim=1) == labels).detach().float()
+        labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
+        loss = F.cross_entropy(sims, labels, reduction="none")
+        acc = (sims.argmax(dim=1) == labels).detach().float()
 
         return loss, {"acc": acc}
 
 
 class AccuracyLoss(Loss):
-    def forward(
-        self,
-        _sender_input,
-        _message,
-        _receiver_input,
-        receiver_output,
-        labels,
-        aux_input,
-    ):
-        cosine_sims = self.get_similarity_scores(labels, receiver_output, aux_input)
+    def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
+        sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input)
 
-        labels = torch.zeros(receiver_output.shape[0]).long().to(receiver_output.device)
+        labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
 
-        acc = (cosine_sims.argmax(dim=1) == labels).detach().float()
+        acc = (sims.argmax(dim=1) == labels).detach().float()
 
         return -acc, {"acc": acc}
 
 
 class SimilarityLoss(Loss):
-    def forward(
-        self,
-        _sender_input,
-        _message,
-        _receiver_input,
-        receiver_output,
-        labels,
-        aux_input,
-    ):
-        cosine_sims = self.get_similarity_scores(labels, receiver_output, aux_input)
-        # maximising similarity between text and image in the feature space
-        return -cosine_sims[0], {}
+    def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
+        sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input)
+
+        labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
+
+        loss = -sims[:, 0]
+        acc = (sims.argmax(dim=1) == labels).detach().float()
+
+        return loss, {"acc": acc}
+
+
+def get_loss(loss_type: str, dataset: str, num_hard_negatives: int):
+    train_emb, train_nns = DATASET2NEG_PATHS.get(dataset.lower(), (None, None))
+
+    name2loss = {
+        "discriminative": DiscriminativeLoss,
+        "accuracy": AccuracyLoss,
+        "similarity": SimilarityLoss,
+    }
+
+    loss_cls = name2loss.get(loss_type.lower(), None)
+    assert loss_cls, f"cannot recognize loss {loss_type}"
+
+    return loss_cls(train_emb, train_nns, num_hard_negatives)

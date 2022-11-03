@@ -3,83 +3,19 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from itertools import chain
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import clip
 import torch
 import torch.nn as nn
-from torch.distributions import Categorical
-from transformers import (
-    GPT2LMHeadModel,
-    GPT2Tokenizer,
-    LogitsProcessor,
-    LogitsProcessorList,
+from transformers import GPT2LMHeadModel, GPT2Tokenizer, LogitsProcessorList
+
+from egg.zoo.emergent_captioner.finetuning.utils import (
+    MLP,
+    KLRegularizer,
+    StopTokenLogitsProcessor,
 )
-
 from egg.zoo.emergent_captioner.utils import convert_models_to_fp32
-
-
-class KLRegularizer:
-    def __init__(self, device=torch.device("cuda")):
-        self.lm = GPT2LMHeadModel.from_pretrained("gpt2").to(device)
-
-    @torch.no_grad()
-    def compute_kl_loss(self, indices, log_probs):
-        # 50256 is gpt2 beginning of sentence
-        indices = torch.cat([torch.ones_like(indices[:, :1]) * 50256, indices], dim=1)
-        # we take probs from bos until last token
-        generated = self.lm(indices)["logits"].log_softmax(-1)[:, :-1, :]
-
-        step_kl_div = []
-        for timestep in range(generated.shape[1]):
-            x = torch.nn.functional.kl_div(
-                log_probs[:, timestep],
-                generated[:, timestep],
-                log_target=True,
-                reduction="none",
-            )
-            step_kl_div.append(x.sum(-1))  # summing over vocab_dim
-        kl_div = torch.stack(step_kl_div, dim=1)
-        return kl_div
-
-
-class StopTokenLogitsProcessor(LogitsProcessor):
-    def __init__(self, tokenizer, do_sample):
-        self.eos_token_id = tokenizer.eos_token_id
-
-        self.stop_word_ids = set(
-            [
-                idx
-                for idx in range(len(tokenizer))
-                if "." in tokenizer.convert_ids_to_tokens(idx)
-            ]
-        )
-        self.vocab_size = len(tokenizer)
-
-    def __call__(
-        self, input_ids: torch.LongTensor, scores: torch.FloatTensor
-    ) -> torch.FloatTensor:
-        for i, input_id in enumerate(input_ids):
-            if input_id[-1].item() in self.stop_word_ids:
-                scores[i, : self.vocab_size] = torch.finfo().min
-                scores[i, self.vocab_size :] = float("-inf")
-                scores[i, self.eos_token_id] = 0.0
-        return scores
-
-
-class MLP(nn.Module):
-    def __init__(self, sizes: Tuple[int, ...], bias=True, act=nn.Tanh):
-        super(MLP, self).__init__()
-        layers = []
-        for i in range(len(sizes) - 1):
-            layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=bias))
-            if i < len(sizes) - 2:
-                layers.append(act())
-        self.model = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.model(x)
 
 
 class ClipCapModel(nn.Module):
@@ -87,7 +23,6 @@ class ClipCapModel(nn.Module):
         self,
         clip_prefix_size: int,
         freeze_mapper: bool,
-        num_return_sequences: int = 1,
         nb_prefix_tokens: int = 10,
         do_sample: bool = False,
         beam_size: int = 5,
@@ -100,7 +35,6 @@ class ClipCapModel(nn.Module):
         self.gpt.config.pad_token_id = self.gpt.config.eos_token_id
         self.eos_token_id = self.tokenizer.eos_token_id
 
-        self.num_return_sequences = num_return_sequences
         self.do_sample = do_sample
         self.beam_size = beam_size
         self.max_len = max_len
@@ -115,8 +49,6 @@ class ClipCapModel(nn.Module):
         hidden_dim = (gpt_embedding_size * self.nb_prefix_tokens) // 2
         output_dim = gpt_embedding_size * self.nb_prefix_tokens
         self.clip_project = MLP((input_dim, hidden_dim, output_dim))
-
-        self.freeze_mapper = freeze_mapper
 
         self.kl_regularizer = KLRegularizer()
 
@@ -138,7 +70,7 @@ class ClipCapModel(nn.Module):
                 do_sample=self.do_sample,
                 max_length=self.max_len,
                 num_beams=self.beam_size,
-                num_return_sequences=self.num_return_sequences,
+                num_return_sequences=1,
                 logits_processor=LogitsProcessorList([self.logits_processor]),
                 top_k=len(self.tokenizer),
             )
@@ -154,9 +86,6 @@ class ClipCapModel(nn.Module):
                 logits_processor=LogitsProcessorList([self.logits_processor]),
                 top_k=len(self.tokenizer),
             )
-
-        if self.training:
-            prompts = prompts.repeat_interleave(self.num_return_sequences, 0)
 
         indices = generated[:, prefix_len:]
         suffix = self.gpt.get_input_embeddings()(indices)
@@ -176,18 +105,10 @@ class ClipCapModel(nn.Module):
 
         # compute normalized log_probs of generated captions
         log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze()
+        if len(log_probs.shape) == 1:
+            log_probs = log_probs.unsqueeze(0)  # bsz = 1, e.g. for imagecode
         log_probs *= mask
         log_probs = log_probs.sum(1) / msg_lengths
-
-        # compute avg per timestep entropy of captioner distribution
-        entropies = []
-        for timestep in range(logits.shape[1]):
-            dist = Categorical(probs=logits[:, timestep].detach())
-            ent = dist.entropy() * mask[:, timestep]
-            entropies.append(ent)
-
-        entropy = torch.stack(entropies, dim=1)
-        entropy = entropy.sum(-1) / msg_lengths
 
         # put captions in textual form
         decoded_captions = self.tokenizer.batch_decode(
@@ -200,7 +121,7 @@ class ClipCapModel(nn.Module):
         kl_div *= mask
         kl_div = kl_div.sum(-1) / msg_lengths
 
-        return decoded_captions, log_probs, entropy, kl_div
+        return decoded_captions, log_probs, kl_div
 
     def maybe_patch_gpt(self, max_embeddings):
         if not getattr(self.gpt, "_patched", False):
@@ -226,25 +147,6 @@ class ClipCapModel(nn.Module):
             if self.gpt._originally_with_no_bias:
                 self.gpt.get_output_embeddings().bias = None
 
-    def named_parameters(self, prefix="", recurse: bool = True):
-        if self.freeze_mapper:
-            return self.gpt.named_parameters()
-        return chain(self.gpt.named_parameters(), self.clip_project.named_parameters())
-
-    def parameters(self, recurse: bool = True):
-        if self.freeze_mapper:
-            return self.gpt.parameters()
-        return chain(self.gpt.parameters(), self.clip_project.parameters())
-
-    def train(self, mode: bool = True):
-        self.training = mode
-        if self.freeze_mapper:
-            self.clip_project.eval()
-        else:
-            self.clip_project.train(mode)
-        self.gpt.train(mode)
-        return self
-
 
 class ClipCapSender(nn.Module):
     def __init__(
@@ -252,7 +154,6 @@ class ClipCapSender(nn.Module):
         clip_model: str,
         clipcap_path: str,
         freeze_clipcap_mapper: bool = False,
-        num_return_sequences: int = 1,
         do_sample: bool = False,
         beam_size: int = 5,
         max_len: int = 20,
@@ -271,7 +172,6 @@ class ClipCapSender(nn.Module):
         self.clipcap = ClipCapModel(
             clip_prefix_size=self.clip_vit.output_dim,
             freeze_mapper=freeze_clipcap_mapper,
-            num_return_sequences=num_return_sequences,
             do_sample=do_sample,
             beam_size=beam_size,
             max_len=max_len,
@@ -280,10 +180,10 @@ class ClipCapSender(nn.Module):
             print("| LOADED CLIPCAP MODEL")
             self.clipcap.load_state_dict(torch.load(clipcap_path))
 
-        self.patch_model()
-
-    def encode_images(self, images: torch.Tensor):
-        return self.clip_vit(images)
+    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None):
+        image_feats = self.clip_vit(images)
+        captions, log_probs, kl_div = self.clipcap(image_feats, aux_input)
+        return captions, log_probs, kl_div
 
     def named_parameters(self, prefix="", recurse: bool = True):
         return self.clipcap.named_parameters()
@@ -302,8 +202,3 @@ class ClipCapSender(nn.Module):
 
     def unpatch_model(self):
         self.clipcap.maybe_unpatch_gpt()
-
-    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None):
-        image_feats = self.encode_images(images)
-        captions, log_probs, entropy, kl_div = self.clipcap(image_feats, aux_input)
-        return captions, log_probs, entropy, kl_div
