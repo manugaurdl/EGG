@@ -100,7 +100,7 @@ def build_game(opts):
 
     loss_fn = get_loss(
         loss_type=opts.loss_type,
-        dataset=opts.dataset,
+        dataset=opts.train_dataset,
         num_hard_negatives=opts.num_hard_negatives,
     )
     # remember that with non-diff losses you should use a wrapper around recv

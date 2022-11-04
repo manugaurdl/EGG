@@ -12,8 +12,8 @@ def get_data_opts(parser):
     group = parser.add_argument_group("data options")
     group.add_argument("--dataset_dir", default=None)
     group.add_argument(
-        "--dataset",
-        choices=["coco", "flickr", "conceptual", "imagecode", "nocaps"],
+        "--train_dataset",
+        choices=["coco", "conceptual"],
         default="coco",
     )
     group.add_argument(
@@ -72,12 +72,6 @@ def get_game_opts(parser):
 def get_common_opts(params):
     parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        "--eval_only",
-        action="store_true",
-        default=False,
-        help="Run only the evaluation loop on the test",
-    )
     parser.add_argument(
         "--debug",
         action="store_true",

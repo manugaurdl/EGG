@@ -10,8 +10,8 @@ import torch
 import torch.nn as nn
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, LogitsProcessorList
 
+from egg.zoo.emergent_captioner.finetuning.archs import MLP
 from egg.zoo.emergent_captioner.finetuning.utils import (
-    MLP,
     KLRegularizer,
     StopTokenLogitsProcessor,
 )
