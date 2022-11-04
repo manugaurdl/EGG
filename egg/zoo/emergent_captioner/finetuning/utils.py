@@ -4,10 +4,9 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
-from typing import Any, Dict, NamedTuple, Optional, Tuple
+from typing import Any, Dict, NamedTuple, Optional
 
 import torch
-import torch.nn as nn
 from transformers import GPT2LMHeadModel, LogitsProcessor
 
 from egg.core import Callback, Interaction
@@ -67,20 +66,6 @@ class StopTokenLogitsProcessor(LogitsProcessor):
                 scores[i, self.vocab_size :] = float("-inf")
                 scores[i, self.eos_token_id] = 0.0
         return scores
-
-
-class MLP(nn.Module):
-    def __init__(self, sizes: Tuple[int, ...], bias=True, act=nn.Tanh):
-        super(MLP, self).__init__()
-        layers = []
-        for i in range(len(sizes) - 1):
-            layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=bias))
-            if i < len(sizes) - 2:
-                layers.append(act())
-        self.model = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.model(x)
 
 
 class ModelSaver(Callback):

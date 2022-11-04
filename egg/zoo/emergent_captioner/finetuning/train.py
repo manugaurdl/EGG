@@ -44,7 +44,7 @@ def main(params):
         "flickr": FlickrWrapper,
     }
 
-    wrapper = name2wrapper[opts.dataset](opts.dataset_dir)
+    wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir)
 
     data_kwargs = dict(
         batch_size=opts.batch_size,
@@ -71,8 +71,7 @@ def main(params):
     )
     trainer.game.sender.patch_model()
 
-    if not opts.eval_only:
-        trainer.train(opts.n_epochs)
+    trainer.train(opts.n_epochs)
 
     _, test_interaction = trainer.eval(test_loader)
 
