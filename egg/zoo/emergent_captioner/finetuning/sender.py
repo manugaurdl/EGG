@@ -22,7 +22,6 @@ class ClipCapModel(nn.Module):
     def __init__(
         self,
         clip_prefix_size: int,
-        freeze_mapper: bool,
         nb_prefix_tokens: int = 10,
         do_sample: bool = False,
         beam_size: int = 5,
@@ -153,7 +152,6 @@ class ClipCapSender(nn.Module):
         self,
         clip_model: str,
         clipcap_path: str,
-        freeze_clipcap_mapper: bool = False,
         do_sample: bool = False,
         beam_size: int = 5,
         max_len: int = 20,
@@ -171,7 +169,6 @@ class ClipCapSender(nn.Module):
 
         self.clipcap = ClipCapModel(
             clip_prefix_size=self.clip_vit.output_dim,
-            freeze_mapper=freeze_clipcap_mapper,
             do_sample=do_sample,
             beam_size=beam_size,
             max_len=max_len,
