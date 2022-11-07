@@ -19,7 +19,7 @@ def get_data_opts(parser):
     group.add_argument(
         "--eval_datasets",
         nargs="+",
-        default=["coco"],
+        default=["flickr"],
     )
     group.add_argument(
         "--sender_image_size", type=int, default=224, help="Sender Image size"

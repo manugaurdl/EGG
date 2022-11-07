@@ -13,6 +13,7 @@ from egg.zoo.emergent_captioner.dataloaders import (
     CocoWrapper,
     ConceptualCaptionsWrapper,
     FlickrWrapper,
+    get_transform,
 )
 from egg.zoo.emergent_captioner.finetuning.game import build_game
 from egg.zoo.emergent_captioner.finetuning.opts import get_common_opts
@@ -48,7 +49,7 @@ def main(params):
 
     data_kwargs = dict(
         batch_size=opts.batch_size,
-        image_size=opts.image_size,
+        transform=get_transform(opts.sender_image_size, opts.recv_image_size),
         num_workers=opts.num_workers,
         seed=opts.random_seed,
     )
@@ -69,7 +70,8 @@ def main(params):
         ],
         debug=opts.debug,
     )
-    trainer.game.sender.patch_model()
+    if opts.captioner_model == "clipcap":
+        trainer.game.sender.patch_model()
 
     trainer.train(opts.n_epochs)
 

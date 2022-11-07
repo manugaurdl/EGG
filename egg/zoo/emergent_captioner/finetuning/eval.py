@@ -11,10 +11,12 @@ import torch
 import egg.core as core
 from egg.zoo.emergent_captioner.dataloaders import (
     CocoWrapper,
+    ConcadiaWrapper,
     ConceptualCaptionsWrapper,
     FlickrWrapper,
     ImageCodeWrapper,
     NoCapsWrapper,
+    get_transform,
 )
 from egg.zoo.emergent_captioner.finetuning.game import build_game
 from egg.zoo.emergent_captioner.finetuning.opts import get_common_opts
@@ -88,7 +90,8 @@ def main(params):
             pass
 
     game = build_game(opts)
-    game.sender.patch_model()
+    if opts.captioner_model == "clipcap":
+        game.sender.patch_model()
 
     trainer = core.Trainer(
         game=game,
@@ -96,21 +99,23 @@ def main(params):
         train_data=None,
         debug=opts.debug,
     )
-    trainer.game.sender.patch_model()
+    if opts.captioner_model == "clipcap":
+        trainer.game.sender.patch_model()
 
     data_kwargs = dict(
         batch_size=opts.batch_size,
-        image_size=opts.image_size,
+        transform=get_transform(opts.sender_image_size, opts.recv_image_size),
         num_workers=opts.num_workers,
         seed=opts.random_seed,
     )
 
     logging.disable(level=logging.INFO)
     for dataset in opts.eval_datasets:
-        if dataset in ["conceptual", "coco", "flickr", "imagecode"]:
+        if dataset in ["conceptual", "coco", "flickr", "imagecode", "concadia"]:
             wrappers = {
-                "conceptual": ConceptualCaptionsWrapper,
                 "coco": CocoWrapper,
+                "concadia": ConcadiaWrapper,
+                "conceptual": ConceptualCaptionsWrapper,
                 "flickr": FlickrWrapper,
                 "imagecode": ImageCodeWrapper,
             }

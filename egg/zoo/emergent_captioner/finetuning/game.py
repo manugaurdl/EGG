@@ -10,9 +10,10 @@ import torch.nn as nn
 
 from egg.core.baselines import MeanBaseline, NoBaseline
 from egg.core.interaction import LoggingStrategy
+from egg.zoo.emergent_captioner.finetuning.blip import BlipSender
+from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender
 from egg.zoo.emergent_captioner.finetuning.losses import get_loss
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
-from egg.zoo.emergent_captioner.finetuning.sender import ClipCapSender
 
 
 class ReinforceCaptionGame(nn.Module):
@@ -84,13 +85,22 @@ class ReinforceCaptionGame(nn.Module):
 
 
 def build_game(opts):
-    sender = ClipCapSender(
-        clip_model=opts.sender_clip_model,
-        clipcap_path=opts.clipcap_model_path,
-        do_sample=opts.do_sample,
-        beam_size=opts.beam_size,
-        max_len=opts.max_len,
-    )
+    if opts.captioner_model.lower() == "clipcap":
+        sender = ClipCapSender(
+            clip_model=opts.sender_clip_model,
+            clipcap_path=opts.clipcap_model_path,
+            do_sample=opts.do_sample,
+            beam_size=opts.beam_size,
+            max_len=opts.max_len,
+        )
+    elif opts.captioner_model.lower() == "blip":
+        sender = BlipSender(
+            blip_model=opts.blip_model,
+            beam_size=opts.beam_size,
+            max_len=opts.max_len,
+        )
+    else:
+        raise RuntimeError
 
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
 
