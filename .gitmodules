@@ -1,0 +1,3 @@
+[submodule "egg/zoo/emergent_captioner/finetuning/LAVIS"]
+	path = egg/zoo/emergent_captioner/finetuning/LAVIS
+	url = https://github.com/salesforce/LAVIS.git
