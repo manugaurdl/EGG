@@ -5,16 +5,14 @@
 
 import json
 from pathlib import Path
+from typing import Callable
 from PIL import Image
 
 import torch
 import torch.distributed as dist
 
 
-from egg.zoo.emergent_captioner.dataloaders.utils import (
-    get_transform,
-    MyDistributedSampler,
-)
+from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
 
 
 def collate(batch):
@@ -75,14 +73,18 @@ class ImageCodeDataset(torch.utils.data.Dataset):
 
         images = [Image.open(photo_file) for photo_file in img_files]
         images[0], images[img_idx] = images[img_idx], images[0]
-        images = torch.stack([self.transform(photo) for photo in images])
+
+        sender_imgs, recv_imgs = zip(*[self.transform(photo) for photo in images])
+
+        sender_input = torch.stack(sender_imgs)[torch.LongTensor([0])]
+        recv_input = torch.stack(recv_imgs)
 
         aux_input = {
             "captions": text,
             "is_video": torch.Tensor(["open-images" not in set_dir]),
             "target_idx_imagecode": torch.tensor([img_idx]).long(),
         }
-        return images[torch.LongTensor([0])], torch.tensor([idx]), images, aux_input
+        return sender_input, torch.tensor([idx]), recv_input, aux_input
 
 
 class ImageCodeWrapper:
@@ -94,15 +96,13 @@ class ImageCodeWrapper:
     def get_split(
         self,
         split: str,
+        transform: Callable,
         batch_size: int = 1,
-        image_size: int = 224,
         num_workers: int = 8,
         shuffle: bool = None,
         seed: int = 111,
     ):
-        ds = ImageCodeDataset(
-            self.dataset_dir, split=split, transform=get_transform(image_size)
-        )
+        ds = ImageCodeDataset(self.dataset_dir, split=split, transform=transform)
 
         sampler = None
         if dist.is_initialized():

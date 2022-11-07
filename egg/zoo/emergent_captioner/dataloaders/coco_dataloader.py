@@ -7,15 +7,13 @@ import json
 import os
 from collections import defaultdict
 from pathlib import Path
+from typing import Callable
 
 import torch
 import torch.distributed as dist
 from PIL import Image
 
-from egg.zoo.emergent_captioner.dataloaders.utils import (
-    MyDistributedSampler,
-    get_transform,
-)
+from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
 
 
 class CocoDataset:
@@ -31,12 +29,11 @@ class CocoDataset:
         file_path, captions, image_id = self.samples[idx]
 
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
-        if self.transform is not None:
-            image = self.transform(image)
+        sender_input, recv_input = self.transform(image)
 
         aux = {"img_id": torch.tensor([image_id]), "captions": captions[:5]}
 
-        return image, torch.tensor([idx]), image, aux
+        return sender_input, torch.tensor([idx]), recv_input, aux
 
 
 class CocoWrapper:
@@ -69,7 +66,7 @@ class CocoWrapper:
         self,
         split: str,
         batch_size: int,
-        image_size: int,
+        transform: Callable,
         num_workers: int = 8,
         shuffle: bool = None,
         seed: int = 111,
@@ -78,7 +75,7 @@ class CocoWrapper:
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
 
-        ds = CocoDataset(self.dataset_dir, samples, transform=get_transform(image_size))
+        ds = CocoDataset(self.dataset_dir, samples, transform=transform)
 
         sampler = None
         if dist.is_initialized():

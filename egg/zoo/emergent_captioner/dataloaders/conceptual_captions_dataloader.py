@@ -11,10 +11,7 @@ import torch
 import torch.distributed as dist
 from torchvision.datasets import VisionDataset
 
-from egg.zoo.emergent_captioner.dataloaders.utils import (
-    get_transform,
-    MyDistributedSampler,
-)
+from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
 
 
 class ConceptualCaptionsDataset(VisionDataset):
@@ -57,19 +54,19 @@ class ConceptualCaptionsDataset(VisionDataset):
         with open(img_path, "rb") as f:
             image = Image.open(f).convert("RGB")
 
-        if self.transform:
-            image = self.transform(image)
+        sender_input, recv_input = self.transform(image)
 
         aux = {"img_id": fname}
         if self.captions:
             try:
-                # only 13k captions, 13084 images
+                # preventing IndexError when loading images from txt file of img paths
+                # only 13k captions but 13084 images
                 # this is not a problem if batching w/ bsz == 100 as we usually do
                 aux["captions"] = self.captions[index].strip()
             except IndexError:
                 aux["captions"] = ""
 
-        return image, torch.tensor([index]), image, aux
+        return sender_input, torch.tensor([index]), recv_input, aux
 
 
 class ConceptualCaptionsWrapper:
@@ -82,15 +79,13 @@ class ConceptualCaptionsWrapper:
         self,
         split: str,
         batch_size: int,
-        image_size: int,
+        transform: Callable,
         num_workers: int = 1,
         shuffle: bool = None,
         seed: int = 111,
     ):
         ds = ConceptualCaptionsDataset(
-            dataset_dir=self.dataset_dir,
-            split=split,
-            transform=get_transform(image_size),
+            dataset_dir=self.dataset_dir, split=split, transform=transform
         )
 
         sampler = None

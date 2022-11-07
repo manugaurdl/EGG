@@ -21,13 +21,33 @@ def get_data_opts(parser):
         nargs="+",
         default=["coco"],
     )
-    group.add_argument("--image_size", type=int, default=224, help="Image size")
+    group.add_argument(
+        "--sender_image_size", type=int, default=224, help="Sender Image size"
+    )
+    group.add_argument(
+        "--recv_image_size", type=int, default=None, help="Recv image size"
+    )
     group.add_argument("--num_workers", type=int, default=8)
 
 
-def get_clipcap_opts(parser):
-    group = parser.add_argument_group("clipcap options")
+def get_captioner_opts(parser):
+    group = parser.add_argument_group("captioner options")
 
+    group.add_argument(
+        "--captioner_model",
+        choices="clipcap blip".split(),
+        default="clipcap",
+        help="Type of captioner model (default: clipcap)",
+    )
+
+    # Blip
+    group.add_argument(
+        "--blip_model",
+        choices=["base_coco", "large_coco"],
+        default="base_coco",
+    )
+
+    # Clipcap
     group.add_argument(
         "--clipcap_model_path",
         default="/private/home/rdessi/EGG/egg/zoo/emergent_captioner/clipclap_models/conceptual_weights.pt",
@@ -80,7 +100,7 @@ def get_common_opts(params):
     )
 
     get_data_opts(parser)
-    get_clipcap_opts(parser)
+    get_captioner_opts(parser)
     get_game_opts(parser)
 
     opts = core.init(arg_parser=parser, params=params)

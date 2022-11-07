@@ -7,11 +7,10 @@ import json
 import os
 from collections import defaultdict
 from pathlib import Path
+from typing import Callable
 from PIL import Image
 
 import torch
-
-from egg.zoo.emergent_captioner.dataloaders.utils import get_transform
 
 
 class NoCapsDataset:
@@ -27,8 +26,7 @@ class NoCapsDataset:
         file_path, captions, image_id = self.samples[idx]
 
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
-        if self.transform is not None:
-            image = self.transform(image)
+        sender_input, recv_input = self.transform(image)
 
         aux = {
             "img_id": torch.tensor([image_id]),
@@ -36,7 +34,7 @@ class NoCapsDataset:
             "filepath": str(file_path),
         }
 
-        return image, torch.tensor([idx]), image, aux
+        return sender_input, torch.tensor([idx]), recv_input, aux
 
 
 class NoCapsWrapper:
@@ -73,7 +71,7 @@ class NoCapsWrapper:
         self,
         split: str,
         batch_size: int,
-        image_size: int,
+        transform: Callable,
         num_workers: int = 8,
         shuffle: bool = None,
         seed: int = 111,
@@ -83,9 +81,7 @@ class NoCapsWrapper:
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
 
-        ds = NoCapsDataset(
-            self.dataset_dir, samples, transform=get_transform(image_size)
-        )
+        ds = NoCapsDataset(self.dataset_dir, samples, transform=transform)
 
         loader = torch.utils.data.DataLoader(
             ds,
