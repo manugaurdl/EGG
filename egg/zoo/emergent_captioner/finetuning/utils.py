@@ -111,7 +111,9 @@ class ModelSaver(Callback):
 
     def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int):
         self.epoch = epoch
-        self.save_clipclap_model(epoch=epoch)
+        if self.opts.captioner_model == "clipcap":
+            self.save_clipclap_model(epoch=epoch)
 
     def on_train_end(self):
-        self.save_clipclap_model()
+        if self.opts.captioner_model == "clipcap":
+            self.save_clipclap_model()
