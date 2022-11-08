@@ -29,6 +29,7 @@ class BlipSender(nn.Module):
         self.model_txt.config.eos_token_id = self.tokenizer.sep_token_id
         self.model_txt.config.pad_token_id = self.tokenizer.pad_token_id
 
+        assert beam_size == 1
         self.beam_size = beam_size
 
         self.max_len = max_len
@@ -61,7 +62,6 @@ class BlipSender(nn.Module):
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None):
         with torch.no_grad():
             feats_img = self.model_img(images)
-            feats_img = feats_img.repeat_interleave(self.beam_size, 0)
             attns_img = torch.ones(feats_img.size()[:-1], dtype=torch.long).to(
                 self.device
             )

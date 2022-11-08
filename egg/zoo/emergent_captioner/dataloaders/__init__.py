@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from .coco_dataloader import CocoWrapper
+from .concadia_dataloader import ConcadiaWrapper
 from .conceptual_captions_dataloader import ConceptualCaptionsWrapper
 from .flickr_dataloader import FlickrWrapper
 from .imagecode_dataloader import ImageCodeWrapper
@@ -12,6 +13,7 @@ from .utils import get_transform
 
 __all__ = [
     "CocoWrapper",
+    "ConcadiaWrapper",
     "ConceptualCaptionsWrapper",
     "FlickrWrapper",
     "ImageCodeWrapper",
