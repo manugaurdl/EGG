@@ -9,6 +9,7 @@ from .conceptual_captions_dataloader import ConceptualCaptionsWrapper
 from .flickr_dataloader import FlickrWrapper
 from .imagecode_dataloader import ImageCodeWrapper
 from .nocaps_dataloader import NoCapsWrapper
+from .vizwiz_dataloader import VizWizWrapper
 from .utils import get_transform
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "FlickrWrapper",
     "ImageCodeWrapper",
     "NoCapsWrapper",
+    "VizWizWrapper",
     "get_transform",
 ]

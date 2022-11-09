@@ -16,6 +16,7 @@ from egg.zoo.emergent_captioner.dataloaders import (
     FlickrWrapper,
     ImageCodeWrapper,
     NoCapsWrapper,
+    VizWizWrapper,
     get_transform,
 )
 from egg.zoo.emergent_captioner.finetuning.game import build_game
@@ -111,13 +112,21 @@ def main(params):
 
     logging.disable(level=logging.INFO)
     for dataset in opts.eval_datasets:
-        if dataset in ["conceptual", "coco", "flickr", "imagecode", "concadia"]:
+        if dataset in [
+            "concadia",
+            "conceptual",
+            "coco",
+            "flickr",
+            "imagecode",
+            "vizwiz",
+        ]:
             wrappers = {
                 "coco": CocoWrapper,
                 "concadia": ConcadiaWrapper,
                 "conceptual": ConceptualCaptionsWrapper,
                 "flickr": FlickrWrapper,
                 "imagecode": ImageCodeWrapper,
+                "vizwiz": VizWizWrapper,
             }
 
             wrapper = wrappers[dataset.lower()]()
@@ -126,7 +135,7 @@ def main(params):
             log_stats(interaction, f"{dataset.upper()} TEST SET")
             dump_interaction(interaction, opts, name=f"{dataset.lower()}_")
 
-            multi_reference = dataset not in ["conceptual", "imagecode"]
+            multi_reference = dataset not in ["conceptual", "imagecode", "concadia"]
             gt = extract_gt(interaction, multi_reference=multi_reference)
             preds = extract_captions(interaction)
             preds, gt = prepare_for_nlg_metrics(preds, gt)

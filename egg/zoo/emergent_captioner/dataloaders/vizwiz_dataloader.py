@@ -4,6 +4,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import json
+import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Callable
 from PIL import Image
@@ -22,17 +24,28 @@ class VizWizDataset(torch.utils.data.Dataset):
         split,
         transform,
     ):
-        assert split in ["train", "valid", "test"]
+        assert split in ["train", "test"]
 
-        self.dataset_dir = dataset_dir
-        with open(dataset_dir / f"{split}_data.json", "r") as fd:
+        self.dataset_dir = os.path.realpath(dataset_dir)
+        with open(dataset_dir / "annotations" / f"{split}.json", "r") as fd:
             data = json.load(fd)
 
-        breakpoint()
-        self.samples = []
-        for img_dir, sents in data.items():
-            for img_idx, text in sents.items():
-                self.samples.append((img_dir, int(img_idx), text))
+        img_info = defaultdict(list)
+        for img_dict in data["images"]:
+            img_info[img_dict["id"]].append(img_dict["file_name"])
+
+        ann_info = defaultdict(list)
+        for ann_dict in data["annotations"]:
+            caption, img_id = ann_dict["caption"], ann_dict["image_id"]
+            ann_info[img_id].append(caption)
+
+        assert len(img_info) == len(ann_info)
+        for img_id, captions in ann_info.items():
+            img_info[img_id].extend(captions)
+
+        self.samples = [(k, v[0], v[1:]) for k, v in img_info.items()]
+
+        self.split = "val" if split == "test" else "train"
 
         self.transform = transform
 
@@ -40,25 +53,16 @@ class VizWizDataset(torch.utils.data.Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        set_dir, img_idx, text = self.samples[idx]
-        set_path = Path(self.dataset_dir) / "image-sets" / set_dir
-        img_files = list(set_path.glob("*.jpg"))
-        img_files.sort(key=lambda x: int(str(x).split("/")[-1].split(".")[0][3:]))
+        img_id, file_name, captions = self.samples[idx]
 
-        images = [Image.open(photo_file) for photo_file in img_files]
-        images[0], images[img_idx] = images[img_idx], images[0]
+        file_path = os.path.join(self.dataset_dir, "images", self.split, file_name)
+        image = Image.open(file_path).convert("RGB")
 
-        sender_imgs, recv_imgs = zip(*[self.transform(photo) for photo in images])
+        sender_input, recv_input = self.transform(image)
 
-        sender_input = torch.stack(sender_imgs)[torch.LongTensor([0])]
-        recv_input = torch.stack(recv_imgs)
+        aux = {"img_id": torch.tensor([img_id]), "captions": captions}
 
-        aux_input = {
-            "captions": text,
-            "is_video": torch.Tensor(["open-images" not in set_dir]),
-            "target_idx_imagecode": torch.tensor([img_idx]).long(),
-        }
-        return sender_input, torch.tensor([idx]), recv_input, aux_input
+        return sender_input, torch.tensor([idx]), recv_input, aux
 
 
 class VizWizWrapper:
@@ -71,7 +75,7 @@ class VizWizWrapper:
         self,
         split: str,
         transform: Callable,
-        batch_size: int = 1,
+        batch_size: int = 4,
         num_workers: int = 8,
         shuffle: bool = None,
         seed: int = 111,
@@ -103,9 +107,12 @@ class VizWizWrapper:
 
 
 if __name__ == "__main__":
+    from utils import get_transform
+
     w = VizWizWrapper()
-    dl = w.get_split(split="test", num_workers=0)
+    dl = w.get_split(split="test", num_workers=0, transform=get_transform(224))
     for i, elem in enumerate(dl):
+        breakpoint()
         if i == 10:
             break
         continue
