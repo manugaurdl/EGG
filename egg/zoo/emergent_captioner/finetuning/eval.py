@@ -136,14 +136,13 @@ def main(params):
 
         elif dataset == "nocaps":
             nocaps_wrapper = NoCapsWrapper()
-            for split in ["in-domain", "near-domain", "out-domain"]:
+            for split in ["all", "near-domain", "out-domain"]:  # excluding "in-domain"
                 test_loader = nocaps_wrapper.get_split(split=split, **data_kwargs)
                 _, interaction = trainer.eval(test_loader)
                 log_stats(interaction, f"NOCAPS {split} TEST SET")
                 dump_interaction(interaction, opts, name=f"nocaps_{split}_")
 
-                multi_reference = dataset not in ["conceptual", "imagecode"]
-                gt = extract_gt(interaction, multi_reference=multi_reference)
+                gt = extract_gt(interaction, multi_reference=True)
                 preds = extract_captions(interaction)
                 preds, gt = prepare_for_nlg_metrics(preds, gt)
 

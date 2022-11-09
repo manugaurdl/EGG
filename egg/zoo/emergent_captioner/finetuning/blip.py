@@ -17,6 +17,7 @@ class BlipSender(nn.Module):
         blip_model: str = "base_coco",
         beam_size: int = 5,
         max_len: int = 20,
+        freeze_visual_encoder: bool = False,
     ):
         super(BlipSender, self).__init__()
         model = load_model(name="blip_caption", model_type=blip_model)
@@ -36,8 +37,12 @@ class BlipSender(nn.Module):
 
         self.model_img = model.visual_encoder
         self.model_img.eval()
-        for p in self.model_img.parameters():
-            p.requires_grad = False
+
+        self.freeze_visual_encoder = freeze_visual_encoder
+
+        if self.freeze_visual_encoder:
+            for p in self.model_img.parameters():
+                p.requires_grad = False
 
     @property
     def device(self):
@@ -48,16 +53,22 @@ class BlipSender(nn.Module):
         return len(self.prompt)
 
     def named_parameters(self, prefix="", recurse: bool = True):
-        return self.model_txt.named_parameters()
+        if self.freeze_visual_encoder:
+            return self.model_txt.named_parameters()
+        return super().named_parameters(prefix=prefix, recurse=recurse)
 
     def parameters(self, recurse: bool = True):
-        return self.model_txt.parameters()
+        if self.freeze_visual_encoder:
+            return self.model_txt.parameters()
+        return super().parameters(recurse=recurse)
 
     def train(self, mode: bool = True):
-        self.training = mode
-        self.model_img.eval()
-        self.model_txt.train(mode)
-        return self
+        if self.freeze_visual_encoder:
+            self.training = mode
+            self.model_img.eval()
+            self.model_txt.train(mode)
+            return self
+        return super().train(mode=mode)
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None):
         with torch.no_grad():

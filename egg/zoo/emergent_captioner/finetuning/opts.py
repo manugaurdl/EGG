@@ -46,6 +46,9 @@ def get_captioner_opts(parser):
         choices=["base_coco", "large_coco"],
         default="base_coco",
     )
+    group.add_argument(
+        "--freeze_blip_visual_encoder", action="store_true", default=False
+    )
 
     # Clipcap
     group.add_argument(
