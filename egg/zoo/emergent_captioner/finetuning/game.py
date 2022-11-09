@@ -98,6 +98,7 @@ def build_game(opts):
             blip_model=opts.blip_model,
             beam_size=opts.beam_size,
             max_len=opts.max_len,
+            freeze_visual_encoder=opts.freeze_blip_visual_encoder,
         )
     else:
         raise RuntimeError
