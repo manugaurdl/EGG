@@ -77,11 +77,19 @@ class NoCapsWrapper:
         seed: int = 111,
     ):
 
-        assert split in ["in-domain", "near-domain", "out-domain"]
-        samples = self.split2samples[split]
-        assert samples, f"Wrong split {split}"
+        assert split in ["in-domain", "near-domain", "out-domain", "all"]
 
-        ds = NoCapsDataset(self.dataset_dir, samples, transform=transform)
+        if split == "all":
+            datasets = []
+            for s in ["in-domain", "near-domain", "out-domain"]:
+                samples = self.split2samples[s]
+                d = NoCapsDataset(self.dataset_dir, samples, transform=transform)
+                datasets.append(d)
+
+            ds = torch.utils.data.ConcatDataset(datasets)
+        else:
+            samples = self.split2samples[split]
+            ds = NoCapsDataset(self.dataset_dir, samples, transform=transform)
 
         loader = torch.utils.data.DataLoader(
             ds,

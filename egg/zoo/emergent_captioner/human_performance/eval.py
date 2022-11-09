@@ -9,12 +9,14 @@ import time
 import torch
 
 import egg.core as core
-from egg.zoo.emergent_captioner.dataloaders import (  # ConceptualCaptionsWrapper,
+from egg.zoo.emergent_captioner.dataloaders import (
+    ConcadiaWrapper,
     ConceptualCaptionsWrapper,
     CocoWrapper,
     FlickrWrapper,
     ImageCodeWrapper,
     NoCapsWrapper,
+    get_transform,
 )
 from egg.zoo.emergent_captioner.human_performance.modules import (
     ClipReceiver,
@@ -69,16 +71,17 @@ def main(params):
     )
 
     wrappers = {
-        "conceptual": ConceptualCaptionsWrapper,
         "coco": CocoWrapper,
+        "concadia": ConcadiaWrapper,
+        "conceptual": ConceptualCaptionsWrapper,
         "flickr": FlickrWrapper,
         "imagecode": ImageCodeWrapper,
     }
 
     data_kwargs = dict(
         batch_size=opts.batch_size,
-        image_size=opts.image_size,
         num_workers=opts.num_workers,
+        transform=get_transform(opts.image_size),
         seed=opts.random_seed,
     )
     for dataset, wrapper in wrappers.items():
@@ -89,7 +92,7 @@ def main(params):
         log_stats(interaction, f"{dataset.upper()} TEST SET")
 
     nocaps_wrapper = NoCapsWrapper()
-    for split in ["in-domain", "near-domain", "out-domain"]:
+    for split in ["in-domain", "near-domain", "out-domain", "all"]:
         test_loader = nocaps_wrapper.get_split(split=split, **data_kwargs)
         _, interaction = trainer.eval(test_loader)
         log_stats(interaction, f"NOCAPS {split} TEST SET")

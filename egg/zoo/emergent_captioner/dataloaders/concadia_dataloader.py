@@ -21,7 +21,6 @@ class ConcadiaDataset:
         self.root = root
         self.samples = samples
         self.transform = transform
-        print("| ATTENTION: using caption, not the description split of Concadia dset")
 
     def __len__(self):
         return len(self.samples)
