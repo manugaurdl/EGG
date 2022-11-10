@@ -15,6 +15,7 @@ from dataloaders import (
     FlickrWrapper,
     NoCapsWrapper,
 )
+from dataloaders.utils import get_transform
 from utils import convert_models_to_fp32
 
 
@@ -52,7 +53,7 @@ def get_dataloader(opts):
 
     data_kwargs = dict(
         batch_size=opts.batch_size,
-        image_size=opts.image_size,
+        transform=get_transform(opts.image_size),
         num_workers=opts.num_workers,
         shuffle=False,
     )

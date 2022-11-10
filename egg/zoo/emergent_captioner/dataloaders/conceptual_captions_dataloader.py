@@ -88,6 +88,8 @@ class ConceptualCaptionsWrapper:
             dataset_dir=self.dataset_dir, split=split, transform=transform
         )
 
+        print(f"| Split {split} has {len(ds)} elements.")
+
         sampler = None
         if dist.is_initialized():
             if shuffle is None:

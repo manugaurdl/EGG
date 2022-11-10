@@ -90,6 +90,8 @@ class VizWizWrapper:
                 ds, shuffle=shuffle, drop_last=True, seed=seed
             )
 
+        print(f"| Split {split} has {len(ds)} elements.")
+
         if shuffle is None:
             shuffle = split != "test" and sampler is None
 
