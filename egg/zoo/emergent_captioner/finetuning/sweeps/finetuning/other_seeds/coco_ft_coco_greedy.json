@@ -7,5 +7,5 @@
     "lr": [0.0000001],
     "baseline": ["mean"],
     "max_len":[40],
-    "random_seed": [111]
+    "random_seed": [222, 333, 444, 555, 666, 777]
 }
