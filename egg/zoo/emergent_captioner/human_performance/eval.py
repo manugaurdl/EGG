@@ -16,6 +16,7 @@ from egg.zoo.emergent_captioner.dataloaders import (
     FlickrWrapper,
     ImageCodeWrapper,
     NoCapsWrapper,
+    VizWizWrapper,
     get_transform,
 )
 from egg.zoo.emergent_captioner.human_performance.modules import (
@@ -76,6 +77,7 @@ def main(params):
         "conceptual": ConceptualCaptionsWrapper,
         "flickr": FlickrWrapper,
         "imagecode": ImageCodeWrapper,
+        "vizwiz": VizWizWrapper,
     }
 
     data_kwargs = dict(

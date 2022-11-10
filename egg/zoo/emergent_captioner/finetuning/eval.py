@@ -31,12 +31,17 @@ from egg.zoo.emergent_captioner.utils import (
 )
 
 
-def prepare_for_nlg_metrics(predictions, gt):
+def prepare_for_nlg_metrics(predictions, gt, multi_reference):
+    breakpoint()
     preds = {}
     gold = {}
     for i, (p, gg) in enumerate(zip(predictions, gt)):
         preds[i] = [{"caption": p}]
-        gold[i] = [{"caption": g} for g in gg]
+        if multi_reference:
+            gold[i] = [{"caption": g} for g in gg]
+        else:
+            gold[i] = [{"caption": gg}]
+    breakpoint()
     return preds, gold
 
 
@@ -138,7 +143,7 @@ def main(params):
             multi_reference = dataset not in ["conceptual", "imagecode", "concadia"]
             gt = extract_gt(interaction, multi_reference=multi_reference)
             preds = extract_captions(interaction)
-            preds, gt = prepare_for_nlg_metrics(preds, gt)
+            preds, gt = prepare_for_nlg_metrics(preds, gt, multi_reference)
 
             print(f"EVALUATING {dataset}")
             compute_nlg_metrics(preds, gt)
@@ -153,7 +158,7 @@ def main(params):
 
                 gt = extract_gt(interaction, multi_reference=True)
                 preds = extract_captions(interaction)
-                preds, gt = prepare_for_nlg_metrics(preds, gt)
+                preds, gt = prepare_for_nlg_metrics(preds, gt, multi_reference=True)
 
                 print(f"EVALUATING nocaps {split}")
                 compute_nlg_metrics(preds, gt)

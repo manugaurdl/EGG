@@ -1,14 +1,12 @@
 {
-    "n_epoch": [50],
+    "n_epoch": [10],
     "clipcap_model_path": ["/private/home/rdessi/EGG/egg/zoo/emergent_captioner/clipclap_models/coco_weights.pt"],
-    "dataset": ["coco"],
-    "batch_size": [100],
+    "train_dataset": ["coco"],
+    "batch_size": [200, 300, 400, 500, 1000],
     "recv_clip_model": ["ViT-B/32"],
     "lr": [0.0000001],
-    "beam_size": [1],
     "baseline": ["mean"],
-    "do_sample": [false],
     "max_len":[40],
     "random_seed": [111],
-    "num_hard_negatives": [0]
+    "debug": [true]
 }
