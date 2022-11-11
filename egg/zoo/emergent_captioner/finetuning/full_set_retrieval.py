@@ -12,12 +12,18 @@ import torch.nn.functional as F
 
 import egg.core as core
 from egg.core.interaction import LoggingStrategy
-from egg.zoo.emergent_captioner.dataloaders import CocoWrapper, FlickrWrapper
+from egg.zoo.emergent_captioner.dataloaders import (
+    CocoWrapper,
+    FlickrWrapper,
+    NoCapsWrapper,
+    get_transform,
+)
+from egg.zoo.emergent_captioner.finetuning.blip import BlipSender
 from egg.zoo.emergent_captioner.finetuning.game import ReinforceCaptionGame
 from egg.zoo.emergent_captioner.finetuning.losses import Loss
 from egg.zoo.emergent_captioner.finetuning.opts import get_common_opts
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
-from egg.zoo.emergent_captioner.finetuning.sender import ClipCapSender
+from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender
 from egg.zoo.emergent_captioner.utils import get_sha, log_stats
 
 DATASET2NEG_PATHS = {
@@ -28,6 +34,10 @@ DATASET2NEG_PATHS = {
     "coco": (
         "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/coco/test_coco.emb.pt",
         "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/coco/test_coco.nns.pt",
+    ),
+    "nocaps": (
+        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/nocaps/all.emb.pt",
+        "/private/home/rdessi/EGG/egg/zoo/emergent_captioner/hard_negatives/nocaps/all.nns.pt",
     ),
 }
 
@@ -125,20 +135,30 @@ def main(params):
 
     human_sender = HumanCaptionSender()
 
-    clipcap_sender = ClipCapSender(
-        clip_model=opts.sender_clip_model,
-        clipcap_path=opts.clipcap_model_path,
-        do_sample=opts.do_sample,
-        beam_size=opts.beam_size,
-        max_len=opts.max_len,
-    )
+    if opts.captioner_model == "clipcap":
+        model_sender = ClipCapSender(
+            clip_model=opts.sender_clip_model,
+            clipcap_path=opts.clipcap_model_path,
+            do_sample=opts.do_sample,
+            beam_size=opts.beam_size,
+            max_len=opts.max_len,
+        )
+    elif opts.captioner_model.lower() == "blip":
+        model_sender = BlipSender(
+            blip_model=opts.blip_model,
+            beam_size=opts.beam_size,
+            max_len=opts.max_len,
+            freeze_visual_encoder=opts.freeze_blip_visual_encoder,
+        )
+    else:
+        raise RuntimeError
 
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
 
     data_kwargs = dict(
         batch_size=opts.batch_size,
-        image_size=opts.image_size,
         num_workers=opts.num_workers,
+        transform=get_transform(opts.sender_image_size, opts.recv_image_size),
         seed=opts.random_seed,
     )
 
@@ -150,41 +170,53 @@ def main(params):
 
         # remember that with non-diff losses you should use a wrapper around recv
         model_game = ReinforceCaptionGame(
-            sender=clipcap_sender,
+            sender=model_sender,
             receiver=receiver,
             loss=loss,
             baseline=opts.baseline,
             kl_div_coeff=opts.kl_div_coeff,
         )
 
-        human_game = HumanGame(sender=human_sender, receiver=receiver, loss=loss)
+        # human_game = HumanGame(sender=human_sender, receiver=receiver, loss=loss)
+        _ = HumanGame(sender=human_sender, receiver=receiver, loss=loss)
+
+        if opts.captioner_model == "clipcap":
+            model_game.sender.patch_model()
 
         trainer = core.Trainer(
             game=model_game,
-            optimizer=torch.optim.Adam(model_game.receiver.parameters(), lr=opts.lr),
+            optimizer=torch.optim.Adam(model_game.sender.parameters(), lr=opts.lr),
             train_data=None,
             debug=opts.debug,
         )
-        # trainer.game.sender.patch_model()
-        trainer.game.sender.patch_model()
 
-        assert dataset in ["flickr", "coco"]
-        wrappers = {"coco": CocoWrapper, "flickr": FlickrWrapper}
+        if opts.captioner_model == "clipcap":
+            trainer.game.sender.patch_model()
+
+        assert dataset in ["coco", "flickr", "nocaps"]
+        wrappers = {
+            "coco": CocoWrapper,
+            "flickr": FlickrWrapper,
+            "nocaps": NoCapsWrapper,
+        }
 
         wrapper = wrappers[dataset.lower()]()
-        test_loader = wrapper.get_split(split="test", **data_kwargs)
+        split = "all" if dataset == "nocaps" else "test"
+        test_loader = wrapper.get_split(split=split, **data_kwargs)
         _, interaction = trainer.eval(test_loader)
         log_stats(interaction, f"Model performance: {dataset.upper()} TEST SET")
 
+        """
         trainer = core.Trainer(
             game=human_game,
-            optimizer=torch.optim.Adam(model_game.receiver.parameters(), lr=opts.lr),
+            optimizer=torch.optim.Adam(human_game.sender.parameters(), lr=opts.lr),
             train_data=None,
             debug=opts.debug,
         )
 
-        _, human_interaction = trainer.eval(test_loader)
-        log_stats(human_interaction, f"Human performance: {dataset.upper()} TEST SET")
+        # _, human_interaction = trainer.eval(test_loader)
+        # log_stats(human_interaction, f"Human performance: {dataset.upper()} TEST SET")
+        """
 
     end = time.time()
 

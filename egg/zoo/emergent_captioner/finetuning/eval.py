@@ -32,7 +32,6 @@ from egg.zoo.emergent_captioner.utils import (
 
 
 def prepare_for_nlg_metrics(predictions, gt, multi_reference):
-    breakpoint()
     preds = {}
     gold = {}
     for i, (p, gg) in enumerate(zip(predictions, gt)):
@@ -41,7 +40,6 @@ def prepare_for_nlg_metrics(predictions, gt, multi_reference):
             gold[i] = [{"caption": g} for g in gg]
         else:
             gold[i] = [{"caption": gg}]
-    breakpoint()
     return preds, gold
 
 
@@ -140,7 +138,7 @@ def main(params):
             log_stats(interaction, f"{dataset.upper()} TEST SET")
             dump_interaction(interaction, opts, name=f"{dataset.lower()}_")
 
-            multi_reference = dataset not in ["conceptual", "imagecode", "concadia"]
+            multi_reference = dataset not in ["conceptual", "concadia", "imagecode"]
             gt = extract_gt(interaction, multi_reference=multi_reference)
             preds = extract_captions(interaction)
             preds, gt = prepare_for_nlg_metrics(preds, gt, multi_reference)
@@ -150,7 +148,7 @@ def main(params):
 
         elif dataset == "nocaps":
             nocaps_wrapper = NoCapsWrapper()
-            for split in ["all", "near-domain", "out-domain"]:  # excluding "in-domain"
+            for split in ["all", "in-domain", "near-domain", "out-domain"]:
                 test_loader = nocaps_wrapper.get_split(split=split, **data_kwargs)
                 _, interaction = trainer.eval(test_loader)
                 log_stats(interaction, f"NOCAPS {split} TEST SET")

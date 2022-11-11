@@ -7,9 +7,9 @@
     "blip_model": ["base_coco"],
     "batch_size": [100],
     "recv_clip_model": ["ViT-B/32"],
-    "lr": [0.000005, 0.000001, 0.0000001, 0.0000005],
+    "lr": [0.0000001],
     "beam_size": [1],
     "baseline": ["mean"],
     "max_len":[40],
-    "random_seed": [111]
+    "random_seed": [222, 333, 444, 555, 666, 777]
 }
