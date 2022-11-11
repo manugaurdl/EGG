@@ -1,5 +1,5 @@
 {
-    "n_epoch": [10],
+    "n_epoch": [3],
     "train_dataset": ["coco"],
     "sender_image_size": [384],
     "recv_image_size": [224],
