@@ -53,11 +53,13 @@ class BlipSender(nn.Module):
         return len(self.prompt)
 
     def named_parameters(self, prefix="", recurse: bool = True):
+        return self.model_txt.named_parameters()
         if self.freeze_visual_encoder:
             return self.model_txt.named_parameters()
         return super().named_parameters(prefix=prefix, recurse=recurse)
 
     def parameters(self, recurse: bool = True):
+        return self.model_txt.parameters()
         if self.freeze_visual_encoder:
             return self.model_txt.parameters()
         return super().parameters(recurse=recurse)

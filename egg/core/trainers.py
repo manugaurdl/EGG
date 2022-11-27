@@ -311,7 +311,7 @@ class Trainer:
             callback.on_train_end()
 
     def load(self, checkpoint: Checkpoint):
-        self.game.load_state_dict(checkpoint.model_state_dict)
+        self.game.load_state_dict(checkpoint.model_state_dict, strict=False)
         self.optimizer.load_state_dict(checkpoint.optimizer_state_dict)
         if checkpoint.optimizer_scheduler_state_dict:
             self.optimizer_scheduler.load_state_dict(
