@@ -89,7 +89,7 @@ class XEntLoss(Loss):
 
         acc = (model_guesses.argmax(dim=1) == labels).detach().float()
         loss = F.cross_entropy(model_guesses, labels, reduction="none")
-        return loss, {"acc": acc, "game_acc": acc}
+        return loss, {"acc": acc}  # , "game_acc": acc}
 
     def __call__(
         self,

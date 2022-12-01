@@ -51,7 +51,10 @@ def build_game(opts):
     )
 
     train_logging_strategy = LoggingStrategy(False, False, True, True, True, False)
-    test_logging_strategy = LoggingStrategy(False, False, True, True, True, False)
+    # test_logging_strategy = LoggingStrategy(False, False, True, True, True, False)
+    test_logging_strategy = LoggingStrategy(
+        True, False, True, False, True, False, False
+    )
 
     if opts.simclr_sender:
         sender = SimCLRSender(

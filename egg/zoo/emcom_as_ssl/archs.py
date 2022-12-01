@@ -92,6 +92,7 @@ class VisionGameWrapper(nn.Module):
             sender_input=sender_encoded_input,
             labels=labels,
             receiver_input=receiver_encoded_input,
+            images=x_i,
         )
 
 
@@ -182,7 +183,7 @@ class EmComSSLSymbolGame(SenderReceiverContinuousCommunication):
     def __init__(self, *args, **kwargs):
         super(EmComSSLSymbolGame, self).__init__(*args, **kwargs)
 
-    def forward(self, sender_input, labels, receiver_input):
+    def forward(self, sender_input, labels, receiver_input, images):
         if isinstance(self.sender, SimCLRSender):
             message, message_like, resnet_output_sender = self.sender(
                 sender_input, sender=True
@@ -196,14 +197,15 @@ class EmComSSLSymbolGame(SenderReceiverContinuousCommunication):
             sender_input, message, receiver_input, receiver_output, labels, None
         )
 
-        if hasattr(self.sender, "temperature"):
+        if False:  # hasattr(self.sender, "temperature"):
             if isinstance(self.sender.temperature, torch.nn.Parameter):
                 temperature = self.sender.temperature.detach()
             else:
                 temperature = torch.Tensor([self.sender.temperature])
             aux_info["temperature"] = temperature
 
-        if not self.training:
+        if False:  # not self.training:
+            aux_info["images"] = images.detach()
             aux_info["message_like"] = message_like
             aux_info["resnet_output_sender"] = resnet_output_sender
             aux_info["resnet_output_recv"] = resnet_output_recv
@@ -212,12 +214,12 @@ class EmComSSLSymbolGame(SenderReceiverContinuousCommunication):
             self.train_logging_strategy if self.training else self.test_logging_strategy
         )
         interaction = logging_strategy.filtered_interaction(
-            sender_input=sender_input,
+            sender_input=images.detach(),  # sender_input,
             receiver_input=receiver_input,
             labels=labels,
             aux_input=None,
             receiver_output=receiver_output.detach(),
-            message=message.detach(),
+            message=message_like,  # message.detach(),
             message_length=torch.ones(message.size(0)),
             aux=aux_info,
         )
