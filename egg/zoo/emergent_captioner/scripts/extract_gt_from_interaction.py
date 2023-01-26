@@ -41,7 +41,7 @@ def extract_gt():
     args = get_args()
     interaction = torch.load(args.interaction_file)
     captions = extract_gt_from_interaction(interaction, args.multi_reference)
-    write_captions_to_file(captions, args.multi_reference)
+    write_captions_to_file(captions, args.output_file, args.multi_reference)
 
 
 if __name__ == "__main__":

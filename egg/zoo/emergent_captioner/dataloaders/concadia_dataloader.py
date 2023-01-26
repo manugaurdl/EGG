@@ -31,8 +31,9 @@ class ConcadiaDataset:
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
         sender_input, recv_input = self.transform(image)
 
+        # Remember to cap len to 200 tokens to avoid oom when computing nlg metrics
         aux = {"captions": caption}
-        # aux = {"captions": description}
+        # aux = {"captions": description[:200]}  
 
         return sender_input, torch.tensor([idx]), recv_input, aux
 
