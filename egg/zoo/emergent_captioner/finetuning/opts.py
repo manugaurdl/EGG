@@ -35,7 +35,7 @@ def get_captioner_opts(parser):
 
     group.add_argument(
         "--captioner_model",
-        choices="clipcap blip".split(),
+        choices="clipcap blip camel".split(),
         default="clipcap",
         help="Type of captioner model (default: clipcap)",
     )
@@ -57,9 +57,31 @@ def get_captioner_opts(parser):
     )
     group.add_argument(
         "--sender_clip_model",
-        choices=["ViT-B/16", "ViT-B/32"],
+        choices=["ViT-B/16", "ViT-B/32", "RN50x16"],
         default="ViT-B/32",
     )
+
+    # Camel
+    group.add_argument(
+        "--camel_model_path",
+        type=str,
+        default="/private/home/rdessi/EGG/egg/zoo/emergent_captioner/finetuning/camel_models/checkpoints/camel_nomesh.pth",
+    )
+
+    group.add_argument(
+        "--network", type=str, choices=("online", "target"), default="target"
+    )
+    group.add_argument("--disable_mesh", action="store_true")
+
+    group.add_argument("--N_dec", type=int, default=3)
+    group.add_argument("--N_enc", type=int, default=3)
+    group.add_argument("--d_model", type=int, default=512)
+    group.add_argument("--d_ff", type=int, default=2048)
+    group.add_argument("--m", type=int, default=40)
+    group.add_argument("--head", type=int, default=8)
+    group.add_argument("--with_pe", action="store_true")
+
+    # Other
     group.add_argument("--num_hard_negatives", type=int, default=0)
 
     group.add_argument(

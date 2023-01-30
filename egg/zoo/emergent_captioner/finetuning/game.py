@@ -11,6 +11,7 @@ import torch.nn as nn
 from egg.core.baselines import MeanBaseline, NoBaseline
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.emergent_captioner.finetuning.blip import BlipSender
+from egg.zoo.emergent_captioner.finetuning.camel import CamelSender
 from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender
 from egg.zoo.emergent_captioner.finetuning.losses import get_loss
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
@@ -99,6 +100,14 @@ def build_game(opts):
             beam_size=opts.beam_size,
             max_len=opts.max_len,
             freeze_visual_encoder=opts.freeze_blip_visual_encoder,
+        )
+    elif opts.captioner_model.lower() == "camel":
+        sender = CamelSender(
+            args=opts,
+            clip_model=opts.sender_clip_model,
+            camel_path=opts.camel_model_path,
+            beam_size=opts.beam_size,
+            max_len=opts.max_len,
         )
     else:
         raise RuntimeError
