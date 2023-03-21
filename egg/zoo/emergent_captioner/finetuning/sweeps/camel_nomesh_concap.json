@@ -1,19 +1,16 @@
 {
-    "n_epoch": [20],
-    "train_dataset": ["coco"],
+    "n_epoch": [2],
+    "train_dataset": ["conceptual"],
     "sender_image_size": [384],
     "recv_image_size": [224],
     "captioner_model": ["camel"],
-    "camel_model_path": ["/private/home/rdessi/EGG/egg/zoo/emergent_captioner/finetuning/camel_models/checkpoints/camel_mesh.pth"],
     "batch_size": [100],
     "recv_clip_model": ["ViT-B/32"],
     "lr": [0.0000001],
     "beam_size": [1],
     "baseline": ["mean"],
     "max_len":[40],
+    "disable_mesh": [true],
     "sender_clip_model": ["RN50x16"],
     "random_seed": [111]
 }
-
-
-

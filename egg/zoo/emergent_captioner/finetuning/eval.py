@@ -3,8 +3,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import json
 import logging
 import time
+from pathlib import Path
 
 import torch
 
@@ -19,9 +21,9 @@ from egg.zoo.emergent_captioner.dataloaders import (
     VizWizWrapper,
     get_transform,
 )
+from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metrics
 from egg.zoo.emergent_captioner.finetuning.game import build_game
 from egg.zoo.emergent_captioner.finetuning.opts import get_common_opts
-from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metrics
 from egg.zoo.emergent_captioner.utils import (
     dump_interaction,
     get_sha,
@@ -144,7 +146,8 @@ def main(params):
             preds, gt = prepare_for_nlg_metrics(preds, gt, multi_reference)
 
             print(f"EVALUATING {dataset}")
-            compute_nlg_metrics(preds, gt)
+            dataset_name = f"{dataset.lower()}"
+            results = compute_nlg_metrics(preds, gt)
 
         elif dataset == "nocaps":
             nocaps_wrapper = NoCapsWrapper()
@@ -159,9 +162,17 @@ def main(params):
                 preds, gt = prepare_for_nlg_metrics(preds, gt, multi_reference=True)
 
                 print(f"EVALUATING nocaps {split}")
-                compute_nlg_metrics(preds, gt)
+                dataset_name = f"nocaps_{split}"
+                results = compute_nlg_metrics(preds, gt)
+
         else:
             print(f"Cannot recognize {dataset} dataset. Skipping...")
+
+        results["acc"] = interaction.aux['acc'].mean().item()
+        if opts.checkpoint_dir and opts.distributed_context.is_leader:
+            output_path = Path(opts.checkpoint_dir) / f"results_{dataset_name}.json"
+            with open(output_path, "w") as fout:
+                json.dump(results, fout)
 
     end = time.time()
 
