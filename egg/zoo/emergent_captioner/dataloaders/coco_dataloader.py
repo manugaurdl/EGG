@@ -45,7 +45,7 @@ class CocoWrapper:
         self.split2samples = self._load_splits()
 
     def _load_splits(self):
-        with open(self.dataset_dir / "dataset_coco.json") as f:
+        with open("/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/annotations/dataset_coco.json") as f:
             annotations = json.load(f)
         split2samples = defaultdict(list)
         for img_ann in annotations["images"]:

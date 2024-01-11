@@ -8,7 +8,7 @@ from typing import Any, Dict
 import torch
 import torch.nn as nn
 
-from lavis.models import load_model
+# from lavis.models import load_model
 
 
 class BlipSender(nn.Module):

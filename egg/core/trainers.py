@@ -6,7 +6,7 @@
 import os
 import pathlib
 from typing import List, Optional
-
+from tqdm import tqdm
 try:
     # requires python >= 3.7
     from contextlib import nullcontext
@@ -210,7 +210,7 @@ class Trainer:
 
         self.optimizer.zero_grad()
 
-        for batch_id, batch in enumerate(self.train_data):
+        for batch_id, batch in tqdm(enumerate(self.train_data), total = len(self.train_data)):
             if self.debug and batch_id == 10:
                 break
             if not isinstance(batch, Batch):
@@ -220,6 +220,7 @@ class Trainer:
             context = autocast() if self.scaler else nullcontext()
             with context:
                 optimized_loss, interaction = self.game(*batch)
+                print(optimized_loss)
 
                 if self.update_freq > 1:
                     # throughout EGG, we minimize _mean_ loss, not sum
@@ -273,6 +274,7 @@ class Trainer:
             callback.on_train_begin(self)
 
         for epoch in range(self.start_epoch, n_epochs):
+            print(f"Training epoch {epoch}")
             for callback in self.callbacks:
                 callback.on_epoch_begin(epoch + 1)
 

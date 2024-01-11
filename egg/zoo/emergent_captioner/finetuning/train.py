@@ -6,7 +6,6 @@
 import time
 
 import torch
-
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -45,7 +44,9 @@ def main(params):
         "coco": CocoWrapper,
         "flickr": FlickrWrapper,
     }
-
+    # args
+    opts.dataset_dir = "/ssd_scratch/cvit/manu/coco"
+    opts.clipcap_model_path = "/ssd_scratch/cvit/manu/clipcap/coco_weights.pt"
     wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir)
 
     data_kwargs = dict(
@@ -91,5 +92,5 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     # torch.set_deterministic(True)
     import sys
-
+    
     main(sys.argv[1:])

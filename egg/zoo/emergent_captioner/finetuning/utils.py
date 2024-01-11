@@ -46,8 +46,10 @@ class KLRegularizer:
 
 class StopTokenLogitsProcessor(LogitsProcessor):
     def __init__(self, tokenizer, do_sample):
-        self.eos_token_id = tokenizer.eos_token_id
+        self.eos_token_id = tokenizer.eos_token_id #50256
 
+        # f : tokenizer.convert_ids_to_tokens --> decodes token  i.e f(500) = "walk" 
+        # There are 121 strings that contain "." --> all of them are treated as stop tokens
         self.stop_word_ids = set(
             [
                 idx
@@ -60,6 +62,7 @@ class StopTokenLogitsProcessor(LogitsProcessor):
     def __call__(
         self, input_ids: torch.LongTensor, scores: torch.FloatTensor
     ) -> torch.FloatTensor:
+        # iterate each batch of prefix tokens ; input_ids (B , 10)
         for i, input_id in enumerate(input_ids):
             if input_id[-1].item() in self.stop_word_ids:
                 scores[i, : self.vocab_size] = torch.finfo().min

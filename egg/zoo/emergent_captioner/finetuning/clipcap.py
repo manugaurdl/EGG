@@ -252,16 +252,16 @@ class ClipCapModel(nn.Module):
         self.kl_regularizer = KLRegularizer()
 
     def forward(self, image_feats, aux_input=None):
-        prompts = self.clip_project(image_feats)
-        prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1)
+        prompts = self.clip_project(image_feats) #16,7680
+        prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1) # 16,10,768
 
         bsz, prefix_len, h_dim = prompts.shape
 
-        prompts_flat = prompts.view(-1, prompts.size(-1))
-        start = len(self.tokenizer)
-        end = start + (bsz * prefix_len)
-        self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat
+        prompts_flat = prompts.view(-1, prompts.size(-1)) #160,768
+        start = len(self.tokenizer) #50257
+        end = start + (bsz * prefix_len) # 50417 as prefix len = 10 and bsz = 16
         input_ids = torch.arange(start, end).view(*prompts.shape[:2]).to(prompts.device)
+        self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat #add prefix tokens for batch images to GPT lookup table
 
         if self.training:
             generated = self.gpt.generate(
@@ -286,16 +286,18 @@ class ClipCapModel(nn.Module):
                 top_k=len(self.tokenizer),
             )
 
-        indices = generated[:, prefix_len:]
-        suffix = self.gpt.get_input_embeddings()(indices)
-        inputs_embeds = torch.cat([prompts, suffix], dim=1)
+        indices = generated[:, prefix_len:] # B, 10 tokens 
+
+        # logits after generation?
+        suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd
+        inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
         logits = self.gpt(inputs_embeds=inputs_embeds)
-        logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)]
+        logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, 20, 55257) 
         logits = logits.log_softmax(-1)
 
         # compute_mask and msg_lengths
-        max_k = indices.size(1)
-        end_of_caption = indices == self.eos_token_id
+        max_k = indices.size(1) #generated size i.e 10
+        end_of_caption = indices == self.eos_token_id #50256
         extra_tokens = end_of_caption.cumsum(dim=1) > 0
         msg_lengths = max_k - (extra_tokens).sum(dim=1)
         msg_lengths.add_(1).clamp_(max=max_k)
@@ -323,7 +325,11 @@ class ClipCapModel(nn.Module):
     def maybe_patch_gpt(self, max_embeddings):
         if not getattr(self.gpt, "_patched", False):
             self.gpt._patched = True
+            #increase gpt nn.embedding from vocab size --> + 5000
             self.gpt.resize_token_embeddings(len(self.tokenizer) + max_embeddings)
+            
+            # bias for output embeddings (768) added (55257)
+            # its requires grad is False?
             if self.gpt.get_output_embeddings().bias is None:
                 self.gpt.get_output_embeddings().bias = torch.nn.Parameter(
                     torch.tensor([0.0] * (len(self.tokenizer) + max_embeddings))

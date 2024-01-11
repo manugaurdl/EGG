@@ -22,6 +22,7 @@ class Loss(nn.Module):
 
         self.train_emb = None
         self.train_nns = None
+        train_emb_path = None
         if train_emb_path:
             assert train_nns_path
             self.emb = torch.load(train_emb_path, map_location="cpu")
