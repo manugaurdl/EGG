@@ -2,7 +2,7 @@
 
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+CIDER_OPTIM = True
 from typing import Any, Dict, Optional, Tuple
 
 import clip
@@ -251,7 +251,7 @@ class ClipCapModel(nn.Module):
 
         self.kl_regularizer = KLRegularizer()
 
-    def forward(self, image_feats, aux_input=None):
+    def forward(self, image_feats, aux_input=None, CIDER_OPTIM = False, greedy_baseline = False):
         prompts = self.clip_project(image_feats) #16,7680
         prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1) # 16,10,768
 
@@ -262,8 +262,15 @@ class ClipCapModel(nn.Module):
         end = start + (bsz * prefix_len) # 50417 as prefix len = 10 and bsz = 16
         input_ids = torch.arange(start, end).view(*prompts.shape[:2]).to(prompts.device)
         self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat #add prefix tokens for batch images to GPT lookup table
+        
+        if CIDER_OPTIM and not greedy_baseline:
+            self.do_sample = True
+            temp = 0.1
+        else:
+            temp = 1.0
 
-        if self.training:
+
+        if self.training or greedy_baseline:
             generated = self.gpt.generate(
                 input_ids,
                 do_sample=self.do_sample,
@@ -272,10 +279,12 @@ class ClipCapModel(nn.Module):
                 num_return_sequences=1,
                 logits_processor=LogitsProcessorList([self.logits_processor]),
                 top_k=len(self.tokenizer),
+                temperature = temp,
             )
         else:
             # at test time we use beam search regardless of the decoding method
             # used at training time
+            print("BEAM SEARCH GENERATION")
             generated = self.gpt.generate(
                 input_ids,
                 do_sample=False,
@@ -285,7 +294,8 @@ class ClipCapModel(nn.Module):
                 logits_processor=LogitsProcessorList([self.logits_processor]),
                 top_k=len(self.tokenizer),
             )
-
+        self.do_sample = False
+        temp = 1.0
         indices = generated[:, prefix_len:] # B, 10 tokens 
 
         # logits after generation?
@@ -381,9 +391,9 @@ class ClipCapSender(nn.Module):
             print("| LOADED CLIPCAP MODEL")
             self.clipcap.load_state_dict(torch.load(clipcap_path))
 
-    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None):
+    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False):
         image_feats = self.clip_vit(images)
-        captions, log_probs, kl_div = self.clipcap(image_feats, aux_input)
+        captions, log_probs, kl_div = self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline)
         return captions, log_probs, kl_div
 
     def named_parameters(self, prefix="", recurse: bool = True):

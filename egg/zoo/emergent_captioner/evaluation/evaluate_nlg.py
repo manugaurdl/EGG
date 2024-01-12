@@ -20,19 +20,25 @@ def read_plaintext_file(file):
     return data
 
 
-def compute_nlg_metrics(predictions, gold_standard):
+def compute_nlg_metrics(predictions, gold_standard, only_cider = False):
     tokenizer = PTBTokenizer()
 
     predictions = tokenizer.tokenize(predictions)
     ground_truth = tokenizer.tokenize(gold_standard)
-
-    scorers = [
-        (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
-        (Meteor(), "METEOR"),
-        (Rouge(), "ROUGE_L"),
+    
+    if only_cider:
+        scorers = [
         (Cider(), "CIDEr"),
-        (Spice(), "SPICE"),
-    ]
+        ]
+    
+    else:
+        scorers = [
+            (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
+            (Meteor(), "METEOR"),
+            (Rouge(), "ROUGE_L"),
+            (Cider(), "CIDEr"),
+            (Spice(), "SPICE"),
+        ]
 
     summary = {}
     for scorer, method in scorers:
@@ -41,9 +47,13 @@ def compute_nlg_metrics(predictions, gold_standard):
             for sc, scs, m in zip(score, scores, method):
                 summary[m] = sc
         else:
-            summary[method] = score
+            if only_cider:
+                summary[method] = scores
+            else:
+                summary[method] = score
     print()
-    pprint(summary)
+    if not only_cider:
+        pprint(summary)
     return summary
 
 

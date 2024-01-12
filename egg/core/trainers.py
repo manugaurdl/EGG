@@ -209,6 +209,7 @@ class Trainer:
                 n_batches += 1
 
         mean_loss /= n_batches
+        # import ipdb;ipdb.set_trace()
         full_interaction = Interaction.from_iterable(interactions)
         
         img_ids = full_interaction.aux_input['img_id']

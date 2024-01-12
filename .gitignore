@@ -6,7 +6,7 @@ dummy.txt
 __pycache__/
 *.py[cod]
 *$py.class
-
+checkpoints/
 # vim swap files
 *.swp
 *.swo

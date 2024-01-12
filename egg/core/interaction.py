@@ -146,7 +146,7 @@ class Interaction:
         assert interactions, "interaction list must not be empty"
         has_aux_input = interactions[0].aux_input is not None
         for x in interactions:
-            assert len(x.aux) == len(interactions[0].aux)
+            # assert len(x.aux) == len(interactions[0].aux)
             if has_aux_input:
                 assert len(x.aux_input) == len(
                     interactions[0].aux_input
@@ -162,8 +162,8 @@ class Interaction:
             for k in interactions[0].aux_input:
                 aux_input[k] = _check_cat([x.aux_input[k] for x in interactions])
         aux = {}
-        for k in interactions[0].aux:
-            aux[k] = _check_cat([x.aux[k] for x in interactions])
+        # for k in interactions[0].aux:
+        #     aux[k] = _check_cat([x.aux[k] for x in interactions])
 
         return Interaction(
             sender_input=_check_cat([x.sender_input for x in interactions]),

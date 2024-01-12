@@ -2,7 +2,8 @@
 
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+CIDER_OPTIM = True
+GREEDY_BASELINE = True
 from typing import Callable
 import wandb
 import torch
@@ -61,25 +62,35 @@ class ReinforceCaptionGame(nn.Module):
                     captions : 5 coco GT cap for each image : list of 5 lists --> each sublist has bsz captions
                     }
         """
-        captions, log_prob, kl_div = self.sender(sender_input, aux_input) # logprob : (B) --> only one logprob per caption (averaged over all words)
-
+        captions, log_prob, kl_div = self.sender(sender_input, aux_input, CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
+        
         with torch.no_grad():
-            text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
-            loss, aux_info = self.loss(text_feats, img_feats, labels, aux_input)
+            if CIDER_OPTIM:
+            # gt : aux_input, preds : captions
+            # baseline --> mean vs greedy
+                    loss = torch.tensor(self.loss(captions, aux_input)).to(log_prob.device)
+                    if GREEDY_BASELINE:
+                        self.eval()
+                        greedy_cap, _, _  = self.sender(sender_input, aux_input, False, GREEDY_BASELINE)
+                        baseline = torch.tensor(self.loss(greedy_cap, aux_input)).to(log_prob.device).detach()
+                        self.train()
+            else:
+                text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
+                loss, aux_info = self.loss(text_feats, img_feats, labels, aux_input)
         weighted_kl_div = self.kl_div_coeff * kl_div
-
-        baseline = self.baseline.predict(loss.detach())
+        
+        if not GREEDY_BASELINE:
+            baseline = self.baseline.predict(loss.detach())
 
         reward = (loss.detach() - baseline) + weighted_kl_div
         policy_loss = (reward * log_prob).mean()
-        if self.training:
+        if self.training and not GREEDY_BASELINE:
             self.baseline.update(loss)
 
-        aux_info["kl_div"] = kl_div
+        aux_info = {'acc' : torch.randn(1,2), "kl_div" : kl_div}
+        
+        logging_strategy = self.test_logging_strategy
 
-        logging_strategy = (
-            self.train_logging_strategy if self.training else self.test_logging_strategy
-        )
         interaction = logging_strategy.filtered_interaction(
             sender_input=sender_input,
             labels=labels,

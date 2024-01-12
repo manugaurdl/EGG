@@ -4,9 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 
-WANDB = False
+WANDB = True
+WANDB_NAME = 'cider_optim_b_greedy'
 
 import wandb
+import os
 import time
 import torch
 import egg.core as core
@@ -33,7 +35,9 @@ from egg.zoo.emergent_captioner.utils import (
 def main(params):
     start = time.time()
     opts = get_common_opts(params=params)
-
+    
+    opts.loss_type = 'cider'
+    
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
     print(opts)
@@ -48,8 +52,8 @@ def main(params):
         "flickr": FlickrWrapper,
     }
     # args
-
-    wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir)
+    jatayu  = not os.path.isdir("/ssd_scratch/cvit")
+    wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir, jatayu)
 
     data_kwargs = dict(
         batch_size=opts.batch_size,
@@ -97,7 +101,7 @@ if __name__ == "__main__":
     import sys
     if WANDB:
         wandb.init(entity= "manugaur", project="emergent_captioner")
-        wandb.run.name = "reproduce_cvpr23"
+        wandb.run.name = WANDB_NAME
 
     
     main(sys.argv[1:])

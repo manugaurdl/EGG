@@ -23,13 +23,21 @@ class CocoDataset:
         self.transform = transform
 
     def __len__(self):
-        # return len(self.samples)
-        return 64
+        return len(self.samples)
+        # return 1024
 
     def __getitem__(self, idx):
-        file_path, captions, image_id = self.samples[idx]
 
-        image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
+        file_path, captions, image_id = self.samples[idx]
+        # try:
+        # print("*********************************")
+        # print(self.root)
+        # print(str(file_path))
+        image = Image.open(str(file_path)).convert("RGB")
+        # image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
+        # except:
+            # import ipdb;ipdb.set_trace()
+
         sender_input, recv_input = self.transform(image)
 
         aux = {"img_id": torch.tensor([image_id]), "captions": captions[:5]}
@@ -38,18 +46,22 @@ class CocoDataset:
 
 
 class CocoWrapper:
-    def __init__(self, dataset_dir: str = None):
+    def __init__(self, dataset_dir: str = None, jatayu: bool = False):
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
         self.dataset_dir = Path(dataset_dir)
 
-        self.split2samples = self._load_splits()
+        self.split2samples = self._load_splits(jatayu)
 
-    def _load_splits(self):
-        with open("/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/annotations/dataset_coco.json") as f:
+    def _load_splits(self, jatayu):
+        dataset_coco_path = "/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/annotations/dataset_coco.json"
+        if jatayu:
+            dataset_coco_path = "/home/manugaur/img_cap_self_retrieval/data/annotations/dataset_coco.json"
+        with open(dataset_coco_path) as f:
             annotations = json.load(f)
         split2samples = defaultdict(list)
         for img_ann in annotations["images"]:
+            # breakpoint()
             file_path = self.dataset_dir / img_ann["filepath"] / img_ann["filename"]
             captions = [x["raw"] for x in img_ann["sentences"]]
             img_id = img_ann["imgid"]

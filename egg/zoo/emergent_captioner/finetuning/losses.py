@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from egg.zoo.emergent_captioner.utils import DATASET2NEG_PATHS
-
+from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metrics
 
 class Loss(nn.Module):
     def __init__(
@@ -76,6 +76,23 @@ class DiscriminativeLoss(Loss):
 
         return loss, {"acc": acc}
 
+class CiderReward(Loss):
+    def forward(self, preds, aux_input):
+        img_ids = aux_input['img_id']
+        captions = aux_input['captions']
+        # preds_per_batch = full_interaction.message
+        bsz = len(aux_input['img_id'])
+        
+        coco_caps = list(zip(*captions))
+        
+        gold_standard = {idx : [{"caption": cap} for cap in img] for idx, img in enumerate(coco_caps)}
+        
+        predictions = {idx : [{"caption" :pred}] for idx, pred in enumerate(preds)}
+
+        summary = compute_nlg_metrics(predictions, gold_standard, only_cider = True) # score for each idx stored in summary except bleu
+
+        return summary['CIDEr']
+
 
 class AccuracyLoss(Loss):
     def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
@@ -107,6 +124,7 @@ def get_loss(loss_type: str, dataset: str, num_hard_negatives: int):
         "discriminative": DiscriminativeLoss,
         "accuracy": AccuracyLoss,
         "similarity": SimilarityLoss,
+        "cider" : CiderReward,
     }
 
     loss_cls = name2loss.get(loss_type.lower(), None)
