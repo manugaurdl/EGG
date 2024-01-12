@@ -2,8 +2,10 @@
 
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+STEP = 0
+INIT_VAL = True 
 import os
+import wandb
 import pathlib
 from typing import List, Optional
 from tqdm import tqdm
@@ -28,6 +30,15 @@ from .callbacks import (
 from .distributed import get_preemptive_checkpoint_dir
 from .interaction import Interaction
 from .util import get_opts, move_to
+from egg.zoo.emergent_captioner.utils import (
+    dump_interaction,
+    get_sha,
+    log_stats,
+    print_grad_info,
+    setup_for_distributed,
+    store_job_and_task_id,
+)
+from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metrics
 
 try:
     from torch.cuda.amp import GradScaler, autocast
@@ -165,6 +176,7 @@ class Trainer:
             self.scaler = None
 
     def eval(self, data=None):
+        global STEP
         mean_loss = 0.0
         interactions = []
         n_batches = 0
@@ -177,7 +189,7 @@ class Trainer:
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
-                optimized_loss, interaction = self.game(*batch)
+                optimized_loss, interaction, reward = self.game(*batch)
                 if (
                     self.distributed_context.is_distributed
                     and self.aggregate_interaction_logs
@@ -198,10 +210,30 @@ class Trainer:
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
+        
+        img_ids = full_interaction.aux_input['img_id']
+        captions = full_interaction.aux_input['captions']
+        preds_per_batch = full_interaction.message
+        bsz = len(preds_per_batch[0])
+        gold_standard = {}
+        
+        for i, batch in enumerate(captions):
+            coco_caps = list(zip(*batch))
+            for j, img in enumerate(coco_caps):
+                gold_standard[(i)*bsz + j] = [{"caption": cap} for cap in img]
+        
+        predictions = {}
+        
+        for i, batch in enumerate(preds_per_batch):
+            for j, pred in enumerate(batch):
+                predictions[(i*bsz) + j] = [{"caption" :pred}]
+        
+        summary = compute_nlg_metrics(predictions, gold_standard) # score for each idx stored in summary except bleu
+        
+        return mean_loss.item(), full_interaction, reward, summary
 
-        return mean_loss.item(), full_interaction
-
-    def train_epoch(self):
+    def train_epoch(self, WANDB):
+        global STEP
         mean_loss = 0
         n_batches = 0
         interactions = []
@@ -219,9 +251,9 @@ class Trainer:
 
             context = autocast() if self.scaler else nullcontext()
             with context:
-                optimized_loss, interaction = self.game(*batch)
-                print(optimized_loss)
-
+                optimized_loss, interaction, reward = self.game(*batch)
+                
+                #not accumulating gradients currently
                 if self.update_freq > 1:
                     # throughout EGG, we minimize _mean_ loss, not sum
                     # hence, we need to account for that when aggregating grads
@@ -261,24 +293,65 @@ class Trainer:
                 callback.on_batch_end(interaction, optimized_loss, batch_id)
 
             interactions.append(interaction)
-
+            print(f"Loss : {optimized_loss.item():.5f}")
+            print(f"Avg Loss : {mean_loss.item():.5f}")
+            # 
+            if WANDB:
+                wandb.log({ "Loss" :optimized_loss.item(),
+                            "Reward" : reward,
+                            "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"],
+                            }, step = STEP)
+            STEP+=1
         if self.optimizer_scheduler:
             self.optimizer_scheduler.step()
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
+        if WANDB:
+            wandb.log({"Avg Loss" : mean_loss.item()}, step = STEP)
         return mean_loss.item(), full_interaction
 
-    def train(self, n_epochs):
+    def train(self, n_epochs, WANDB):
+        global STEP
         for callback in self.callbacks:
             callback.on_train_begin(self)
 
         for epoch in range(self.start_epoch, n_epochs):
+            
+            if epoch ==0 and INIT_VAL:
+                validation_loss = validation_interaction = None
+                if (
+                    self.validation_data is not None
+                    and self.validation_freq > 0
+                    and (epoch + 1) % self.validation_freq == 0
+                ):
+                    for callback in self.callbacks:
+                        callback.on_validation_begin(epoch + 1)
+                    
+                    validation_loss, validation_interaction, val_reward, summary = self.eval()
+                    
+                    val_log = { "Val Loss" :validation_loss,
+                                "Val Reward" : val_reward,
+                                "CIDEr" : summary["CIDEr"],
+                                "SPICE" : summary["SPICE"],
+                                "Bleu_4" : summary["Bleu_4"],
+                                'METEOR': summary["METEOR"],
+                                "ROUGE_L" : summary['ROUGE_L']
+                                }
+                    if WANDB:
+                        wandb.log(val_log, step = STEP)
+
+                    for callback in self.callbacks:
+                        callback.on_validation_end(
+                            validation_loss, validation_interaction, epoch + 1
+                        )
+ 
+
             print(f"Training epoch {epoch}")
             for callback in self.callbacks:
                 callback.on_epoch_begin(epoch + 1)
 
-            train_loss, train_interaction = self.train_epoch()
+            train_loss, train_interaction = self.train_epoch(WANDB)
 
             for callback in self.callbacks:
                 callback.on_epoch_end(train_loss, train_interaction, epoch + 1)
@@ -291,12 +364,23 @@ class Trainer:
             ):
                 for callback in self.callbacks:
                     callback.on_validation_begin(epoch + 1)
-                validation_loss, validation_interaction = self.eval()
+                    validation_loss, validation_interaction, val_reward, summary = self.eval()
+                    
+                    val_log = { "Val Loss" :validation_loss,
+                                "Val Reward" : val_reward,
+                                "CIDEr" : summary["CIDEr"],
+                                "SPICE" : summary["SPICE"],
+                                "Bleu_4" : summary["Bleu_4"],
+                                'METEOR': summary["METEOR"],
+                                "ROUGE_L" : summary['ROUGE_L']
+                                }
+                    if WANDB:
+                        wandb.log(val_log, step = STEP)
 
-                for callback in self.callbacks:
-                    callback.on_validation_end(
-                        validation_loss, validation_interaction, epoch + 1
-                    )
+                    for callback in self.callbacks:
+                        callback.on_validation_end(
+                            validation_loss, validation_interaction, epoch + 1
+                        )
 
             if self.should_stop:
                 for callback in self.callbacks:

@@ -66,6 +66,7 @@ def extract_gt(interaction, multi_reference: bool = False):
 
 def main(params):
     start = time.time()
+    # params.extend(["--eval_datasets", ["coco"]])
     opts = get_common_opts(params=params)
 
     store_job_and_task_id(opts)
@@ -132,6 +133,7 @@ def main(params):
                 "vizwiz": VizWizWrapper,
             }
 
+            dataset = "coco"
             wrapper = wrappers[dataset.lower()]()
             test_loader = wrapper.get_split(split="test", **data_kwargs)
             _, interaction = trainer.eval(test_loader)

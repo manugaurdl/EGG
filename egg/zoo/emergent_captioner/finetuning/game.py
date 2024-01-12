@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import Callable
-
+import wandb
 import torch
 import torch.nn as nn
 
@@ -49,19 +49,29 @@ class ReinforceCaptionGame(nn.Module):
         )
 
     def forward(self, sender_input, labels, receiver_input=None, aux_input=None):
-        captions, log_prob, kl_div = self.sender(sender_input, aux_input)
+        """
+        receiver : clip
+        sender : clip VIT + clipcap model
+        kl_div_coeff : 0
+        _____
+        sender_input : (B, 3, 224, 224)
+        labels : ? 
+        receiver_input : (B, 3 ,224, 224)
+        aux : dict {img_id : cocoids
+                    captions : 5 coco GT cap for each image : list of 5 lists --> each sublist has bsz captions
+                    }
+        """
+        captions, log_prob, kl_div = self.sender(sender_input, aux_input) # logprob : (B) --> only one logprob per caption (averaged over all words)
 
         with torch.no_grad():
-            text_feats, img_feats = self.receiver(captions, receiver_input, aux_input)
+            text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
             loss, aux_info = self.loss(text_feats, img_feats, labels, aux_input)
-
         weighted_kl_div = self.kl_div_coeff * kl_div
 
         baseline = self.baseline.predict(loss.detach())
 
         reward = (loss.detach() - baseline) + weighted_kl_div
         policy_loss = (reward * log_prob).mean()
-
         if self.training:
             self.baseline.update(loss)
 
@@ -81,7 +91,7 @@ class ReinforceCaptionGame(nn.Module):
             aux=aux_info,
         )
 
-        return policy_loss.mean(), interaction
+        return policy_loss.mean(), interaction, reward.mean().item()
 
 
 def build_game(opts):

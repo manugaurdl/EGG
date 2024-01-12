@@ -68,11 +68,11 @@ class Loss(nn.Module):
 
 class DiscriminativeLoss(Loss):
     def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
-        sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input)
+        sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input) # (B, 3)
 
         labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
         loss = F.cross_entropy(sims, labels, reduction="none")
-        acc = (sims.argmax(dim=1) == labels).detach().float()
+        acc = (sims.argmax(dim=1) == labels).detach().float() # highest similarity index  == labels (indices)
 
         return loss, {"acc": acc}
 

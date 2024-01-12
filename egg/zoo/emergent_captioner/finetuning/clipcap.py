@@ -305,9 +305,9 @@ class ClipCapModel(nn.Module):
         mask = (extra_tokens == 0).float()
 
         # compute normalized log_probs of generated captions
-        log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1)
-        log_probs *= mask
-        log_probs = log_probs.sum(1) / msg_lengths
+        log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
+        log_probs *= mask # everything of "." is zeroed
+        log_probs = log_probs.sum(1) / msg_lengths #averaged
 
         # put captions in textual form
         decoded_captions = self.tokenizer.batch_decode(
