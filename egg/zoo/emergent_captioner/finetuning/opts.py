@@ -105,6 +105,6 @@ def get_common_opts(params):
     get_data_opts(parser)
     get_captioner_opts(parser)
     get_game_opts(parser)
-
+    # import ipdb;ipdb.set_trace()
     opts = core.init(arg_parser=parser, params=params)
     return opts

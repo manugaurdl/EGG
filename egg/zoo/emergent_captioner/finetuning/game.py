@@ -67,7 +67,7 @@ class ReinforceCaptionGame(nn.Module):
             text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
             loss, aux_info = self.loss(text_feats, img_feats, labels, aux_input)
         weighted_kl_div = self.kl_div_coeff * kl_div
-
+        
         baseline = self.baseline.predict(loss.detach())
 
         reward = (loss.detach() - baseline) + weighted_kl_div

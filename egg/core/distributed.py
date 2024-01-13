@@ -25,6 +25,7 @@ class DistributedContext:
 
 
 def maybe_init_distributed(args) -> DistributedContext:
+    # import ipdb;ipdb.set_trace()
     assert not hasattr(
         args, "distributed_context"
     ), "distributed context is already initialized?!"
@@ -41,7 +42,8 @@ def maybe_init_distributed(args) -> DistributedContext:
         "SLURM_NODEID",
         "SLURM_JOB_NODELIST",
     ]
-
+    # for key in slurm_keys:
+    #     print(f"{key} : {key in os.environ}")
     # is it torch.distributed.launch?
     if all(key in os.environ for key in launch_keys):
         init_method = "env://"
@@ -59,7 +61,9 @@ def maybe_init_distributed(args) -> DistributedContext:
             backend="nccl", init_method=init_method, world_size=world_size, rank=rank
         )
     # is it slurm?
-    elif all(key in os.environ for key in slurm_keys):
+    elif all(key in os.environ for key in slurm_keys) and 9 > 10:
+        print("Running distributed")
+        import ipdb;ipdb.set_trace()
         init_method = "env://"
         local_rank = int(os.environ["SLURM_LOCALID"])
         rank = int(os.environ["SLURM_PROCID"])

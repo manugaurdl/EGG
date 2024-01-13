@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 STEP = 0
-INIT_VAL = True 
+INIT_VAL = False 
 import os
 import wandb
 import pathlib
@@ -183,7 +183,7 @@ class Trainer:
         validation_data = self.validation_data if data is None else data
         self.game.eval()
         with torch.no_grad():
-            for batch_id, batch in enumerate(validation_data):
+            for batch_id, batch in tqdm(enumerate(validation_data), total = len(validation_data)):
                 if self.debug and batch_id == 10:
                     break
                 if not isinstance(batch, Batch):
@@ -300,6 +300,7 @@ class Trainer:
                 wandb.log({ "Loss" :optimized_loss.item(),
                             "Reward" : reward,
                             "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"],
+                            "acc@1" : interaction.aux['acc'].mean().item()
                             }, step = STEP)
             STEP+=1
         if self.optimizer_scheduler:

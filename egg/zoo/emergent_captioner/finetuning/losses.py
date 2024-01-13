@@ -31,11 +31,11 @@ class Loss(nn.Module):
         self.num_hard_negatives = num_hard_negatives
 
     def get_similarity_scores(self, text_feats, image_feats, img_idxs, aux_input=None):
-        cosine_in_batch = text_feats @ image_feats.t()
+        cosine_in_batch = text_feats @ image_feats.t() # (B x B) sim matrix
 
-        targets = cosine_in_batch.diag(0).unsqueeze(1)
-        cosine_in_batch.fill_diagonal_(float("-inf"))
-        cosine_in_batch = torch.cat([targets, cosine_in_batch], dim=1)
+        targets = cosine_in_batch.diag(0).unsqueeze(1) # targets are the image itself
+        cosine_in_batch.fill_diagonal_(float("-inf"))  # mask targets.
+        cosine_in_batch = torch.cat([targets, cosine_in_batch], dim=1) # (B +1 X B )
 
         cosine_sims = cosine_in_batch
 
@@ -68,11 +68,13 @@ class Loss(nn.Module):
 
 class DiscriminativeLoss(Loss):
     def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
-        sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input) # (B, 3)
+        sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
 
         labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
+        # dist over bsz + 1 classes. logprob for target class in the 0th column. For each sample(row), target logprob : row[0]
         loss = F.cross_entropy(sims, labels, reduction="none")
-        acc = (sims.argmax(dim=1) == labels).detach().float() # highest similarity index  == labels (indices)
+        # highest sim should be the first column for each row i.e sim.argmax for each row should be == 0.
+        acc = (sims.argmax(dim=1) == labels).detach().float() 
 
         return loss, {"acc": acc}
 

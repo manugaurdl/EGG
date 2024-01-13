@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 wandb/
 *.txt
+job_train.sh
 .vscode/
 dummy.txt
 __pycache__/

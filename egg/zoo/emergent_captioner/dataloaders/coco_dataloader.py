@@ -23,8 +23,8 @@ class CocoDataset:
         self.transform = transform
 
     def __len__(self):
-        # return len(self.samples)
-        return 64
+        return len(self.samples)
+        # return  64
 
     def __getitem__(self, idx):
         file_path, captions, image_id = self.samples[idx]

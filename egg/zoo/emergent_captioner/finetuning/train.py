@@ -5,7 +5,7 @@
 
 
 WANDB = False
-
+WANDB_NAME = "cvpr_reproduce_acc@1"
 import wandb
 import time
 import torch
@@ -31,6 +31,9 @@ from egg.zoo.emergent_captioner.utils import (
 
 
 def main(params):
+    print("Inside main")
+    # import ipdb;ipdb.set_trace()
+
     start = time.time()
     opts = get_common_opts(params=params)
 
@@ -64,7 +67,7 @@ def main(params):
     # print_grad_info(game)
 
     optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
-
+    # import ipdb;ipdb.set_trace()
     trainer = core.Trainer(
         game=game,
         optimizer=optimizer,
@@ -97,7 +100,7 @@ if __name__ == "__main__":
     import sys
     if WANDB:
         wandb.init(entity= "manugaur", project="emergent_captioner")
-        wandb.run.name = "reproduce_cvpr23"
+        wandb.run.name = WANDB_NAME
 
     
     main(sys.argv[1:])

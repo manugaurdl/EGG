@@ -133,11 +133,13 @@ def _populate_cl_params(arg_parser: argparse.ArgumentParser) -> argparse.Argumen
 def _get_params(
     arg_parser: argparse.ArgumentParser, params: List[str]
 ) -> argparse.Namespace:
-    args = arg_parser.parse_args(params)
+    
+    args = arg_parser.parse_args(params) #command line args
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     # just to avoid confusion and be consistent
     args.no_cuda = not args.cuda
     args.device = torch.device("cuda" if args.cuda else "cpu")
+    # import ipdb;ipdb.set_trace()
     args.distributed_context = maybe_init_distributed(args)
 
     if args.fp16 and torch.__version__ < "1.6.0":
@@ -172,6 +174,7 @@ def init(
 
     if params is None:
         params = sys.argv[1:]
+    # import ipdb;ipdb.set_trace()
     common_opts = _get_params(arg_parser, params)
 
     if common_opts.random_seed is None:
