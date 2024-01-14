@@ -4,8 +4,10 @@
 # LICENSE file in the root directory of this source tree.
 
 
-WANDB = True
+WANDB = False
 WANDB_NAME = 'cider_optim_b_greedy'
+DEBUG = True
+INIT_VAL = False
 
 import wandb
 import os
@@ -61,8 +63,8 @@ def main(params):
         num_workers=opts.num_workers,
         seed=opts.random_seed,
     )
-    train_loader = wrapper.get_split(split="train", **data_kwargs)
-    val_loader = wrapper.get_split(split="val", **data_kwargs)
+    train_loader = wrapper.get_split(split="train", debug= DEBUG, **data_kwargs)
+    val_loader = wrapper.get_split(split="val", debug = DEBUG,**data_kwargs)
 
     game = build_game(opts)
     # print_grad_info(game)
@@ -83,7 +85,7 @@ def main(params):
     if opts.captioner_model == "clipcap":
         trainer.game.sender.patch_model()
 
-    trainer.train(opts.n_epochs, WANDB)
+    trainer.train(opts.n_epochs, WANDB, INIT_VAL)
 
     # _, test_interaction, test_reward = trainer.eval(val_loader)
 

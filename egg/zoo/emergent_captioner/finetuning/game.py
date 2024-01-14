@@ -62,7 +62,8 @@ class ReinforceCaptionGame(nn.Module):
                     captions : 5 coco GT cap for each image : list of 5 lists --> each sublist has bsz captions
                     }
         """
-        captions, log_prob, kl_div = self.sender(sender_input, aux_input, CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
+        if CIDER_OPTIM :
+            captions, log_prob, kl_div = self.sender(sender_input, aux_input, CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
         
         with torch.no_grad():
             if CIDER_OPTIM:
@@ -100,7 +101,38 @@ class ReinforceCaptionGame(nn.Module):
             receiver_output=None,
             message_length=None,
             aux=aux_info,
-        )
+        else:
+            captions, log_prob, kl_div = self.sender(sender_input, aux_input, CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
+            
+            with torch.no_grad():
+                text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
+                loss, aux_info = self.loss(text_feats, img_feats, labels, aux_input)
+            
+            weighted_kl_div = self.kl_div_coeff * kl_div
+            
+            baseline = self.baseline.predict(loss.detach())
+
+            reward = (loss.detach() - baseline) + weighted_kl_div
+            policy_loss = (reward * log_prob).mean()
+            if self.training:
+                self.baseline.update(loss)
+
+            # aux_info = {'acc' : torch.randn(1,2), "kl_div" : kl_div}
+            aux_info["kl_div"] = kl_div
+
+            
+            logging_strategy = self.test_logging_strategy
+
+            interaction = logging_strategy.filtered_interaction(
+                sender_input=sender_input,
+                labels=labels,
+                receiver_input=receiver_input,
+                aux_input=aux_input,
+                message=captions,
+                receiver_output=None,
+                message_length=None,
+                aux=aux_info,
+            )
 
         return policy_loss.mean(), interaction, reward.mean().item()
 

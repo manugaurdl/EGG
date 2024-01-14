@@ -17,14 +17,17 @@ from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
 
 
 class CocoDataset:
-    def __init__(self, root, samples, transform):
+    def __init__(self, root, samples, transform, debug):
         self.root = root
         self.samples = samples
         self.transform = transform
+        self.debug = debug
 
     def __len__(self):
-        return len(self.samples)
-        # return 1024
+        if self.debug:
+            return 1024
+        else:
+            return len(self.samples)
 
     def __getitem__(self, idx):
 
@@ -78,6 +81,7 @@ class CocoWrapper:
     def get_split(
         self,
         split: str,
+        debug :bool,
         batch_size: int,
         transform: Callable,
         num_workers: int = 8,
@@ -88,7 +92,7 @@ class CocoWrapper:
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
 
-        ds = CocoDataset(self.dataset_dir, samples, transform=transform)
+        ds = CocoDataset(self.dataset_dir, samples, transform=transform, debug = debug)
 
         sampler = None
         if dist.is_initialized():

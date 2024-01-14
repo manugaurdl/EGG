@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 STEP = 0
-INIT_VAL = True 
 import os
 import wandb
 import pathlib
@@ -312,7 +311,7 @@ class Trainer:
             wandb.log({"Avg Loss" : mean_loss.item()}, step = STEP)
         return mean_loss.item(), full_interaction
 
-    def train(self, n_epochs, WANDB):
+    def train(self, n_epochs, WANDB, INIT_VAL):
         global STEP
         for callback in self.callbacks:
             callback.on_train_begin(self)
