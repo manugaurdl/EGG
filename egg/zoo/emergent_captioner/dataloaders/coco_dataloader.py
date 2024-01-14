@@ -17,17 +17,20 @@ from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
 
 
 class CocoDataset:
-    def __init__(self, root, samples, transform):
+    def __init__(self, root, samples, transform, debug):
         self.root = root
         self.samples = samples
         self.transform = transform
-
+        self.debug = debug
     def __len__(self):
-        return len(self.samples)
-        # return  1024
+        if self.debug:
+            return 1024
+        else:
+            return len(self.samples)
 
     def __getitem__(self, idx):
         file_path, captions, image_id = self.samples[idx]
+        # image = Image.open(str(file_path)).convert("RGB")
 
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
         sender_input, recv_input = self.transform(image)
@@ -38,7 +41,7 @@ class CocoDataset:
 
 
 class CocoWrapper:
-    def __init__(self, dataset_dir: str = None, jatayu: bool =None):
+    def __init__(self, dataset_dir: str = None, jatayu: bool = False):
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
         self.dataset_dir = Path(dataset_dir)
@@ -70,6 +73,7 @@ class CocoWrapper:
     def get_split(
         self,
         split: str,
+        debug : bool,
         batch_size: int,
         transform: Callable,
         num_workers: int = 8,
@@ -80,7 +84,7 @@ class CocoWrapper:
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
 
-        ds = CocoDataset(self.dataset_dir, samples, transform=transform)
+        ds = CocoDataset(self.dataset_dir, samples, transform=transform, debug = debug)
 
         sampler = None
         if dist.is_initialized():

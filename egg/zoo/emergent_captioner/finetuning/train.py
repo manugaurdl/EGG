@@ -3,9 +3,13 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-
-WANDB = True
+WANDB = False
 WANDB_NAME = "cvpr_reproduce_acc@1"
+DEBUG = True
+INIT_VAL = False
+CIDER_OPTIM = True
+GREEDY_BASELINE = False
+
 import wandb
 import time
 import os
@@ -37,7 +41,8 @@ def main(params):
 
     start = time.time()
     opts = get_common_opts(params=params)
-
+    if CIDER_OPTIM:
+        opts.loss_type= "cider"
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
     print(opts)
@@ -61,8 +66,8 @@ def main(params):
         num_workers=opts.num_workers,
         seed=opts.random_seed,
     )
-    train_loader = wrapper.get_split(split="train", **data_kwargs)
-    val_loader = wrapper.get_split(split="val", **data_kwargs)
+    train_loader = wrapper.get_split(split="train", debug = DEBUG, **data_kwargs)
+    val_loader = wrapper.get_split(split="val",debug = DEBUG,  **data_kwargs)
 
     game = build_game(opts)
     # print_grad_info(game)
@@ -83,7 +88,7 @@ def main(params):
     if opts.captioner_model == "clipcap":
         trainer.game.sender.patch_model()
 
-    trainer.train(opts.n_epochs, WANDB)
+    trainer.train(opts.n_epochs, WANDB, INIT_VAL, GREEDY_BASELINE)
 
     # _, test_interaction, test_reward = trainer.eval(val_loader)
 

@@ -76,7 +76,7 @@ def get_game_opts(parser):
 
     group.add_argument(
         "--loss_type",
-        choices="accuracy similarity discriminative".split(),
+        choices="accuracy similarity discriminative cider".split(),
         default="discriminative",
     )
     group.add_argument(

@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 STEP = 0
-INIT_VAL = True 
 import os
 import wandb
 import pathlib
@@ -175,7 +174,7 @@ class Trainer:
         else:
             self.scaler = None
 
-    def eval(self, data=None):
+    def eval(self, data=None, GREEDY_BASELINE = False):
         global STEP
         mean_loss = 0.0
         interactions = []
@@ -232,7 +231,7 @@ class Trainer:
         
         return mean_loss.item(), full_interaction, reward, summary
 
-    def train_epoch(self, WANDB):
+    def train_epoch(self, WANDB, GREEDY_BASELINE):
         global STEP
         mean_loss = 0
         n_batches = 0
@@ -243,6 +242,7 @@ class Trainer:
         self.optimizer.zero_grad()
 
         for batch_id, batch in tqdm(enumerate(self.train_data), total = len(self.train_data)):
+            # batch.append(GREEDY_BASELINE)
             if self.debug and batch_id == 10:
                 break
             if not isinstance(batch, Batch):
@@ -251,7 +251,7 @@ class Trainer:
 
             context = autocast() if self.scaler else nullcontext()
             with context:
-                optimized_loss, interaction, reward = self.game(*batch)
+                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE)
                 
                 #not accumulating gradients currently
                 if self.update_freq > 1:
@@ -312,7 +312,7 @@ class Trainer:
             wandb.log({"Avg Loss" : mean_loss.item()}, step = STEP)
         return mean_loss.item(), full_interaction
 
-    def train(self, n_epochs, WANDB):
+    def train(self, n_epochs, WANDB, INIT_VAL, GREEDY_BASELINE):
         global STEP
         for callback in self.callbacks:
             callback.on_train_begin(self)
@@ -329,7 +329,7 @@ class Trainer:
                     for callback in self.callbacks:
                         callback.on_validation_begin(epoch + 1)
                     
-                    validation_loss, validation_interaction, val_reward, summary = self.eval()
+                    validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE)
                     
                     val_log = { "Val Loss" :validation_loss,
                                 "Val Reward" : val_reward,
@@ -354,7 +354,7 @@ class Trainer:
             for callback in self.callbacks:
                 callback.on_epoch_begin(epoch + 1)
 
-            train_loss, train_interaction = self.train_epoch(WANDB)
+            train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE)
 
             for callback in self.callbacks:
                 callback.on_epoch_end(train_loss, train_interaction, epoch + 1)
@@ -367,7 +367,7 @@ class Trainer:
             ):
                 for callback in self.callbacks:
                     callback.on_validation_begin(epoch + 1)
-                    validation_loss, validation_interaction, val_reward, summary = self.eval()
+                    validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE)
                     
                     val_log = { "Val Loss" :validation_loss,
                                 "Val Reward" : val_reward,
