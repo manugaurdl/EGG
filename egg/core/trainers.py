@@ -3,7 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 STEP = 0
-INIT_VAL = False 
+INIT_VAL = True 
 import os
 import wandb
 import pathlib
@@ -337,7 +337,9 @@ class Trainer:
                                 "SPICE" : summary["SPICE"],
                                 "Bleu_4" : summary["Bleu_4"],
                                 'METEOR': summary["METEOR"],
-                                "ROUGE_L" : summary['ROUGE_L']
+                                "ROUGE_L" : summary['ROUGE_L'],
+                                "VAL_ACC@1" : validation_interaction.aux['acc'].mean().item()
+
                                 }
                     if WANDB:
                         wandb.log(val_log, step = STEP)
@@ -373,7 +375,8 @@ class Trainer:
                                 "SPICE" : summary["SPICE"],
                                 "Bleu_4" : summary["Bleu_4"],
                                 'METEOR': summary["METEOR"],
-                                "ROUGE_L" : summary['ROUGE_L']
+                                "ROUGE_L" : summary['ROUGE_L'],
+                                "VAL_ACC@1" : validation_interaction.aux['acc'].mean().item()
                                 }
                     if WANDB:
                         wandb.log(val_log, step = STEP)

@@ -4,10 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 
-WANDB = False
+WANDB = True
 WANDB_NAME = "cvpr_reproduce_acc@1"
 import wandb
 import time
+import os
 import torch
 import egg.core as core
 from egg.core import ConsoleLogger
@@ -51,8 +52,8 @@ def main(params):
         "flickr": FlickrWrapper,
     }
     # args
-
-    wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir)
+    jatayu  = not os.path.isdir("/ssd_scratch/cvit")
+    wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir, jatayu)
 
     data_kwargs = dict(
         batch_size=opts.batch_size,

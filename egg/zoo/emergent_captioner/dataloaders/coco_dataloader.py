@@ -24,7 +24,7 @@ class CocoDataset:
 
     def __len__(self):
         return len(self.samples)
-        # return  64
+        # return  1024
 
     def __getitem__(self, idx):
         file_path, captions, image_id = self.samples[idx]
@@ -38,15 +38,19 @@ class CocoDataset:
 
 
 class CocoWrapper:
-    def __init__(self, dataset_dir: str = None):
+    def __init__(self, dataset_dir: str = None, jatayu: bool =None):
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
         self.dataset_dir = Path(dataset_dir)
 
-        self.split2samples = self._load_splits()
+        self.split2samples = self._load_splits(jatayu)
 
-    def _load_splits(self):
-        with open("/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/annotations/dataset_coco.json") as f:
+    def _load_splits(self, jatayu):
+        if jatayu:
+            path2ann = "/home/manugaur/img_cap_self_retrieval/data/annotations/dataset_coco.json"
+        else:
+            path2ann = "/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/annotations/dataset_coco.json"
+        with open(path2ann) as f:
             annotations = json.load(f)
         split2samples = defaultdict(list)
         for img_ann in annotations["images"]:
