@@ -263,9 +263,9 @@ class ClipCapModel(nn.Module):
         input_ids = torch.arange(start, end).view(*prompts.shape[:2]).to(prompts.device)
         self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat #add prefix tokens for batch images to GPT lookup table
 
-        if CIDER_OPTIM and not greedy_baseline:
+        if CIDER_OPTIM and not greedy_baseline and self.training:
             self.do_sample = True
-            temp = 0.1
+            temp = 1.0
         else:
             temp = 1.0
         

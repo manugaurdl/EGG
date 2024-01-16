@@ -4,11 +4,11 @@
 # LICENSE file in the root directory of this source tree.
 
 WANDB = False
-WANDB_NAME = "cvpr_reproduce_acc@1"
+WANDB_NAME = "cider_optim_b_greedy_t_te-1_logsoftmax_hf_generate_max_len_20"
 DEBUG = True
 INIT_VAL = False
 CIDER_OPTIM = True
-GREEDY_BASELINE = False
+GREEDY_BASELINE = True
 
 import wandb
 import time
@@ -45,7 +45,7 @@ def main(params):
         opts.loss_type= "cider"
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
-    print(opts)
+    # print(opts)
     print(get_sha())
 
     if not opts.distributed_context.is_distributed and opts.debug:
@@ -88,7 +88,7 @@ def main(params):
     if opts.captioner_model == "clipcap":
         trainer.game.sender.patch_model()
 
-    trainer.train(opts.n_epochs, WANDB, INIT_VAL, GREEDY_BASELINE)
+    trainer.train(opts.n_epochs, WANDB, INIT_VAL, GREEDY_BASELINE, opts)
 
     # _, test_interaction, test_reward = trainer.eval(val_loader)
 

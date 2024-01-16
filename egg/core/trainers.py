@@ -231,7 +231,7 @@ class Trainer:
         
         return mean_loss.item(), full_interaction, reward, summary
 
-    def train_epoch(self, WANDB, GREEDY_BASELINE):
+    def train_epoch(self, WANDB, GREEDY_BASELINE, opts):
         global STEP
         mean_loss = 0
         n_batches = 0
@@ -295,13 +295,15 @@ class Trainer:
             interactions.append(interaction)
             print(f"Loss : {optimized_loss.item():.5f}")
             print(f"Avg Loss : {mean_loss.item():.5f}")
-            # 
-            if WANDB:
-                wandb.log({ "Loss" :optimized_loss.item(),
+            train_log = { "Loss" :optimized_loss.item(),
                             "Reward" : reward,
-                            "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"],
-                            "acc@1" : interaction.aux['acc'].mean().item()
-                            }, step = STEP)
+                            "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"]
+                            }
+            if opts.loss_type != 'cider':
+                train_log["acc@1"] : interaction.aux['acc'].mean().item()
+
+            if WANDB:
+                wandb.log(train_log, step = STEP)
             STEP+=1
         if self.optimizer_scheduler:
             self.optimizer_scheduler.step()
@@ -312,7 +314,7 @@ class Trainer:
             wandb.log({"Avg Loss" : mean_loss.item()}, step = STEP)
         return mean_loss.item(), full_interaction
 
-    def train(self, n_epochs, WANDB, INIT_VAL, GREEDY_BASELINE):
+    def train(self, n_epochs, WANDB, INIT_VAL, GREEDY_BASELINE, opts):
         global STEP
         for callback in self.callbacks:
             callback.on_train_begin(self)
@@ -337,10 +339,11 @@ class Trainer:
                                 "SPICE" : summary["SPICE"],
                                 "Bleu_4" : summary["Bleu_4"],
                                 'METEOR': summary["METEOR"],
-                                "ROUGE_L" : summary['ROUGE_L'],
-                                "VAL_ACC@1" : validation_interaction.aux['acc'].mean().item()
-
+                                "ROUGE_L" : summary['ROUGE_L']
                                 }
+                    if opts.loss_type != 'cider':
+                        val_log["VAL_ACC@1"]=  validation_interaction.aux['acc'].mean().item()
+
                     if WANDB:
                         wandb.log(val_log, step = STEP)
 
@@ -354,7 +357,7 @@ class Trainer:
             for callback in self.callbacks:
                 callback.on_epoch_begin(epoch + 1)
 
-            train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE)
+            train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE,opts)
 
             for callback in self.callbacks:
                 callback.on_epoch_end(train_loss, train_interaction, epoch + 1)
@@ -375,9 +378,12 @@ class Trainer:
                                 "SPICE" : summary["SPICE"],
                                 "Bleu_4" : summary["Bleu_4"],
                                 'METEOR': summary["METEOR"],
-                                "ROUGE_L" : summary['ROUGE_L'],
-                                "VAL_ACC@1" : validation_interaction.aux['acc'].mean().item()
+                                "ROUGE_L" : summary['ROUGE_L']
                                 }
+
+                    if opts.loss_type != 'cider':
+                        val_log["VAL_ACC@1"]=  validation_interaction.aux['acc'].mean().item()
+
                     if WANDB:
                         wandb.log(val_log, step = STEP)
 
