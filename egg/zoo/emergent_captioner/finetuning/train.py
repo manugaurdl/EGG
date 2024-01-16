@@ -3,10 +3,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-WANDB = False
-WANDB_NAME = "cider_optim_b_greedy_t_te-1_logsoftmax_hf_generate_max_len_20"
-DEBUG = True
-INIT_VAL = False
+WANDB = True
+WANDB_NAME = "cider_optim_b_greedy_t_1e-1_my_sample_maxlen_20"
+DEBUG = False
+INIT_VAL = True
 CIDER_OPTIM = True
 GREEDY_BASELINE = True
 

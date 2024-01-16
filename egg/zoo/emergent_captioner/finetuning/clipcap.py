@@ -255,80 +255,118 @@ class ClipCapModel(nn.Module):
         prompts = self.clip_project(image_feats) #16,7680
         prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1) # 16,10,768
 
-        bsz, prefix_len, h_dim = prompts.shape
-
-        prompts_flat = prompts.view(-1, prompts.size(-1)) #160,768
-        start = len(self.tokenizer) #50257
-        end = start + (bsz * prefix_len) # 50417 as prefix len = 10 and bsz = 16
-        input_ids = torch.arange(start, end).view(*prompts.shape[:2]).to(prompts.device)
-        self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat #add prefix tokens for batch images to GPT lookup table
-
         if CIDER_OPTIM and not greedy_baseline and self.training:
-            self.do_sample = True
+            temp = 0.1
+            method = "sample"
+        elif CIDER_OPTIM and greedy_baseline and self.training:
+            method = "greedy"
             temp = 1.0
         else:
             temp = 1.0
         
-        if self.training or greedy_baseline:
-            generated = self.gpt.generate(
-                input_ids,
-                do_sample=self.do_sample,
-                max_length=self.max_len,
-                num_beams=self.beam_size,
-                num_return_sequences=1,
-                logits_processor=LogitsProcessorList([self.logits_processor]),
-                top_k=len(self.tokenizer),
-                temperature = temp
+        if CIDER_OPTIM and self.training : 
+            _,  log_probs, captions = self.sample(max_length = self.max_len, token_emb = prompts, model = self, temp = temp, 
+                                                method = method, stop_token = 13, tokenizer = self.tokenizer,sample_n = 1)
+            kl_div = 0
+
+            # compute mask and message length
+            max_k = captions.shape[-1]
+            end_of_caption = captions == 13
+            extra_tokens = end_of_caption.cumsum(dim = 1)> 0 
+            msg_lengths = max_k - (extra_tokens).sum(dim=1)
+            msg_lengths.add_(1).clamp_(max=max_k) # add 1 for <eos>
+
+            # logprobs are already masked right?            
+            # mask = (extra_tokens == 0).float()
+            # log_probs *= mask
+            log_probs = log_probs.sum(1) / msg_lengths #averaged
+
+            # put captions in textual form
+            decoded_captions = self.tokenizer.batch_decode(
+                captions,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True,
             )
-        else:
-            # at test time we use beam search regardless of the decoding method
-            # used at training time
-            print("BEAM SEARCH GENERATION")
+            decoded_captions = list(map(lambda x: x.split("!")[0], decoded_captions))
+        # average log probs
+        # decode captions
 
-            generated = self.gpt.generate(
-                input_ids,
-                do_sample=False,
-                max_length=self.max_len,
-                num_beams=5,
-                num_return_sequences=1,
-                logits_processor=LogitsProcessorList([self.logits_processor]),
-                top_k=len(self.tokenizer),
+        if not self.training:
+
+            bsz, prefix_len, h_dim = prompts.shape
+
+            prompts_flat = prompts.view(-1, prompts.size(-1)) #160,768
+            start = len(self.tokenizer) #50257
+            end = start + (bsz * prefix_len) # 50417 as prefix len = 10 and bsz = 16
+            input_ids = torch.arange(start, end).view(*prompts.shape[:2]).to(prompts.device)
+            self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat #add prefix tokens for batch images to GPT lookup table
+
+            if CIDER_OPTIM and not greedy_baseline and self.training:
+                self.do_sample = True
+                temp = 1.0
+            else:
+                temp = 1.0
+            
+            if self.training or greedy_baseline:
+                generated = self.gpt.generate(
+                    input_ids,
+                    do_sample=self.do_sample,
+                    max_length=self.max_len,
+                    num_beams=self.beam_size,
+                    num_return_sequences=1,
+                    logits_processor=LogitsProcessorList([self.logits_processor]),
+                    top_k=len(self.tokenizer),
+                    temperature = temp
+                )
+            else:
+                # at test time we use beam search regardless of the decoding method
+                # used at training time
+                print("BEAM SEARCH GENERATION")
+
+                generated = self.gpt.generate(
+                    input_ids,
+                    do_sample=False,
+                    max_length=self.max_len,
+                    num_beams=5,
+                    num_return_sequences=1,
+                    logits_processor=LogitsProcessorList([self.logits_processor]),
+                    top_k=len(self.tokenizer),
+                )
+            self.do_sample = False
+            temp = 1.0
+            indices = generated[:, prefix_len:] # B, 10 tokens 
+
+            # logits after generation?
+            suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd
+            inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
+            logits = self.gpt(inputs_embeds=inputs_embeds)
+            logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, 20, 55257) 
+            logits = logits.log_softmax(-1)
+
+            # compute_mask and msg_lengths
+            max_k = indices.size(1) #generated size i.e 10
+            end_of_caption = indices == self.eos_token_id #50256
+            extra_tokens = end_of_caption.cumsum(dim=1) > 0
+            msg_lengths = max_k - (extra_tokens).sum(dim=1)
+            msg_lengths.add_(1).clamp_(max=max_k)
+
+            mask = (extra_tokens == 0).float()
+
+            # compute normalized log_probs of generated captions
+            log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
+            log_probs *= mask # everything of "." is zeroed
+            log_probs = log_probs.sum(1) / msg_lengths #averaged
+
+            # put captions in textual form
+            decoded_captions = self.tokenizer.batch_decode(
+                indices,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True,
             )
-        self.do_sample = False
-        temp = 1.0
-        indices = generated[:, prefix_len:] # B, 10 tokens 
-
-        # logits after generation?
-        suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd
-        inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
-        logits = self.gpt(inputs_embeds=inputs_embeds)
-        logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, 20, 55257) 
-        logits = logits.log_softmax(-1)
-
-        # compute_mask and msg_lengths
-        max_k = indices.size(1) #generated size i.e 10
-        end_of_caption = indices == self.eos_token_id #50256
-        extra_tokens = end_of_caption.cumsum(dim=1) > 0
-        msg_lengths = max_k - (extra_tokens).sum(dim=1)
-        msg_lengths.add_(1).clamp_(max=max_k)
-
-        mask = (extra_tokens == 0).float()
-
-        # compute normalized log_probs of generated captions
-        log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
-        log_probs *= mask # everything of "." is zeroed
-        log_probs = log_probs.sum(1) / msg_lengths #averaged
-
-        # put captions in textual form
-        decoded_captions = self.tokenizer.batch_decode(
-            indices,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=True,
-        )
-        # compute kl loss
-        kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
-        kl_div *= mask
-        kl_div = kl_div.sum(-1) / msg_lengths
+            # compute kl loss
+            kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
+            kl_div *= mask
+            kl_div = kl_div.sum(-1) / msg_lengths
 
         return decoded_captions, log_probs, kl_div
 
@@ -359,6 +397,90 @@ class ClipCapModel(nn.Module):
             self.gpt.resize_token_embeddings(len(self.tokenizer))
             if self.gpt._originally_with_no_bias:
                 self.gpt.get_output_embeddings().bias = None
+
+
+    def sample(self, max_length, token_emb, model, temp, method, stop_token, tokenizer, sample_n = None, tokens = None):
+        
+        max_len = round(float(max_length))
+        if method == "greedy":
+            sample_n = 1
+            temp = 1.0
+        
+        pred_logits = []        
+        # for sample_n > 1 : repeat images --> batch size increase sample_n X times 
+        if method =="sample" and sample_n > 1:
+            token_emb = repeat_tensors(sample_n, token_emb)
+        
+        #(B,40)
+        tokens = torch.zeros((token_emb.shape[0], max_len), dtype = torch.int).to(token_emb.device)
+        seqLogprob = torch.zeros((token_emb.shape[0], max_len)).to(token_emb.device)
+        
+        # each iteration, the context on which generation is conditioned increases by 1. (prefix + gpt_outputs)
+        # T1 = time.time()
+        for t in range(max_len):
+
+            if t == max_len:
+                break
+            outputs = model.gpt(inputs_embeds= token_emb)
+
+            #LM head output --> distribution over vocab
+            logits = outputs.logits # (B, prefix_len, vocab_size)    
+            # logit of last token = next token prediction
+            logits =  logits[:, -1, :]/ (temp if temp > 0 else 1.0)  # (B,vocab_size)
+            # preds for timestep t
+            pred_logits.append(logits.unsqueeze(1)) #(B,1,vocab_size)
+
+            if method == "greedy":
+                sampled_logprob, next_token = torch.max(logits.data,dim = -1)
+                #torch.argmax(log_softmax) != torch.argmax(x) if values of x very close        
+                # logprobs = torch.nn.functional.log_softmax(logits, dim=-1) # (B, vocab_size)
+                # sampled_logprob, next_token = torch.max(logprobs,dim = -1)
+
+
+            elif method == "sample":
+                # probs = torch.nn.functional.softmax(logits.data, dim=-1) # (B, vocab_size)
+                logprobs = torch.nn.functional.log_softmax(logits, dim=-1) # (B, vocab_size)
+                # next_token = torch.multinomial(logprobs, num_samples=1).squeeze(-1) # (B, 1)
+                next_token = torch.distributions.Categorical(logits=logprobs.detach()).sample()
+                sampled_logprob = logprobs.gather(1, next_token.clone().unsqueeze(-1)).squeeze(-1)
+
+                #************************************************************************
+
+            if t ==0:
+                # True for indices where stop token is not reached.
+                try:
+                    unfinished = next_token != stop_token
+                except:
+                    import ipdb;ipdb.set_trace()
+            else:
+                # For instances in batch which are finished --> overwrite sampled next_token with 0.
+                next_token[~unfinished] = 0
+                sampled_logprob[~unfinished] = 0
+
+                # logprobs = logprobs * unfinished.unsqueeze(1).to(logprobs)
+
+                # zero out log probs?
+                # If stop_token reached for an idx, unfinished = False
+                unfinished = unfinished & (next_token != stop_token)        
+            
+            # t_th index  = token sampled for t_th index
+            tokens[:,t] = next_token
+            seqLogprob[:,t] = sampled_logprob
+            
+            # for the sampled token, get token embedding 
+            next_token_embed = model.gpt.transformer.wte(next_token.unsqueeze(-1)) # (B,1,768)
+            token_emb = torch.cat((token_emb, next_token_embed), dim=1)
+
+            # unfinished[torch.nonzero((next_token==stop_token).squeeze(-1)).cpu()] = False
+            
+            if unfinished.sum() == 0:
+                return pred_logits, seqLogprob[:,:t+1], tokens[:,:t+1]
+
+        # if method=="sample":
+        #     step_time_avg.append(time.time() - T1)
+        #     print(len(step_time_avg))
+        #     print(f"bsz {config['batch_size']} sample_n {config['train_sample_n']} : {np.mean(np.array(step_time_avg))}")
+        return pred_logits, seqLogprob, tokens 
 
 
 class ClipCapSender(nn.Module):
