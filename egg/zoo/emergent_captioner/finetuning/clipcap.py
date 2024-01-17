@@ -265,7 +265,7 @@ class ClipCapModel(nn.Module):
 
         if CIDER_OPTIM and not greedy_baseline and self.training:
             self.do_sample = True
-            temp = 1.0
+            temp = 0.1
         else:
             temp = 1.0
         
@@ -294,29 +294,29 @@ class ClipCapModel(nn.Module):
                 logits_processor=LogitsProcessorList([self.logits_processor]),
                 top_k=len(self.tokenizer),
             )
-        self.do_sample = False
-        temp = 1.0
-        indices = generated[:, prefix_len:] # B, 10 tokens 
 
-        # logits after generation?
-        suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd
+        indices = generated[:, prefix_len:] # generated (B, max_batch_len) tokens. After "."/13 padded with "<eos>/50256
+
+        # logits after generation bruh
+        suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd. 
         inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
         logits = self.gpt(inputs_embeds=inputs_embeds)
-        logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, 20, 55257) 
+        logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, max_batch_len, 55257) 
+        logits = logits/(temp if temp > 0 else 1.0)
         logits = logits.log_softmax(-1)
 
         # compute_mask and msg_lengths
-        max_k = indices.size(1) #generated size i.e 10
-        end_of_caption = indices == self.eos_token_id #50256
+        max_k = indices.size(1) #len of longest generation in batch i.e 10
+        end_of_caption = indices == self.eos_token_id #50256 padding tokens
         extra_tokens = end_of_caption.cumsum(dim=1) > 0
         msg_lengths = max_k - (extra_tokens).sum(dim=1)
-        msg_lengths.add_(1).clamp_(max=max_k)
+        # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
 
         mask = (extra_tokens == 0).float()
 
-        # compute normalized log_probs of generated captions
+        # get logprob for each sampled token for all captions
         log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
-        log_probs *= mask # everything of "." is zeroed
+        log_probs *= mask # everything after "." is zeroed
         log_probs = log_probs.sum(1) / msg_lengths #averaged
 
         # put captions in textual form
@@ -329,6 +329,8 @@ class ClipCapModel(nn.Module):
         kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
         kl_div *= mask
         kl_div = kl_div.sum(-1) / msg_lengths
+
+        self.do_sample = False
 
         return decoded_captions, log_probs, kl_div
 

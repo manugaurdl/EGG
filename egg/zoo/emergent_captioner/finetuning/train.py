@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 WANDB = False
-WANDB_NAME = "cider_optim_b_greedy_t_te-1_logsoftmax_hf_generate_max_len_20"
+WANDB_NAME = "cider_optim_b_greedy_t_1e-1_logsoftmax_hf_generate_max_len_20_lr_1e-6"
 DEBUG = True
 INIT_VAL = False
 CIDER_OPTIM = True
