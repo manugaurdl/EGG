@@ -289,7 +289,7 @@ class ClipCapModel(nn.Module):
             # used at training time
             print("BEAM SEARCH GENERATION")
 
-            generated = self.gpt.generate(
+            gen_dict = self.gpt.generate(
                 input_ids,
                 do_sample=False,
                 max_length=self.max_len,
@@ -297,7 +297,11 @@ class ClipCapModel(nn.Module):
                 num_return_sequences=1,
                 logits_processor=LogitsProcessorList([self.logits_processor]),
                 top_k=len(self.tokenizer),
+                return_dict_in_generate=True,
+                output_scores = True
             )
+            generated = gen_dict['sequences']
+            scores = gen_dict['scores']
 
         indices = generated[:, prefix_len:] # generated (B, max_batch_len) tokens. After "."/13 padded with "<eos>/50256
         B, max_len_batch = indices.shape
