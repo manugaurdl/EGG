@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 WANDB = True
-WANDB_NAME = "cider_optim_b_greedy_t_1e-1_my_sample_maxlen_20"
+WANDB_NAME = "cider_optim_b_greedy_t_1e-1_my_sample_maxlen_20_lr_1e-6"
 DEBUG = False
 INIT_VAL = True
 CIDER_OPTIM = True

@@ -80,14 +80,14 @@ class ReinforceCaptionGame(nn.Module):
             # gt : aux_input
             # baseline --> mean vs greedy
             policy_cider = torch.tensor(self.loss(policy_captions, aux_input)).to(log_prob.device)
-                        
-            weighted_kl_div = self.kl_div_coeff * kl_div
+
+            # weighted_kl_div = self.kl_div_coeff * kl_div
             
             if not GREEDY_BASELINE:
                 # get policy cap first.
                 baseline = self.baseline.predict(policy_cider.detach())
 
-            reward = (policy_cider.detach() - baseline) + weighted_kl_div
+            reward = (policy_cider.detach() - baseline)# + weighted_kl_div
             reinforce_loss = -1*((reward * log_prob).mean())
             # import ipdb;ipdb.set_trace()
             if self.training and not GREEDY_BASELINE:

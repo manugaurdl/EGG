@@ -267,7 +267,7 @@ class ClipCapModel(nn.Module):
         if CIDER_OPTIM and self.training : 
             _,  log_probs, captions = self.sample(max_length = self.max_len, token_emb = prompts, model = self, temp = temp, 
                                                 method = method, stop_token = 13, tokenizer = self.tokenizer,sample_n = 1)
-            kl_div = 0
+            kl_div = torch.randn(1,2)
 
             # compute mask and message length
             max_k = captions.shape[-1]
@@ -303,7 +303,7 @@ class ClipCapModel(nn.Module):
 
             if CIDER_OPTIM and not greedy_baseline and self.training:
                 self.do_sample = True
-                temp = 1.0
+                temp = 0.1
             else:
                 temp = 1.0
             
