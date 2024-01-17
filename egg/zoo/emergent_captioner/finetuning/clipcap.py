@@ -338,13 +338,13 @@ class ClipCapModel(nn.Module):
             clean_up_tokenization_spaces=True,
         )
         # compute kl loss
-        kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
-        kl_div *= mask
-        kl_div = kl_div.sum(-1) / msg_lengths
-
+        # kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
+        # kl_div *= mask
+        # kl_div = kl_div.sum(-1) / msg_lengths
+        # kl_div = torch.randn
         self.do_sample = False
 
-        return decoded_captions, sampled_logprobs, kl_div
+        return decoded_captions, sampled_logprobs#, kl_div
 
     def maybe_patch_gpt(self, max_embeddings):
         if not getattr(self.gpt, "_patched", False):
@@ -407,8 +407,9 @@ class ClipCapSender(nn.Module):
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False):
         image_feats = self.clip_vit(images)
-        captions, log_probs, kl_div = self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline)
-        return captions, log_probs, kl_div
+        # captions, log_probs, kl_div = self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline)
+        captions, log_probs= self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline)
+        return captions, log_probs#, kl_div
 
     def named_parameters(self, prefix="", recurse: bool = True):
         return self.clipcap.named_parameters()

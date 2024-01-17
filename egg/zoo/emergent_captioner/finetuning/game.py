@@ -67,13 +67,14 @@ class ReinforceCaptionGame(nn.Module):
         CIDER_OPTIM = isinstance(self.loss, CiderReward)
         if CIDER_OPTIM:
             # get policy cap
-            policy_captions, log_prob, kl_div = self.sender(sender_input, aux_input, CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
-        
+            # policy_captions, log_prob, kl_div = self.sender(sender_input, aux_input, CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
+            policy_captions, log_prob = self.sender(sender_input, aux_input, CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
+
             #get greedy_cap
             if GREEDY_BASELINE:
                 self.eval()
                 with torch.no_grad():
-                    greedy_cap, _, _  = self.sender(sender_input, aux_input, False, GREEDY_BASELINE)
+                    greedy_cap, _ = self.sender(sender_input, aux_input, False, GREEDY_BASELINE)
                     baseline = torch.tensor(self.loss(greedy_cap, aux_input)).to(log_prob.device).detach()
                 self.train()
 
@@ -81,19 +82,19 @@ class ReinforceCaptionGame(nn.Module):
             # baseline --> mean vs greedy
             policy_cider = torch.tensor(self.loss(policy_captions, aux_input)).to(log_prob.device)
                         
-            weighted_kl_div = self.kl_div_coeff * kl_div
+            # weighted_kl_div = self.kl_div_coeff * kl_div
             
             if not GREEDY_BASELINE:
                 # get policy cap first.
                 baseline = self.baseline.predict(policy_cider.detach())
 
-            reward = (policy_cider.detach() - baseline) + weighted_kl_div
+            reward = (policy_cider.detach() - baseline) #+ weighted_kl_div
             reinforce_loss = -1*((reward * log_prob).mean())
             # import ipdb;ipdb.set_trace()
             if self.training and not GREEDY_BASELINE:
                 self.baseline.update(policy_cider)
 
-            aux_info = {'acc' : torch.randn(1,2), "kl_div" : kl_div}
+            aux_info = {'acc' : torch.randn(1,2)}
             
             logging_strategy = self.test_logging_strategy
 
