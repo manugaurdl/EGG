@@ -270,7 +270,7 @@ class ClipCapModel(nn.Module):
             temp = 1.0
         
         if self.training or greedy_baseline:
-            generated = self.gpt.generate(
+            gen_dict = self.gpt.generate(
                 input_ids,
                 do_sample=self.do_sample,
                 max_length=self.max_len,
@@ -278,8 +278,12 @@ class ClipCapModel(nn.Module):
                 num_return_sequences=1,
                 logits_processor=LogitsProcessorList([self.logits_processor]),
                 top_k=len(self.tokenizer),
-                temperature = temp
+                temperature = temp,
+                return_dict_in_generate=True,
+                output_scores = True
             )
+            generated = gen_dict['sequences']
+            scores = gen_dict['scores']
         else:
             # at test time we use beam search regardless of the decoding method
             # used at training time
@@ -296,28 +300,41 @@ class ClipCapModel(nn.Module):
             )
 
         indices = generated[:, prefix_len:] # generated (B, max_batch_len) tokens. After "."/13 padded with "<eos>/50256
-
-        # logits after generation bruh
-        suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd. 
-        inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
-        logits = self.gpt(inputs_embeds=inputs_embeds)
-        logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, max_batch_len, 55257) 
-        logits = logits/(temp if temp > 0 else 1.0)
-        logits = logits.log_softmax(-1)
+        B, max_len_batch = indices.shape
+        end_of_caption = indices == self.eos_token_id #50256 padding tokens
 
         # compute_mask and msg_lengths
-        max_k = indices.size(1) #len of longest generation in batch i.e 10
-        end_of_caption = indices == self.eos_token_id #50256 padding tokens
+        max_k = max_len_batch #len of longest generation in batch i.e 10
         extra_tokens = end_of_caption.cumsum(dim=1) > 0
         msg_lengths = max_k - (extra_tokens).sum(dim=1)
         # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
 
         mask = (extra_tokens == 0).float()
 
+        # ith score
+        # logit_zero = torch.nn.functional.log_softmax(scores[0], dim=-1)
+        # logprobs_zero = torch.gather(logit_zero,dim =-1, index = index_zero.unsqueeze(-1))
+        # parrallelize
+        scores = torch.cat(scores) #(B*max_batch_len)
+        logprobs = torch.nn.functional.log_softmax(scores, dim=-1)
+        sampled_logprobs = torch.gather(logprobs, dim =-1, index = indices.reshape(-1).unsqueeze(-1))
+        sampled_logprobs = sampled_logprobs.reshape(B, max_len_batch)
+        sampled_logprobs *= mask
+        sampled_logprobs = sampled_logprobs.sum(1) / msg_lengths
+
+        # logits after generation bruh
+        # suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd. 
+        # inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
+        # logits = self.gpt(inputs_embeds=inputs_embeds)
+        # logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, max_batch_len, 55257) 
+        # logits = logits/(temp if temp > 0 else 1.0)
+        # logits = logits.log_softmax(-1)
+
+
         # get logprob for each sampled token for all captions
-        log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
-        log_probs *= mask # everything after "." is zeroed
-        log_probs = log_probs.sum(1) / msg_lengths #averaged
+        # log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
+        # log_probs *= mask # everything after "." is zeroed
+        # log_probs = log_probs.sum(1) / msg_lengths #averaged
 
         # put captions in textual form
         decoded_captions = self.tokenizer.batch_decode(
@@ -332,7 +349,7 @@ class ClipCapModel(nn.Module):
 
         self.do_sample = False
 
-        return decoded_captions, log_probs, kl_div
+        return decoded_captions, sampled_logprobs, kl_div
 
     def maybe_patch_gpt(self, max_embeddings):
         if not getattr(self.gpt, "_patched", False):
