@@ -9,7 +9,7 @@ DEBUG = False
 INIT_VAL = False
 CIDER_OPTIM = True
 GREEDY_BASELINE = True
-
+SHUFFLE = True
 import wandb
 import time
 import os
@@ -67,8 +67,8 @@ def main(params):
         num_workers=opts.num_workers,
         seed=opts.random_seed,
     )
-    train_loader = wrapper.get_split(split="train",shuffle= False, debug = DEBUG, **data_kwargs)
-    val_loader = wrapper.get_split(split="val",shuffle = False, debug = DEBUG,  **data_kwargs)
+    train_loader = wrapper.get_split(split="train",shuffle= SHUFFLE, debug = DEBUG, **data_kwargs)
+    val_loader = wrapper.get_split(split="val",shuffle = SHUFFLE, debug = DEBUG,  **data_kwargs)
     game = build_game(opts)
     # print_grad_info(game)
 

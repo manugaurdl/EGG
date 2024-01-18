@@ -295,6 +295,7 @@ class Trainer:
             interactions.append(interaction)
             print(f"Loss : {optimized_loss.item():.5f}")
             print(f"Avg Loss : {(mean_loss.item())/n_batches:.5f}")
+            print(f"Reward : {reward}")
             train_log = { "Loss" :optimized_loss.item(),
                             "Reward" : reward,
                             "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"]

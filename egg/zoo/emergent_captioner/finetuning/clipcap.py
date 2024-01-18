@@ -315,9 +315,9 @@ class ClipCapModel(nn.Module):
 
         mask = (extra_tokens == 0).float()
         
-        scores = torch.cat(scores) #(B*max_batch_len)   # i1 i2 i1 i2 i1 i2 ..... 12 times
+        scores = torch.stack(scores)[:,:, : len(self.tokenizer)].permute(1,0,2) #(B*max_batch_len)   # i1 i2 i1 i2 i1 i2 ..... 12 times
         logprobs = torch.nn.functional.log_softmax(scores, dim=-1)
-        sampled_logprobs = torch.gather(logprobs, dim =-1, index = indices.t().reshape(-1).unsqueeze(-1)).reshape(-1, B).t()
+        sampled_logprobs = torch.gather(logprobs, dim =-1, index = indices.unsqueeze(-1)).squeeze(-1)
         sampled_logprobs *= mask
         sampled_logprobs = sampled_logprobs.sum(1) / msg_lengths
 
