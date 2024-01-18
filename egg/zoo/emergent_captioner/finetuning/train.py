@@ -14,7 +14,14 @@ import wandb
 import time
 import os
 import torch
-torch.manual_seed(0)
+import numpy as np
+import random
+seed = 42
+random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+np.random.seed(seed)
+torch.backends.cudnn.benchmark = True
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
