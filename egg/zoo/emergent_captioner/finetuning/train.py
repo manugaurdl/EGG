@@ -3,10 +3,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-WANDB = True
+WANDB = False
 WANDB_NAME = "cider_optim_b_greedy_t_1e-1_max_len_20_lr_1e-6_new_hf_sampler"
 DEBUG = False
-INIT_VAL = True
+INIT_VAL = False
 CIDER_OPTIM = True
 GREEDY_BASELINE = True
 
