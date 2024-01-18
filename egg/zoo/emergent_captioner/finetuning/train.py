@@ -14,6 +14,7 @@ import wandb
 import time
 import os
 import torch
+torch.manual_seed(0)
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -66,8 +67,8 @@ def main(params):
         num_workers=opts.num_workers,
         seed=opts.random_seed,
     )
-    train_loader = wrapper.get_split(split="train", debug = DEBUG, **data_kwargs)
-    val_loader = wrapper.get_split(split="val",debug = DEBUG,  **data_kwargs)
+    train_loader = wrapper.get_split(split="train",shuffle =False, debug = DEBUG, **data_kwargs)
+    val_loader = wrapper.get_split(split="val",shuffle =False, debug = DEBUG,  **data_kwargs)
 
     game = build_game(opts)
     # print_grad_info(game)
