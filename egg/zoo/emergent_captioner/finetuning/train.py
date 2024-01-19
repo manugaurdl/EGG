@@ -3,13 +3,12 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-WANDB = False
-WANDB_NAME = "cider_optim_b_greedy_t_1e-1_logsoftmax_hf_generate_max_len_20_lr_1e-6"
-DEBUG = True
-INIT_VAL = False
+WANDB = True
+WANDB_NAME = "rll_refactor_cider_max_len_20_no_dropout"
+DEBUG = False
+INIT_VAL = True
 CIDER_OPTIM = True
 GREEDY_BASELINE = True
-
 import wandb
 import time
 import os
@@ -21,7 +20,8 @@ random.seed(seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
-torch.backends.cudnn.benchmark = True
+
+
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -74,8 +74,8 @@ def main(params):
         num_workers=opts.num_workers,
         seed=opts.random_seed,
     )
-    train_loader = wrapper.get_split(split="train",shuffle =False, debug = DEBUG, **data_kwargs)
-    val_loader = wrapper.get_split(split="val",shuffle =False, debug = DEBUG,  **data_kwargs)
+    train_loader = wrapper.get_split(split="train",shuffle = not DEBUG, debug = DEBUG, **data_kwargs)
+    val_loader = wrapper.get_split(split="val",shuffle = not DEBUG, debug = DEBUG,  **data_kwargs)
 
     game = build_game(opts)
     # print_grad_info(game)
