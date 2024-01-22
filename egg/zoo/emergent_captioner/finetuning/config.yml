@@ -1,0 +1,19 @@
+WANDB : False
+WANDB_NAME : "rll_refactor_cider_max_len_20_no_dropout_bsz_16"
+DEBUG : True
+INIT_VAL : False
+CIDER_OPTIM : True
+GREEDY_BASELINE : True
+SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
+
+opts: 
+  baseline : mean
+  n_epochs : 5
+  batch_size : 500
+  lr : 1e-6
+  max_len : 20
+  checkpoint_freq : 4
+  dataset_dir : /home/manugaur/coco
+  clipcap_model_path : /home/manugaur/clipcap/coco_weights.pt
+  checkpoint_dir : /home/manugaur/EGG/checkpoints/temp
+    

@@ -2,19 +2,14 @@
 
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
-WANDB = True
-WANDB_NAME = "rll_refactor_cider_max_len_20_no_dropout"
-DEBUG = False
-INIT_VAL = True
-CIDER_OPTIM = True
-GREEDY_BASELINE = True
 import wandb
+import sys
 import time
 import os
 import torch
 import numpy as np
 import random
+from egg.zoo.emergent_captioner.finetuning.utils import get_config, get_cl_args
 seed = 42
 random.seed(seed)
 torch.manual_seed(seed)
@@ -49,7 +44,7 @@ def main(params):
 
     start = time.time()
     opts = get_common_opts(params=params)
-    if CIDER_OPTIM:
+    if config['CIDER_OPTIM']:
         opts.loss_type= "cider"
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
@@ -74,8 +69,8 @@ def main(params):
         num_workers=opts.num_workers,
         seed=opts.random_seed,
     )
-    train_loader = wrapper.get_split(split="train",shuffle = not DEBUG, debug = DEBUG, **data_kwargs)
-    val_loader = wrapper.get_split(split="val",shuffle = not DEBUG, debug = DEBUG,  **data_kwargs)
+    train_loader = wrapper.get_split(split="train",shuffle = not config['DEBUG'], debug = config['DEBUG'], **data_kwargs)
+    val_loader = wrapper.get_split(split="val",shuffle = not config['DEBUG'], debug = config['DEBUG'],  **data_kwargs)
 
     game = build_game(opts)
     # print_grad_info(game)
@@ -96,7 +91,7 @@ def main(params):
     if opts.captioner_model == "clipcap":
         trainer.game.sender.patch_model()
 
-    trainer.train(opts.n_epochs, WANDB, INIT_VAL, GREEDY_BASELINE, opts)
+    trainer.train(config, opts)
 
     # _, test_interaction, test_reward = trainer.eval(val_loader)
 
@@ -111,10 +106,12 @@ def main(params):
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     # torch.set_deterministic(True)
-    import sys
-    if WANDB:
-        wandb.init(entity= "manugaur", project="emergent_captioner")
-        wandb.run.name = WANDB_NAME
 
-    
-    main(sys.argv[1:])
+
+    config = get_config()
+
+    if config['WANDB']:
+        wandb.init(entity= "manugaur", project="emergent_captioner")
+        wandb.run.name = config['WANDB_NAME']
+    params = get_cl_args(config)
+    main(params)

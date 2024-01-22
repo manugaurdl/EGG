@@ -5,7 +5,8 @@
 
 import argparse
 from typing import Any, Dict, NamedTuple, Optional
-
+import os
+import yaml
 import torch
 from transformers import GPT2LMHeadModel, LogitsProcessor
 
@@ -97,26 +98,48 @@ class ModelSaver(Callback):
             opts=self.opts,
         )
 
-    def save_clipclap_model(self, epoch=""):
+    def save_clipclap_model(self, epoch="", model_name = None, SAVE_BEST_METRIC = None ):
+        # print(bdfaefndsjkfhnasdknfjk)
         if hasattr(self.trainer, "checkpoint_path"):
             if (
                 self.trainer.checkpoint_path
                 and self.trainer.distributed_context.is_leader
             ):
                 self.trainer.checkpoint_path.mkdir(exist_ok=True, parents=True)
-                model_name = f"clip_cap_model_{epoch if epoch else 'final'}.pt"
-
+                if model_name is None :
+                    model_name = f"clip_cap_model_e_{epoch if epoch else 'final'}.pt"
+                else:
+                    model_name  = f"{model_name}_e_{epoch if epoch else 'final'}.pt"
+                
+                if SAVE_BEST_METRIC:
+                    model_name = f"{model_name.split('_e_')[0]}_best.pt"
+                
                 torch.save(
                     self.get_checkpoint(),
                     self.trainer.checkpoint_path / model_name,
                 )
                 self.trainer.game.sender.patch_model()
 
-    def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int):
+    def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC: bool):
         self.epoch = epoch
         if self.opts.captioner_model == "clipcap":
-            self.save_clipclap_model(epoch=epoch)
+            self.save_clipclap_model(epoch=epoch, model_name = model_name, SAVE_BEST_METRIC = SAVE_BEST_METRIC)
 
-    def on_train_end(self):
+    def on_train_end(self, model_name : str):
         if self.opts.captioner_model == "clipcap":
-            self.save_clipclap_model()
+            self.save_clipclap_model(model_name = model_name)
+
+def get_config():
+    config_path = os.path.join(os.getcwd(),'egg/zoo/emergent_captioner/finetuning/config.yml')
+    with open(config_path) as f:
+        config = yaml.load(f,Loader=yaml.FullLoader)
+    
+    return config
+
+
+def get_cl_args(config):
+    params = []
+    for k,v in config['opts'].items():
+        params.append(f"--{k}")
+        params.append(f"{v}")
+    return params

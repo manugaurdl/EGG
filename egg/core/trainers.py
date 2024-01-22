@@ -314,7 +314,14 @@ class Trainer:
             wandb.log({"Avg Loss" : mean_loss.item()}, step = STEP)
         return mean_loss.item(), full_interaction
 
-    def train(self, n_epochs, WANDB, INIT_VAL, GREEDY_BASELINE, opts):
+    def train(self, config, opts):
+
+        n_epochs = config['opts']['n_epochs']
+        WANDB = config['WANDB']
+        INIT_VAL = config['INIT_VAL']
+        GREEDY_BASELINE = config['GREEDY_BASELINE']
+        SAVE_BEST_METRIC = config['SAVE_BEST_METRIC']
+        best_metric_score = 0
         global STEP
         for callback in self.callbacks:
             callback.on_train_begin(self)
@@ -359,8 +366,6 @@ class Trainer:
 
             train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE,opts)
 
-            for callback in self.callbacks:
-                callback.on_epoch_end(train_loss, train_interaction, epoch + 1)
 
             validation_loss = validation_interaction = None
             if (
@@ -382,7 +387,10 @@ class Trainer:
                                 }
 
                     if opts.loss_type != 'cider':
-                        val_log["VAL_ACC@1"]=  validation_interaction.aux['acc'].mean().item()
+                        metric =  validation_interaction.aux['acc'].mean().item()
+                        val_log["VAL_ACC@1"] = metric
+                    else:
+                        metric = summary["CIDEr"]
 
                     if WANDB:
                         wandb.log(val_log, step = STEP)
@@ -391,6 +399,14 @@ class Trainer:
                         callback.on_validation_end(
                             validation_loss, validation_interaction, epoch + 1
                         )
+            
+            
+            if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch % opts.checkpoint_freq==0): 
+                for callback in self.callbacks:
+                    callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB_NAME'], SAVE_BEST_METRIC)
+                     
+                if SAVE_BEST_METRIC:
+                    best_metric_score = metric
 
             if self.should_stop:
                 for callback in self.callbacks:
@@ -404,7 +420,7 @@ class Trainer:
                 break
 
         for callback in self.callbacks:
-            callback.on_train_end()
+            callback.on_train_end(config['WANDB_NAME'])
 
     def load(self, checkpoint: Checkpoint):
         self.game.load_state_dict(checkpoint.model_state_dict, strict=False)

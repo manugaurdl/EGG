@@ -34,7 +34,7 @@ class Callback:
     def on_train_begin(self, trainer_instance: "Trainer"):  # noqa: F821
         self.trainer = trainer_instance
 
-    def on_train_end(self):
+    def on_train_end(self, model_name):
         pass
 
     def on_early_stopping(
@@ -86,7 +86,7 @@ class ConsoleLogger(Callback):
     def on_validation_end(self, loss: float, logs: Interaction, epoch: int):
         self.aggregate_print(loss, logs, "test", epoch)
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
         if self.print_train_loss:
             self.aggregate_print(loss, logs, "train", epoch)
 
@@ -105,14 +105,14 @@ class TensorboardLogger(Callback):
                 tag=f"test/{k}", scalar_value=v.mean(), global_step=epoch
             )
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
         self.writer.add_scalar(tag="train/loss", scalar_value=loss, global_step=epoch)
         for k, v in logs.aux.items():
             self.writer.add_scalar(
                 tag=f"train/{k}", scalar_value=v.mean(), global_step=epoch
             )
 
-    def on_train_end(self):
+    def on_train_end(self, model_name):
         self.writer.close()
 
 
@@ -148,7 +148,7 @@ class WandbLogger(Callback):
         if is_training and self.trainer.distributed_context.is_leader:
             self.log_to_wandb({"batch_loss": loss}, commit=True)
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
         if self.trainer.distributed_context.is_leader:
             self.log_to_wandb({"train_loss": loss, "epoch": epoch}, commit=True)
 
@@ -170,7 +170,7 @@ class TemperatureUpdater(Callback):
         self.minimum = minimum
         self.update_frequency = update_frequency
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
         if epoch % self.update_frequency == 0:
             self.agent.temperature = max(
                 self.minimum, self.agent.temperature * self.decay
@@ -204,13 +204,13 @@ class CheckpointSaver(Callback):
         self.max_checkpoints = max_checkpoints
         self.epoch_counter = 0
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
         self.epoch_counter = epoch
         if self.checkpoint_freq > 0 and (epoch % self.checkpoint_freq == 0):
             filename = f"{self.prefix}_{epoch}" if self.prefix else str(epoch)
             self.save_checkpoint(filename=filename)
 
-    def on_train_end(self):
+    def on_train_end(self, model_name):
         self.save_checkpoint(
             filename=f"{self.prefix}_final" if self.prefix else "final"
         )
@@ -315,7 +315,7 @@ class InteractionSaver(Callback):
                     logs, "validation", epoch, rank, self.checkpoint_dir
                 )
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
         if epoch in self.train_epochs:
             if (
                 not self.aggregated_interaction
@@ -487,7 +487,7 @@ class ProgressBarLogger(Callback):
         self.progress.start_task(self.train_p)
         self.progress.update(self.train_p, visible=True)
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
         self.progress.stop_task(self.train_p)
         self.progress.update(self.train_p, visible=False)
 
