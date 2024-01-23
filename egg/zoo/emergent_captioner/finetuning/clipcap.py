@@ -265,10 +265,10 @@ class ClipCapModel(nn.Module):
 
         if CIDER_OPTIM and not greedy_baseline and self.training:
             self.do_sample = True
-            temp = 0.1
+            temp = 0.3
         else:
             temp = 1.0
-        
+        flag = False
         if self.training or greedy_baseline:
             generated = self.gpt.generate(
                 input_ids,
@@ -280,6 +280,7 @@ class ClipCapModel(nn.Module):
                 top_k=len(self.tokenizer),
                 temperature = temp
             )
+            
         else:
             # at test time we use beam search regardless of the decoding method
             # used at training time

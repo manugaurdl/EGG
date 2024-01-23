@@ -317,7 +317,7 @@ class Trainer:
     def train(self, config, opts):
 
         n_epochs = config['opts']['n_epochs']
-        WANDB = config['WANDB']
+        WANDB = config['WANDB']['logging']
         INIT_VAL = config['INIT_VAL']
         GREEDY_BASELINE = config['GREEDY_BASELINE']
         SAVE_BEST_METRIC = config['SAVE_BEST_METRIC']
@@ -403,7 +403,7 @@ class Trainer:
             
             if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch % opts.checkpoint_freq==0): 
                 for callback in self.callbacks:
-                    callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB_NAME'], SAVE_BEST_METRIC)
+                    callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], SAVE_BEST_METRIC)
                      
                 if SAVE_BEST_METRIC:
                     best_metric_score = metric

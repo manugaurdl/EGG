@@ -39,7 +39,6 @@ from egg.zoo.emergent_captioner.utils import (
 
 
 def main(params):
-    print("Inside main")
     # import ipdb;ipdb.set_trace()
 
     start = time.time()
@@ -110,8 +109,8 @@ if __name__ == "__main__":
 
     config = get_config()
 
-    if config['WANDB']:
-        wandb.init(entity= "manugaur", project="emergent_captioner")
-        wandb.run.name = config['WANDB_NAME']
+    if config['WANDB']['logging'] and (not config['WANDB']['sweep']) :
+        wandb.init(entity= config["WANDB"]["entity"], project=config["WANDB"]['project'], config = config)
+        wandb.run.name = config['WANDB']['run_name']
     params = get_cl_args(config)
     main(params)
