@@ -24,7 +24,7 @@ class CocoDataset:
         self.debug = debug
     def __len__(self):
         if self.debug:
-            return 1024
+            return 512
         else:
             return len(self.samples)
 
@@ -59,7 +59,8 @@ class CocoWrapper:
         for img_ann in annotations["images"]:
             file_path = self.dataset_dir / img_ann["filepath"] / img_ann["filename"]
             captions = [x["raw"] for x in img_ann["sentences"]]
-            img_id = img_ann["imgid"]
+            # img_id = img_ann["imgid"]
+            img_id = img_ann["cocoid"]
             split = img_ann["split"]
 
             split2samples[split].append((file_path, captions, img_id))

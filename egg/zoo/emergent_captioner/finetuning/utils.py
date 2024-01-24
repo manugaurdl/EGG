@@ -125,17 +125,33 @@ class ModelSaver(Callback):
         if self.opts.captioner_model == "clipcap":
             self.save_clipclap_model(epoch=epoch, model_name = model_name, SAVE_BEST_METRIC = SAVE_BEST_METRIC)
 
-    def on_train_end(self, model_name : str):
+    def on_train_end(self, epoch : int, model_name : str):
+
+        try:
+            isinstance(self.epoch, ModelSaver)
+        except:
+            self.epoch = epoch
+        
         if self.opts.captioner_model == "clipcap":
-            self.save_clipclap_model(model_name = model_name)
+            self.save_clipclap_model(epoch = self.epoch, model_name = model_name)
 
 def get_config():
     config_path = os.path.join(os.getcwd(),'egg/zoo/emergent_captioner/finetuning/config.yml')
     with open(config_path) as f:
         config = yaml.load(f,Loader=yaml.FullLoader)
-    
     return config
 
+def set_data_dir(config):
+    """
+    /home/manugaur —> /ssd_scratch/cvit/manu
+    """
+    jatayu  = os.path.isdir("/home/manugaur")
+    if not jatayu:
+        config['opts']['dataset_dir'] = os.path.join("/ssd_scratch/cvit/manu",config['opts']['dataset_dir'].split("manugaur/")[-1])
+        config['opts']['clipcap_model_path'] = os.path.join("/ssd_scratch/cvit/manu",config['opts']['clipcap_model_path'].split("manugaur/")[-1])
+        config['opts']['checkpoint_dir'] = os.path.join("/ssd_scratch/cvit/manu",config['opts']['checkpoint_dir'].split("manugaur/")[-1])
+        config['opts']['jatayu'] = jatayu
+    return config
 
 def get_cl_args(config):
     params = []

@@ -101,7 +101,11 @@ def get_common_opts(params):
         default=False,
         help="Run the game with pdb enabled",
     )
-
+    parser.add_argument(
+        "--jatayu",
+        default=False,
+        help="Identify which GPU code is being run on",
+    )
     get_data_opts(parser)
     get_captioner_opts(parser)
     get_game_opts(parser)

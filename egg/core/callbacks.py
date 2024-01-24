@@ -34,7 +34,7 @@ class Callback:
     def on_train_begin(self, trainer_instance: "Trainer"):  # noqa: F821
         self.trainer = trainer_instance
 
-    def on_train_end(self, model_name):
+    def on_train_end(self, epoch, model_name):
         pass
 
     def on_early_stopping(
@@ -210,7 +210,7 @@ class CheckpointSaver(Callback):
             filename = f"{self.prefix}_{epoch}" if self.prefix else str(epoch)
             self.save_checkpoint(filename=filename)
 
-    def on_train_end(self, model_name):
+    def on_train_end(self,  epoch, model_name):
         self.save_checkpoint(
             filename=f"{self.prefix}_final" if self.prefix else "final"
         )

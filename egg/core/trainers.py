@@ -6,6 +6,7 @@ STEP = 0
 import os
 import wandb
 import pathlib
+import pickle
 from typing import List, Optional
 from tqdm import tqdm
 try:
@@ -339,7 +340,9 @@ class Trainer:
                         callback.on_validation_begin(epoch + 1)
                     
                     validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE)
-                    
+                    val_preds = self.get_val_preds(validation_interaction)
+                    with open("/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/val_preds/temp.pkl", "wb") as f:
+                        pickle.dump(val_preds, f)
                     val_log = { "Val Loss" :validation_loss,
                                 "Val Reward" : val_reward,
                                 "CIDEr" : summary["CIDEr"],
@@ -420,7 +423,7 @@ class Trainer:
                 break
 
         for callback in self.callbacks:
-            callback.on_train_end(config['WANDB_NAME'])
+            callback.on_train_end(epoch + 1, config['WANDB']['run_name'])
 
     def load(self, checkpoint: Checkpoint):
         self.game.load_state_dict(checkpoint.model_state_dict, strict=False)
@@ -450,3 +453,9 @@ class Trainer:
 
         if latest_file is not None:
             self.load_from_checkpoint(latest_file)
+    
+    def get_val_preds(self, full_interaction):
+        preds = [j for i in full_interaction.message for j in i]
+        cocoids = [i.item() for i in full_interaction.aux_input['img_id']]
+        return dict(zip(cocoids, preds))
+        

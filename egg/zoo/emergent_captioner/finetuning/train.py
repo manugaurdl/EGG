@@ -9,7 +9,7 @@ import os
 import torch
 import numpy as np
 import random
-from egg.zoo.emergent_captioner.finetuning.utils import get_config, get_cl_args
+from egg.zoo.emergent_captioner.finetuning.utils import get_config, set_data_dir, get_cl_args
 seed = 42
 random.seed(seed)
 torch.manual_seed(seed)
@@ -43,6 +43,7 @@ def main(params):
 
     start = time.time()
     opts = get_common_opts(params=params)
+    opts.jatayu =  os.path.isdir("/home/manugaur")
     if config['CIDER_OPTIM']:
         opts.loss_type= "cider"
     store_job_and_task_id(opts)
@@ -59,8 +60,7 @@ def main(params):
         "flickr": FlickrWrapper,
     }
     # args
-    jatayu  = not os.path.isdir("/ssd_scratch/cvit")
-    wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir, jatayu)
+    wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir, opts.jatayu)
 
     data_kwargs = dict(
         batch_size=opts.batch_size,
@@ -106,11 +106,12 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     # torch.set_deterministic(True)
 
-
     config = get_config()
 
     if config['WANDB']['logging'] and (not config['WANDB']['sweep']) :
         wandb.init(entity= config["WANDB"]["entity"], project=config["WANDB"]['project'], config = config)
         wandb.run.name = config['WANDB']['run_name']
+    
+    config = set_data_dir(config)
     params = get_cl_args(config)
     main(params)
