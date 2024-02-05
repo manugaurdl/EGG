@@ -311,8 +311,6 @@ class Trainer:
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
-        if WANDB:
-            wandb.log({"Avg Loss" : mean_loss.item()}, step = STEP)
         return mean_loss.item(), full_interaction
 
     def train(self, config, opts):
@@ -328,7 +326,7 @@ class Trainer:
             callback.on_train_begin(self)
 
         for epoch in range(self.start_epoch, n_epochs):
-            
+            #INIT VAL
             if epoch ==0 and INIT_VAL:
                 validation_loss = validation_interaction = None
                 if (
@@ -340,9 +338,7 @@ class Trainer:
                         callback.on_validation_begin(epoch + 1)
                     
                     validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE)
-                    val_preds = self.get_val_preds(validation_interaction)
-                    with open("/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/val_preds/temp.pkl", "wb") as f:
-                        pickle.dump(val_preds, f)
+                    
                     val_log = { "Val Loss" :validation_loss,
                                 "Val Reward" : val_reward,
                                 "CIDEr" : summary["CIDEr"],
@@ -362,14 +358,17 @@ class Trainer:
                             validation_loss, validation_interaction, epoch + 1
                         )
  
-
+            # TRAIN EPOCH 
             print(f"Training epoch {epoch}")
             for callback in self.callbacks:
                 callback.on_epoch_begin(epoch + 1)
 
             train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE,opts)
+            if WANDB:
+                wandb.log({"Avg Loss" : train_loss,
+                            "epoch" : epoch + 1}, step = STEP)
 
-
+            
             validation_loss = validation_interaction = None
             if (
                 self.validation_data is not None
@@ -379,7 +378,7 @@ class Trainer:
                 for callback in self.callbacks:
                     callback.on_validation_begin(epoch + 1)
                     validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE)
-                    
+
                     val_log = { "Val Loss" :validation_loss,
                                 "Val Reward" : val_reward,
                                 "CIDEr" : summary["CIDEr"],
@@ -394,6 +393,13 @@ class Trainer:
                         val_log["VAL_ACC@1"] = metric
                     else:
                         metric = summary["CIDEr"]
+                    
+                    #VAL PREDS : best epoch preds are saved
+                    val_preds = self.get_val_preds(validation_interaction)
+                    if metric > best_metric_score:
+                        save_path = os.path.join(config["opts"]["checkpoint_dir"], config["WANDB"]["run_name"] + f"_val_preds_e_{epoch+1}.pkl")                                        
+                        with open(save_path, "wb") as f:
+                            pickle.dump(val_preds, f)
 
                     if WANDB:
                         wandb.log(val_log, step = STEP)
@@ -406,6 +412,11 @@ class Trainer:
             
             if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch % opts.checkpoint_freq==0): 
                 for callback in self.callbacks:
+                    """
+                    callbacks.ConsoleLogger: --> save_checkpoint --> 
+                    finetuning.utils.ModelSaver: save_clipcap_model > {run_name}_e/final/best.pt                   
+                    callbacks.CheckpointSaver:
+                    """
                     callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], SAVE_BEST_METRIC)
                      
                 if SAVE_BEST_METRIC:

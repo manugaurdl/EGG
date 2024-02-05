@@ -392,6 +392,10 @@ class ClipCapSender(nn.Module):
         )
         if clipcap_path is not None:
             print("| LOADED CLIPCAP MODEL")
+            # x = torch.load(clipcap_path)
+            # y = torch.load("/home/manugaur/EGG/checkpoints/cvpr_reproduce_acc/clipcap_cvpr_acc_final.pt")[1]
+            # state_dict = {k : y["sender.clipcap." + k]  for k in x.keys()}
+            # self.clipcap.load_state_dict(state_dict)
             self.clipcap.load_state_dict(torch.load(clipcap_path))
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False):

@@ -20,7 +20,6 @@ class MyCheckpoint(NamedTuple):
     optimizer_scheduler_state_dict: Optional[Dict[str, Any]]
     opts: argparse.ArgumentParser
 
-
 class KLRegularizer:
     def __init__(self, device=torch.device("cuda")):
         self.lm = GPT2LMHeadModel.from_pretrained("gpt2").to(device)
@@ -98,7 +97,7 @@ class ModelSaver(Callback):
             opts=self.opts,
         )
 
-    def save_clipclap_model(self, epoch="", model_name = None, SAVE_BEST_METRIC = None ):
+    def save_clipclap_model(self, epoch=None, model_name = None, SAVE_BEST_METRIC = None ):
         # print(bdfaefndsjkfhnasdknfjk)
         if hasattr(self.trainer, "checkpoint_path"):
             if (
@@ -112,7 +111,7 @@ class ModelSaver(Callback):
                     model_name  = f"{model_name}_e_{epoch if epoch else 'final'}.pt"
                 
                 if SAVE_BEST_METRIC:
-                    model_name = f"{model_name.split('_e_')[0]}_best.pt"
+                    model_name = f"{model_name.split('_e_')[0]}_best_{epoch if epoch else 'final'}.pt"
                 
                 torch.save(
                     self.get_checkpoint(),
@@ -133,7 +132,7 @@ class ModelSaver(Callback):
             self.epoch = epoch
         
         if self.opts.captioner_model == "clipcap":
-            self.save_clipclap_model(epoch = self.epoch, model_name = model_name)
+            self.save_clipclap_model(model_name = model_name)
 
 def get_config():
     config_path = os.path.join(os.getcwd(),'egg/zoo/emergent_captioner/finetuning/config.yml')
