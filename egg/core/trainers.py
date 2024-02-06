@@ -175,7 +175,7 @@ class Trainer:
         else:
             self.scaler = None
 
-    def eval(self, data=None, GREEDY_BASELINE = False):
+    def eval(self, data=None, GREEDY_BASELINE = False, train_method = None):
         global STEP
         mean_loss = 0.0
         interactions = []
@@ -189,7 +189,7 @@ class Trainer:
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
-                optimized_loss, interaction, reward = self.game(*batch)
+                optimized_loss, interaction, reward = self.game(*batch, train_method = train_method)
                 if (
                     self.distributed_context.is_distributed
                     and self.aggregate_interaction_logs
@@ -211,7 +211,7 @@ class Trainer:
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
         
-        img_ids = full_interaction.aux_input['img_id']
+        img_ids = full_interaction.aux_input['cocoid']
         captions = full_interaction.aux_input['captions']
         preds_per_batch = full_interaction.message
         bsz = len(preds_per_batch[0])
@@ -232,7 +232,7 @@ class Trainer:
         
         return mean_loss.item(), full_interaction, reward, summary
 
-    def train_epoch(self, WANDB, GREEDY_BASELINE, opts):
+    def train_epoch(self, WANDB, GREEDY_BASELINE, train_method,  opts):
         global STEP
         mean_loss = 0
         n_batches = 0
@@ -252,7 +252,7 @@ class Trainer:
 
             context = autocast() if self.scaler else nullcontext()
             with context:
-                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE)
+                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method)
                 
                 #not accumulating gradients currently
                 if self.update_freq > 1:
@@ -320,6 +320,7 @@ class Trainer:
         INIT_VAL = config['INIT_VAL']
         GREEDY_BASELINE = config['GREEDY_BASELINE']
         SAVE_BEST_METRIC = config['SAVE_BEST_METRIC']
+        train_method = config["train_method"]
         best_metric_score = 0
         global STEP
         for callback in self.callbacks:
@@ -337,7 +338,7 @@ class Trainer:
                     for callback in self.callbacks:
                         callback.on_validation_begin(epoch + 1)
                     
-                    validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE)
+                    validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
                     
                     val_log = { "Val Loss" :validation_loss,
                                 "Val Reward" : val_reward,
@@ -347,7 +348,11 @@ class Trainer:
                                 'METEOR': summary["METEOR"],
                                 "ROUGE_L" : summary['ROUGE_L']
                                 }
-                    if opts.loss_type != 'cider':
+                    if train_method == "mle":
+                        del val_log["Val Loss"]
+                        del val_log["Val Reward"]
+
+                    if opts.loss_type == 'discriminative':
                         val_log["VAL_ACC@1"]=  validation_interaction.aux['acc'].mean().item()
 
                     if WANDB:
@@ -363,7 +368,7 @@ class Trainer:
             for callback in self.callbacks:
                 callback.on_epoch_begin(epoch + 1)
 
-            train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE,opts)
+            train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE, train_method, opts)
             if WANDB:
                 wandb.log({"Avg Loss" : train_loss,
                             "epoch" : epoch + 1}, step = STEP)
@@ -377,7 +382,7 @@ class Trainer:
             ):
                 for callback in self.callbacks:
                     callback.on_validation_begin(epoch + 1)
-                    validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE)
+                    validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
 
                     val_log = { "Val Loss" :validation_loss,
                                 "Val Reward" : val_reward,
@@ -387,8 +392,11 @@ class Trainer:
                                 'METEOR': summary["METEOR"],
                                 "ROUGE_L" : summary['ROUGE_L']
                                 }
+                    if train_method == "mle":
+                        del val_log["Val Loss"]
+                        del val_log["Val Reward"]
 
-                    if opts.loss_type != 'cider':
+                    if opts.loss_type == 'discriminative':
                         metric =  validation_interaction.aux['acc'].mean().item()
                         val_log["VAL_ACC@1"] = metric
                     else:
@@ -397,7 +405,7 @@ class Trainer:
                     #VAL PREDS : best epoch preds are saved
                     val_preds = self.get_val_preds(validation_interaction)
                     if metric > best_metric_score:
-                        save_path = os.path.join(config["opts"]["checkpoint_dir"], config["WANDB"]["run_name"] + f"_val_preds_e_{epoch+1}.pkl")                                        
+                        save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds_e_{epoch+1}.pkl")                                        
                         with open(save_path, "wb") as f:
                             pickle.dump(val_preds, f)
 
@@ -467,6 +475,6 @@ class Trainer:
     
     def get_val_preds(self, full_interaction):
         preds = [j for i in full_interaction.message for j in i]
-        cocoids = [i.item() for i in full_interaction.aux_input['img_id']]
+        cocoids = [i.item() for i in full_interaction.aux_input['cocoid']]
         return dict(zip(cocoids, preds))
         

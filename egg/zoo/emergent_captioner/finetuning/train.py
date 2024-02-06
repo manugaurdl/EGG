@@ -43,9 +43,8 @@ def main(params):
 
     start = time.time()
     opts = get_common_opts(params=params)
-    opts.jatayu =  os.path.isdir("/home/manugaur")
-    if config['CIDER_OPTIM']:
-        opts.loss_type= "cider"
+    opts.jatayu = os.path.isdir("/home/manugaur")
+    opts.loss_type= config['train_method']
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
     # print(opts)
@@ -60,16 +59,23 @@ def main(params):
         "flickr": FlickrWrapper,
     }
     # args
-    wrapper = name2wrapper[opts.train_dataset](opts.dataset_dir, opts.jatayu)
-
+    wrapper = name2wrapper[opts.train_dataset](config["captions"], opts.dataset_dir, opts.jatayu)
     data_kwargs = dict(
         batch_size=opts.batch_size,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
         num_workers=opts.num_workers,
         seed=opts.random_seed,
+        debug = config['DEBUG'],
+        mle_train = config["train_method"] =="mle",
+        max_len_token = config["max_len_token"],
+        prefix_len = config["prefix_len"],
     )
-    train_loader = wrapper.get_split(split="train",shuffle = not config['DEBUG'], debug = config['DEBUG'], **data_kwargs)
-    val_loader = wrapper.get_split(split="val",shuffle = not config['DEBUG'], debug = config['DEBUG'],  **data_kwargs)
+    train_loader = wrapper.get_split(split="train", **data_kwargs)
+    val_loader = wrapper.get_split(split="val",**data_kwargs)
+    test_loader = wrapper.get_split(split="test", **data_kwargs)
+
+    # train_loader = wrapper.get_split(split="train",shuffle = not config['DEBUG'], debug = config['DEBUG'], **data_kwargs)
+    # val_loader = wrapper.get_split(split="val",shuffle = not config['DEBUG'], debug = config['DEBUG'],  **data_kwargs)
 
     game = build_game(opts)
     # print_grad_info(game)
@@ -80,7 +86,7 @@ def main(params):
         game=game,
         optimizer=optimizer,
         train_data=train_loader,
-        validation_data  =val_loader,
+        validation_data =val_loader,
         callbacks=[
             ConsoleLogger(as_json=True, print_train_loss=True),
             ModelSaver(opts),

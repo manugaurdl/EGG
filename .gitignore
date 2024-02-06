@@ -1,4 +1,5 @@
 # Byte-compiled / optimized / DLL files
+*.ipynb
 wandb/
 *.txt
 job_train.sh
@@ -6,6 +7,7 @@ job_train.sh
 dummy.txt
 __pycache__/
 *.py[cod]
+val_preds/
 *$py.class
 checkpoints/
 # vim swap files

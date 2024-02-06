@@ -1,18 +1,21 @@
 DEBUG : True
-INIT_VAL : False
-CIDER_OPTIM : True
-GREEDY_BASELINE : True
+INIT_VAL : True
+GREEDY_BASELINE : False
 SAVE_BEST_METRIC : False # to save nothing : = False and checkpoint_freq = 0
+captions : "coco" #coco, mistral, blip_holistic
+train_method : "mle" # (discriminative, cider, mle)
+prefix_len : 10
+max_len_token : 40
 
 opts: 
   baseline : mean
-  n_epochs : 5
-  batch_size : 256  
+  n_epochs : 1
+  batch_size : 2 
   lr : 1e-6
   max_len : 20
   checkpoint_freq : 1
   dataset_dir : /home/manugaur/coco
-  clipcap_model_path : /home/manugaur/clipcap/coco_weights.pt
+  clipcap_model_path : /home/manugaur/official_clipcap/coco_weights.pt
   checkpoint_dir : /home/manugaur/EGG/checkpoints/temp
     
 WANDB :
@@ -23,3 +26,4 @@ WANDB :
   entity : "manugaur"
   project : "emergent_captioner"
   run_name : "dummy_dum_dum"
+

@@ -3,17 +3,17 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-
 from typing import Callable
 import wandb
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from egg.core.baselines import MeanBaseline, NoBaseline
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.emergent_captioner.finetuning.blip import BlipSender
 from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender
-from egg.zoo.emergent_captioner.finetuning.losses import get_loss, CiderReward
+from egg.zoo.emergent_captioner.finetuning.losses import get_loss, CiderReward, DiscriminativeLoss
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
 
 
@@ -51,7 +51,7 @@ class ReinforceCaptionGame(nn.Module):
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
 
-    def forward(self, sender_input, labels, receiver_input=None, aux_input=None, GREEDY_BASELINE = False):
+    def forward(self, sender_input, labels,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, prefix_len = 10):
         """
         receiver : clip
         sender : clip VIT + clipcap model
@@ -108,7 +108,7 @@ class ReinforceCaptionGame(nn.Module):
                 aux=aux_info,
                 )
         
-        else:
+        elif isinstance(self.loss, DiscriminativeLoss):
             captions, log_prob, kl_div = self.sender(sender_input, aux_input) # logprob : (B) --> only one logprob per caption (averaged over all words)
 
             with torch.no_grad():
@@ -138,7 +138,60 @@ class ReinforceCaptionGame(nn.Module):
                 message_length=None,
                 aux=aux_info,
             )
-        
+
+        else:
+            outputs = self.sender(sender_input, aux_input, train_method= train_method)
+            if self.training:
+                targets = aux_input['tokens'].view(-1, aux_input["tokens"].shape[-1])
+                mask = aux_input['mask'].view(-1, aux_input["mask"].shape[-1])
+                # targets, mask = targets.to(device), mask.to(device)
+                logits = outputs.logits[:, prefix_len - 1: -1]
+                loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
+                # probs = torch.nn.functional.softmax(logits, dim=-1)
+                # preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1) # preds is flattened out --> (B*max_cap_len , 1)
+                baseline = self.baseline.predict(loss.detach())
+                self.baseline.update(loss)
+            else:
+                val_captions, log_prob, kl_div = outputs
+                aux_info = {"kl_div" :kl_div}
+
+                logging_strategy = (
+                    self.train_logging_strategy if self.training else self.test_logging_strategy
+                )
+                interaction = logging_strategy.filtered_interaction(
+                    sender_input=sender_input,
+                    labels=labels,
+                    receiver_input=receiver_input,
+                    aux_input=aux_input,
+                    message=val_captions,
+                    receiver_output=None,
+                    message_length=None,
+                    aux=aux_info,
+                )
+                return torch.randn(1), interaction, torch.randn(1)
+
+
+
+
+            # weighted_kl_div = self.kl_div_coeff * kl_div
+            # aux_info["kl_div"] = weighted_kl_div
+            aux_info = {}
+            captions = []
+            logging_strategy = (
+                self.train_logging_strategy if self.training else self.test_logging_strategy
+            )
+            interaction = logging_strategy.filtered_interaction(
+                sender_input=sender_input,
+                labels=labels,
+                receiver_input=receiver_input,
+                aux_input=aux_input,
+                message=captions,
+                receiver_output=None,
+                message_length=None,
+                aux=aux_info,
+            )
+            
+            return loss, interaction, loss.item()
 
         return reinforce_loss.mean(), interaction, reward.mean().item()
 

@@ -8,25 +8,77 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable
-
+import pickle
 import torch
+import json
 import torch.distributed as dist
 from PIL import Image
-
+from transformers import GPT2Tokenizer
+from tqdm import tqdm
 from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
 
+def open_pickle(path: str):
+    with open(path, "rb") as f:
+        file = pickle.load(f)
+    return file 
 
 class CocoDataset:
-    def __init__(self, root, samples, transform, debug):
+    def __init__(self, root, samples, mle_train, split, max_len_token, prefix_len, transform, debug):
         self.root = root
         self.samples = samples
         self.transform = transform
         self.debug = debug
+        self.split = split
+        self.mle_train = mle_train
+        self.max_len_token = max_len_token
+        self.prefix_len = prefix_len
+        if self.mle_train:
+            self.path2tokens = os.path.join(root, f"tokenized_caps/{self.split}")
+            # self.id2tokens = torch.load
+            pass
     def __len__(self):
         if self.debug:
             return 256
         else:
             return len(self.samples)
+    
+    def pad(self,tokens):
+                     
+        padding = self.max_len_token - tokens.shape[-1]
+
+        if padding>0:
+            pad = torch.zeros(padding)
+            pad = pad.masked_fill(pad ==0, -1) 
+            tokens = torch.cat((tokens, pad)).int() # tokens is padded with -1.
+
+            # ### padded tokens replace the tokens. Here the padding is done by -1. But the tokens returned by the method have padding with 0.
+            # if not self.lazy_load:
+            #     self.tokenized_captions[idx][cap_idx] = tokens
+        else:
+            # if caption > max_len, truncate it 
+            tokens = tokens[:self.max_len_token]
+            # if not self.lazy_load:
+            #     self.tokenized_captions[idx][cap_idx] = tokens
+            
+        mask = tokens.ge(0) #True for indices > 0 i,e padded indices = False
+        tokens[~mask] =0  # padding now done with 0
+        mask = torch.cat((torch.ones(self.prefix_len),mask)) 
+        
+        return (tokens, mask)
+
+
+    def get_tokens(self,cocoid):
+        path =  f"{self.path2tokens}/{cocoid}"
+        # compare with calling self.pad 2 times with list comprehension and stack
+        # compare with storing all 5 captions as single tensor, with padding as -1
+        tokens = []
+        masks = []
+        for i in range(5):
+            t, m = self.pad(torch.load(path + f"_{i}.pt"))
+            tokens.append(t)
+            masks.append(m)
+
+        return torch.stack(tokens), torch.stack(masks)
 
     def __getitem__(self, idx):
         file_path, captions, image_id = self.samples[idx]
@@ -34,36 +86,74 @@ class CocoDataset:
 
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
         sender_input, recv_input = self.transform(image)
-
-        aux = {"img_id": torch.tensor([image_id]), "captions": captions[:5]}
+        if self.mle_train:
+            padded_tokens, mask = self.get_tokens(image_id)
+            aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:5], "tokens": padded_tokens, "mask" : mask}
+        else:
+            aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:5]}
 
         return sender_input, torch.tensor([idx]), recv_input, aux
 
 
 class CocoWrapper:
-    def __init__(self, dataset_dir: str = None, jatayu: bool = False):
+
+    def __init__(self, captions_type : bool, dataset_dir: str = None, jatayu: bool = False):
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
         self.dataset_dir = Path(dataset_dir)
-
+        self.captions_type = captions_type
+        if self.captions_type != "coco":
+            self.id2caption = open_pickle(os.path.join(dataset_dir, f"synthetic_data/cocoid2caption_{self.captions_type}.pkl"))
         self.split2samples = self._load_splits(jatayu)
+        self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+
+    def tokenize(self,split):
+        """
+        self.split2samples[split] : list of [img_path, list_of_caps, cocoid]
+        """
+
+        self.all_len = []
+        save_dir = os.path.join(self.dataset_dir, f"tokenized_caps/{split}/")
+        if not os.path.isdir(save_dir) or len(os.listdir(save_dir))<1000:
+            print(f"tokenizing {split} captions...")
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir)    
+            for instance in tqdm(self.split2samples[split], total = len(self.split2samples[split])):
+                cocoid = instance[2]
+                captions = instance[1]
+                if isinstance(captions, tuple) or isinstance(captions, list):
+                    for idx, cap in enumerate(captions):
+                        token = torch.tensor(self.tokenizer.encode(cap),dtype=torch.int)
+                        torch.save(token, os.path.join(save_dir, f"{cocoid}_{idx}.pt"))
+                    # tokens = [torch.tensor(self.tokenizer.encode(cap),dtype=torch.int) for cap in caption]
+                        self.all_len.append(token.shape[-1])
+            with open(os.path.join(self.dataset_dir, f"tokenized_caps/{split}/all_len.json"), "w") as f:
+                json.dump(self.all_len, f)
+
+        else:
+            print(print(f"tokenized {split} captions exist"))
 
     def _load_splits(self, jatayu):
         if jatayu:
             path2ann = "/home/manugaur/img_cap_self_retrieval/data/annotations/dataset_coco.json"
         else:
             path2ann = "/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/annotations/dataset_coco.json"
+
         with open(path2ann) as f:
             annotations = json.load(f)
         split2samples = defaultdict(list)
+        
         for img_ann in annotations["images"]:
             file_path = self.dataset_dir / img_ann["filepath"] / img_ann["filename"]
-            captions = [x["raw"] for x in img_ann["sentences"]]
+            cocoid = img_ann["cocoid"]
+            if self.captions_type =="coco":
+                captions = [x["raw"] for x in img_ann["sentences"]]
+            else:
+                captions = [self.id2caption[cocoid].split("caption: ")[-1]]
             # img_id = img_ann["imgid"]
-            img_id = img_ann["cocoid"]
             split = img_ann["split"]
 
-            split2samples[split].append((file_path, captions, img_id))
+            split2samples[split].append((file_path, captions, cocoid))
         if "restval" in split2samples:
             split2samples["train"] += split2samples["restval"]
 
@@ -76,16 +166,19 @@ class CocoWrapper:
         split: str,
         debug : bool,
         batch_size: int,
+        mle_train : bool,
+        max_len_token : int,
+        prefix_len : int,
         transform: Callable,
         num_workers: int = 8,
-        shuffle: bool = None,
         seed: int = 111,
     ):
-
+        self.tokenize(split)
+        shuffle = not debug
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
 
-        ds = CocoDataset(self.dataset_dir, samples, transform=transform, debug = debug)
+        ds = CocoDataset(self.dataset_dir, samples, mle_train, split, max_len_token, prefix_len,transform=transform, debug = debug)
 
         sampler = None
         if dist.is_initialized():

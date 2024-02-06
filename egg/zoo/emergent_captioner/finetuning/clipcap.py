@@ -251,87 +251,100 @@ class ClipCapModel(nn.Module):
 
         self.kl_regularizer = KLRegularizer()
 
-    def forward(self, image_feats, aux_input=None, CIDER_OPTIM = False, greedy_baseline = False):
-        prompts = self.clip_project(image_feats) #16,7680
-        prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1) # 16,10,768
+    def forward(self, image_feats, aux_input=None, CIDER_OPTIM = False, greedy_baseline = False, train_method = None):
+        if train_method == "mle" and self.training: 
+            prompts = self.clip_project(image_feats) #16,7680
+            prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1) # 16,10,768
 
-        bsz, prefix_len, h_dim = prompts.shape
-
-        prompts_flat = prompts.view(-1, prompts.size(-1)) #160,768
-        start = len(self.tokenizer) #50257
-        end = start + (bsz * prefix_len) # 50417 as prefix len = 10 and bsz = 16
-        input_ids = torch.arange(start, end).view(*prompts.shape[:2]).to(prompts.device)
-        self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat #add prefix tokens for batch images to GPT lookup table
-
-        if CIDER_OPTIM and not greedy_baseline and self.training:
-            self.do_sample = True
-            temp = 0.3
+            bsz, prefix_len, h_dim = prompts.shape
+            tokens_flat = aux_input['tokens'].view(-1,aux_input['tokens'].shape[-1])
+            token_emb = self.gpt.transformer.wte(tokens_flat) #B*5, 40 , 768
+            gpt_input = torch.cat((token_emb, prompts), dim = 1) # B*5, 50, 768
+            mask = aux_input['mask'].view(-1, aux_input['mask'].shape[-1]) # B*5, 50
+            out = self.gpt(inputs_embeds = gpt_input, attention_mask = mask)
+            return out
+        
         else:
-            temp = 1.0
-        flag = False
-        if self.training or greedy_baseline:
-            generated = self.gpt.generate(
-                input_ids,
-                do_sample=self.do_sample,
-                max_length=self.max_len,
-                num_beams=self.beam_size,
-                num_return_sequences=1,
-                logits_processor=LogitsProcessorList([self.logits_processor]),
-                top_k=len(self.tokenizer),
-                temperature = temp
+            prompts = self.clip_project(image_feats) #16,7680
+            prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1) # 16,10,768
+
+            bsz, prefix_len, h_dim = prompts.shape
+
+            prompts_flat = prompts.view(-1, prompts.size(-1)) #B*10,768
+            start = len(self.tokenizer) #50257
+            end = start + (bsz * prefix_len) # 50417 as prefix len = 10 and bsz = 16
+            input_ids = torch.arange(start, end).view(*prompts.shape[:2]).to(prompts.device)
+            self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat #add prefix tokens for batch images to GPT lookup table
+
+            if CIDER_OPTIM and not greedy_baseline and self.training:
+                self.do_sample = True
+                temp = 0.3
+            else:
+                temp = 1.0
+            flag = False
+            if self.training or greedy_baseline:
+                generated = self.gpt.generate(
+                    input_ids,
+                    do_sample=self.do_sample,
+                    max_length=self.max_len,
+                    num_beams=self.beam_size,
+                    num_return_sequences=1,
+                    logits_processor=LogitsProcessorList([self.logits_processor]),
+                    top_k=len(self.tokenizer),
+                    temperature = temp
+                )
+                
+            else:
+                # at test time we use beam search regardless of the decoding method
+                # used at training time
+                print("BEAM SEARCH GENERATION")
+
+                generated = self.gpt.generate(
+                    input_ids,
+                    do_sample=False,
+                    max_length=self.max_len,
+                    num_beams=5,
+                    num_return_sequences=1,
+                    logits_processor=LogitsProcessorList([self.logits_processor]),
+                    top_k=len(self.tokenizer),
+                )
+
+            indices = generated[:, prefix_len:] # generated (B, max_batch_len) tokens. After "."/13 padded with "<eos>/50256
+
+            # logits after generation bruh
+            suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd. 
+            inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
+            logits = self.gpt(inputs_embeds=inputs_embeds)
+            logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, max_batch_len, 55257) 
+            logits = logits/(temp if temp > 0 else 1.0)
+            logits = logits.log_softmax(-1)
+
+            # compute_mask and msg_lengths
+            max_k = indices.size(1) #len of longest generation in batch i.e 10
+            end_of_caption = indices == self.eos_token_id #50256 padding tokens
+            extra_tokens = end_of_caption.cumsum(dim=1) > 0
+            msg_lengths = max_k - (extra_tokens).sum(dim=1)
+            # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
+
+            mask = (extra_tokens == 0).float()
+
+            # get logprob for each sampled token for all captions
+            log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
+            log_probs *= mask # everything after "." is zeroed
+            log_probs = log_probs.sum(1) / msg_lengths #averaged
+
+            # put captions in textual form
+            decoded_captions = self.tokenizer.batch_decode(
+                indices,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True,
             )
-            
-        else:
-            # at test time we use beam search regardless of the decoding method
-            # used at training time
-            print("BEAM SEARCH GENERATION")
+            # compute kl loss
+            kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
+            kl_div *= mask
+            kl_div = kl_div.sum(-1) / msg_lengths
 
-            generated = self.gpt.generate(
-                input_ids,
-                do_sample=False,
-                max_length=self.max_len,
-                num_beams=5,
-                num_return_sequences=1,
-                logits_processor=LogitsProcessorList([self.logits_processor]),
-                top_k=len(self.tokenizer),
-            )
-
-        indices = generated[:, prefix_len:] # generated (B, max_batch_len) tokens. After "."/13 padded with "<eos>/50256
-
-        # logits after generation bruh
-        suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd. 
-        inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
-        logits = self.gpt(inputs_embeds=inputs_embeds)
-        logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, max_batch_len, 55257) 
-        logits = logits/(temp if temp > 0 else 1.0)
-        logits = logits.log_softmax(-1)
-
-        # compute_mask and msg_lengths
-        max_k = indices.size(1) #len of longest generation in batch i.e 10
-        end_of_caption = indices == self.eos_token_id #50256 padding tokens
-        extra_tokens = end_of_caption.cumsum(dim=1) > 0
-        msg_lengths = max_k - (extra_tokens).sum(dim=1)
-        # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
-
-        mask = (extra_tokens == 0).float()
-
-        # get logprob for each sampled token for all captions
-        log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
-        log_probs *= mask # everything after "." is zeroed
-        log_probs = log_probs.sum(1) / msg_lengths #averaged
-
-        # put captions in textual form
-        decoded_captions = self.tokenizer.batch_decode(
-            indices,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=True,
-        )
-        # compute kl loss
-        kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
-        kl_div *= mask
-        kl_div = kl_div.sum(-1) / msg_lengths
-
-        self.do_sample = False
+            self.do_sample = False
 
         return decoded_captions, log_probs, kl_div
 
@@ -398,10 +411,29 @@ class ClipCapSender(nn.Module):
             # self.clipcap.load_state_dict(state_dict)
             self.clipcap.load_state_dict(torch.load(clipcap_path))
 
-    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False):
+    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
         image_feats = self.clip_vit(images)
-        captions, log_probs, kl_div = self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline)
-        return captions, log_probs, kl_div
+        if train_method == "mle":
+            if self.training:
+                image_feats = self.repeat_tensors(aux_input['tokens'].shape[1], image_feats)
+            return self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline, train_method)
+
+        else:
+            captions, log_probs, kl_div = self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline, train_method)
+            return captions, log_probs, kl_div
+
+    def repeat_tensors(self, n, x):
+        """
+        For a tensor of size Bx..., we repeat it n times, and make it Bnx...
+        For collections, do nested repeat
+        """
+        if torch.is_tensor(x):
+            x = x.unsqueeze(1) # Bx1x...
+            x = x.expand(-1, n, *([-1]*len(x.shape[2:]))) # Bxnx...
+            x = x.reshape(x.shape[0]*n, *x.shape[2:]) # Bnx...
+        elif type(x) is list or type(x) is tuple:
+            x = [repeat_tensors(n, _) for _ in x]
+        return x
 
     def named_parameters(self, prefix="", recurse: bool = True):
         return self.clipcap.named_parameters()
