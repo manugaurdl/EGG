@@ -52,8 +52,8 @@ def get_captioner_opts(parser):
 
     # Clipcap
     group.add_argument(
-        "--clipcap_model_path",
-        default="/private/home/rdessi/EGG/egg/zoo/emergent_captioner/clipclap_models/conceptual_weights.pt",
+        "--mle_model_path"
+        # default="/private/home/rdessi/EGG/egg/zoo/emergent_captioner/clipclap_models/conceptual_weights.pt",
     )
     group.add_argument(
         "--sender_clip_model",

@@ -94,7 +94,7 @@ def main(params):
         debug=opts.debug,
     )
     if opts.captioner_model == "clipcap":
-        trainer.game.sender.patch_model()
+        trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
     trainer.train(config, opts)
 

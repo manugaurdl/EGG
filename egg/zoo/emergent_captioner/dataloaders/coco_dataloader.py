@@ -9,6 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Callable
 import pickle
+import time
 import torch
 import json
 import torch.distributed as dist
@@ -23,7 +24,7 @@ def open_pickle(path: str):
     return file 
 
 class CocoDataset:
-    def __init__(self, root, samples, mle_train, split, max_len_token, prefix_len, transform, debug):
+    def __init__(self, root, samples, mle_train, split,captions_type, max_len_token, prefix_len, transform, debug):
         self.root = root
         self.samples = samples
         self.transform = transform
@@ -32,8 +33,9 @@ class CocoDataset:
         self.mle_train = mle_train
         self.max_len_token = max_len_token
         self.prefix_len = prefix_len
+        self.captions_type = captions_type
         if self.mle_train:
-            self.path2tokens = os.path.join(root, f"tokenized_caps/{self.split}")
+            self.path2tokens = os.path.join(root, f"tokenized_caps/{self.captions_type}/{self.split}")
             # self.id2tokens = torch.load
             pass
     def __len__(self):
@@ -98,14 +100,16 @@ class CocoDataset:
 class CocoWrapper:
 
     def __init__(self, captions_type : bool, dataset_dir: str = None, jatayu: bool = False):
+        self.num_omitted_ids = 0
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
         self.dataset_dir = Path(dataset_dir)
         self.captions_type = captions_type
         if self.captions_type != "coco":
-            self.id2caption = open_pickle(os.path.join(dataset_dir, f"synthetic_data/cocoid2caption_{self.captions_type}.pkl"))
+            self.id2caption = open_pickle(os.path.join(dataset_dir, f"synthetic_data/cocoid2caption_{self.captions_type}_preproc.pkl"))
         self.split2samples = self._load_splits(jatayu)
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
 
     def tokenize(self,split):
         """
@@ -113,7 +117,7 @@ class CocoWrapper:
         """
 
         self.all_len = []
-        save_dir = os.path.join(self.dataset_dir, f"tokenized_caps/{split}/")
+        save_dir = os.path.join(self.dataset_dir, f"tokenized_caps/{self.captions_type}/{split}/")
         if not os.path.isdir(save_dir) or len(os.listdir(save_dir))<1000:
             print(f"tokenizing {split} captions...")
             if not os.path.isdir(save_dir):
@@ -127,7 +131,7 @@ class CocoWrapper:
                         torch.save(token, os.path.join(save_dir, f"{cocoid}_{idx}.pt"))
                     # tokens = [torch.tensor(self.tokenizer.encode(cap),dtype=torch.int) for cap in caption]
                         self.all_len.append(token.shape[-1])
-            with open(os.path.join(self.dataset_dir, f"tokenized_caps/{split}/all_len.json"), "w") as f:
+            with open(os.path.join(self.dataset_dir, f"tokenized_caps/{self.captions_type}/{split}/all_len.json"), "w") as f:
                 json.dump(self.all_len, f)
 
         else:
@@ -146,10 +150,13 @@ class CocoWrapper:
         for img_ann in annotations["images"]:
             file_path = self.dataset_dir / img_ann["filepath"] / img_ann["filename"]
             cocoid = img_ann["cocoid"]
-            if self.captions_type =="coco":
-                captions = [x["raw"] for x in img_ann["sentences"]]
-            else:
-                captions = [self.id2caption[cocoid].split("caption: ")[-1]]
+            try:
+                if self.captions_type =="coco":
+                    captions = [x["raw"] for x in img_ann["sentences"]]
+                else:
+                    captions = [self.id2caption[cocoid].split("caption: ")[-1]]
+            except:
+                self.num_omitted_ids+=1
             # img_id = img_ann["imgid"]
             split = img_ann["split"]
 
@@ -178,7 +185,7 @@ class CocoWrapper:
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
 
-        ds = CocoDataset(self.dataset_dir, samples, mle_train, split, max_len_token, prefix_len,transform=transform, debug = debug)
+        ds = CocoDataset(self.dataset_dir, samples, mle_train, split, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
 
         sampler = None
         if dist.is_initialized():

@@ -200,7 +200,7 @@ def build_game(opts):
     if opts.captioner_model.lower() == "clipcap":
         sender = ClipCapSender(
             clip_model=opts.sender_clip_model,
-            clipcap_path=opts.clipcap_model_path,
+            clipcap_path=opts.mle_model_path,
             do_sample=opts.do_sample,
             beam_size=opts.beam_size,
             max_len=opts.max_len,

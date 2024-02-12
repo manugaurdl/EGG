@@ -447,8 +447,8 @@ class ClipCapSender(nn.Module):
         self.clipcap.train(mode)
         return self
 
-    def patch_model(self, batch_size: int = 500, nb_prefix_tokens: int = 10):
-        self.clipcap.maybe_patch_gpt(batch_size * nb_prefix_tokens)
+    def patch_model(self, batch_size: int = 500, prefix_len: int = 10):
+        self.clipcap.maybe_patch_gpt(batch_size * prefix_len)
 
     def unpatch_model(self):
         self.clipcap.maybe_unpatch_gpt()
