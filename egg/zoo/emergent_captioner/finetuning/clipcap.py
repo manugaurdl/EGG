@@ -257,9 +257,9 @@ class ClipCapModel(nn.Module):
             prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1) # 16,10,768
 
             bsz, prefix_len, h_dim = prompts.shape
-            tokens_flat = aux_input['tokens'].view(-1,aux_input['tokens'].shape[-1])
+            tokens_flat = aux_input['tokens'].view(-1,aux_input['tokens'].shape[-1]) # B*5, 40
             token_emb = self.gpt.transformer.wte(tokens_flat) #B*5, 40 , 768
-            gpt_input = torch.cat((token_emb, prompts), dim = 1) # B*5, 50, 768
+            gpt_input = torch.cat((prompts, token_emb), dim = 1) # B*5, 50, 768
             mask = aux_input['mask'].view(-1, aux_input['mask'].shape[-1]) # B*5, 50
             out = self.gpt(inputs_embeds = gpt_input, attention_mask = mask)
             return out
@@ -382,6 +382,7 @@ class ClipCapSender(nn.Module):
         self,
         clip_model: str,
         clipcap_path: str,
+        train_method : str,
         do_sample: bool = False,
         beam_size: int = 5,
         max_len: int = 20,
@@ -403,7 +404,7 @@ class ClipCapSender(nn.Module):
             beam_size=beam_size,
             max_len=max_len,
         )
-        if clipcap_path is not None:
+        if train_method != "mle":
             print("| LOADED CLIPCAP MODEL")
             # x = torch.load(clipcap_path)
             # y = torch.load("/home/manugaur/EGG/checkpoints/cvpr_reproduce_acc/clipcap_cvpr_acc_final.pt")[1]
@@ -415,7 +416,7 @@ class ClipCapSender(nn.Module):
         image_feats = self.clip_vit(images)
         if train_method == "mle":
             if self.training:
-                image_feats = self.repeat_tensors(aux_input['tokens'].shape[1], image_feats)
+                image_feats = self.repeat_tensors(aux_input['tokens'].shape[1], image_feats) #ABC --> AAA..BBB..CCC..
             return self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline, train_method)
 
         else:

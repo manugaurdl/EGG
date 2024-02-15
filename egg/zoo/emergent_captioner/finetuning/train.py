@@ -9,14 +9,8 @@ import os
 import torch
 import numpy as np
 import random
+from transformers import get_linear_schedule_with_warmup
 from egg.zoo.emergent_captioner.finetuning.utils import get_config, set_data_dir, get_cl_args
-seed = 42
-random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
-np.random.seed(seed)
-
-
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -37,6 +31,11 @@ from egg.zoo.emergent_captioner.utils import (
     store_job_and_task_id,
 )
 
+seed = 42
+random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+np.random.seed(seed)
 
 def main(params):
     # import ipdb;ipdb.set_trace()
@@ -59,7 +58,7 @@ def main(params):
         "flickr": FlickrWrapper,
     }
     # args
-    wrapper = name2wrapper[opts.train_dataset](config["captions"], opts.dataset_dir, opts.jatayu)
+    wrapper = name2wrapper[opts.train_dataset](config["captions_type"], opts.dataset_dir, opts.jatayu)
     data_kwargs = dict(
         batch_size=opts.batch_size,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
@@ -67,7 +66,7 @@ def main(params):
         seed=opts.random_seed,
         debug = config['DEBUG'],
         mle_train = config["train_method"] =="mle",
-        max_len_token = config["max_len_token"],
+        max_len_token = opts.max_len,
         prefix_len = config["prefix_len"],
     )
     train_loader = wrapper.get_split(split="train", **data_kwargs)
@@ -77,15 +76,20 @@ def main(params):
     # train_loader = wrapper.get_split(split="train",shuffle = not config['DEBUG'], debug = config['DEBUG'], **data_kwargs)
     # val_loader = wrapper.get_split(split="val",shuffle = not config['DEBUG'], debug = config['DEBUG'],  **data_kwargs)
 
-    game = build_game(opts)
+    game = build_game(opts, config)
     # print_grad_info(game)
+    
+    optimizer = torch.optim.AdamW(game.sender.parameters(), lr=opts.lr)
+    if config["train_method"] == "mle":
+        total_steps = opts.n_epochs* len(train_loader)
+        scheduler = get_linear_schedule_with_warmup(
+                    optimizer, num_warmup_steps=int(total_steps * config["warmup_ratio"]), num_training_steps= total_steps)
 
-    optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
-    # import ipdb;ipdb.set_trace()
     trainer = core.Trainer(
         game=game,
         optimizer=optimizer,
         train_data=train_loader,
+        optimizer_scheduler = scheduler,
         validation_data =val_loader,
         callbacks=[
             ConsoleLogger(as_json=True, print_train_loss=True),

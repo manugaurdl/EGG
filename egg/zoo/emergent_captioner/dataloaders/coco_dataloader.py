@@ -75,7 +75,7 @@ class CocoDataset:
         # compare with storing all 5 captions as single tensor, with padding as -1
         tokens = []
         masks = []
-        for i in range(5):
+        for i in range(4):
             t, m = self.pad(torch.load(path + f"_{i}.pt"))
             tokens.append(t)
             masks.append(m)
@@ -107,7 +107,8 @@ class CocoWrapper:
         self.captions_type = captions_type
         if self.captions_type != "coco":
             self.id2caption = open_pickle(os.path.join(dataset_dir, f"synthetic_data/cocoid2caption_{self.captions_type}_preproc.pkl"))
-        self.split2samples = self._load_splits(jatayu)
+            assert isinstance(list(self.id2caption.values())[0], list), "cocoid2cap is not id --> list of caps"
+        self.split2samples = self._load_splits(jatayu) # {test,val,train,restval} --> {test[0] :(img_path, list of 5 caps, cocoid) }
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
 
@@ -148,14 +149,15 @@ class CocoWrapper:
         split2samples = defaultdict(list)
         
         for img_ann in annotations["images"]:
+            # import ipdb;ipdb.set_trace()
             file_path = self.dataset_dir / img_ann["filepath"] / img_ann["filename"]
             cocoid = img_ann["cocoid"]
             try:
                 if self.captions_type =="coco":
                     captions = [x["raw"] for x in img_ann["sentences"]]
                 else:
-                    captions = [self.id2caption[cocoid].split("caption: ")[-1]]
-            except:
+                    captions = self.id2caption[cocoid]
+            except KeyError:
                 self.num_omitted_ids+=1
             # img_id = img_ann["imgid"]
             split = img_ann["split"]

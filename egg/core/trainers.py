@@ -306,8 +306,8 @@ class Trainer:
             if WANDB:
                 wandb.log(train_log, step = STEP)
             STEP+=1
-        if self.optimizer_scheduler:
-            self.optimizer_scheduler.step()
+            if self.optimizer_scheduler:
+                self.optimizer_scheduler.step()
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)

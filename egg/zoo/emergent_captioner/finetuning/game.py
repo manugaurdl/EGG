@@ -196,11 +196,12 @@ class ReinforceCaptionGame(nn.Module):
         return reinforce_loss.mean(), interaction, reward.mean().item()
 
 
-def build_game(opts):
+def build_game(opts, config):
     if opts.captioner_model.lower() == "clipcap":
         sender = ClipCapSender(
             clip_model=opts.sender_clip_model,
             clipcap_path=opts.mle_model_path,
+            train_method= config["train_method"],
             do_sample=opts.do_sample,
             beam_size=opts.beam_size,
             max_len=opts.max_len,

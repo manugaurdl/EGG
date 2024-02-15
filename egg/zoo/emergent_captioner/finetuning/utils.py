@@ -8,8 +8,7 @@ from typing import Any, Dict, NamedTuple, Optional
 import os
 import yaml
 import torch
-from transformers import GPT2LMHeadModel, LogitsProcessor
-
+from transformers import GPT2LMHeadModel, LogitsProcessor, get_linear_schedule_with_warmup
 from egg.core import Callback, Interaction
 
 
@@ -111,7 +110,7 @@ class ModelSaver(Callback):
                     model_name  = f"{model_name}_e_{epoch if epoch else 'final'}.pt"
                 
                 if SAVE_BEST_METRIC:
-                    model_name = f"{model_name.split('_e_')[0]}_best_{epoch if epoch else 'final'}.pt"
+                    model_name = f"{model_name.split('_e_')[0]}_best.pt"
                 
                 torch.save(
                     self.get_checkpoint(),
