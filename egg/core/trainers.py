@@ -406,7 +406,7 @@ class Trainer:
                     if WANDB:
                         val_preds = self.get_val_preds(validation_interaction)
                         if metric > best_metric_score:
-                            save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds_e_{epoch+1}.pkl")                                        
+                            save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
                             with open(save_path, "wb") as f:
                                 pickle.dump(val_preds, f)
 
