@@ -80,23 +80,36 @@ def main(params):
     # print_grad_info(game)
     
     optimizer = torch.optim.AdamW(game.sender.parameters(), lr=opts.lr)
+    
     if config["train_method"] == "mle":
         total_steps = opts.n_epochs* len(train_loader)
         scheduler = get_linear_schedule_with_warmup(
                     optimizer, num_warmup_steps=int(total_steps * config["warmup_ratio"]), num_training_steps= total_steps)
 
-    trainer = core.Trainer(
+        trainer = core.Trainer(
+            game=game,
+            optimizer=optimizer,
+            train_data=train_loader,
+            optimizer_scheduler = scheduler,
+            validation_data =val_loader,
+            callbacks=[
+                ConsoleLogger(as_json=True, print_train_loss=True),
+                ModelSaver(opts),
+            ],
+            debug=opts.debug,
+        )
+    else:
+        trainer = core.Trainer(
         game=game,
         optimizer=optimizer,
         train_data=train_loader,
-        optimizer_scheduler = scheduler,
         validation_data =val_loader,
         callbacks=[
             ConsoleLogger(as_json=True, print_train_loss=True),
             ModelSaver(opts),
         ],
         debug=opts.debug,
-    )
+        )   
     if opts.captioner_model == "clipcap":
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
@@ -115,8 +128,8 @@ def main(params):
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     # torch.set_deterministic(True)
-
-    config = get_config()
+    config_filename = f"egg/zoo/emergent_captioner/finetuning/{sys.argv[1:][0]}.yml"    # get this from sys args 
+    config = get_config(config_filename)
 
     if config['WANDB']['logging'] and (not config['WANDB']['sweep']) :
         wandb.init(entity= config["WANDB"]["entity"], project=config["WANDB"]['project'], config = config)

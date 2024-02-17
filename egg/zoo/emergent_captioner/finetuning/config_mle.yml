@@ -1,23 +1,24 @@
 DEBUG : False
 INIT_VAL : True
-GREEDY_BASELINE : False
+GREEDY_BASELINE : True
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 captions_type : "mistral_4" #coco, (mistral, mistral_4), blip_holistic
 train_method : "mle" # (discriminative, cider, mle)
 prefix_len : 10
 warmup_ratio : 0.034
+official_clipcap_weights : /home/manugaur/official_clipcap/coco_weights.pt
 
 opts: 
   baseline : mean
   n_epochs : 10
-  batch_size : 50
-  lr : 2e-5 #1e-6
+  batch_size : 40
+  lr :  2e-5
   max_len : 50
   checkpoint_freq : 0
   num_workers : 16
   dataset_dir : /home/manugaur/coco
-  mle_model_path :  /home/manugaur/official_clipcap/coco_weights.pt
-  checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_40
+  mle_model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50/best.pt
+  checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/mle_len50
     
 WANDB :
   logging : True
@@ -26,5 +27,5 @@ WANDB :
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : "mistral_4_mle_len_40"
+  run_name : "mle_len_50_mistral_4"
 

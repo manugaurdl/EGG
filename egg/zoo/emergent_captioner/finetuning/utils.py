@@ -107,10 +107,10 @@ class ModelSaver(Callback):
                 if model_name is None :
                     model_name = f"clip_cap_model_e_{epoch if epoch else 'final'}.pt"
                 else:
-                    model_name  = f"{model_name}_e_{epoch if epoch else 'final'}.pt"
+                    model_name  = f"e_{epoch if epoch else 'final'}.pt"
                 
                 if SAVE_BEST_METRIC:
-                    model_name = f"{model_name.split('_e_')[0]}_best.pt"
+                    model_name = f"best.pt"
                 
                 torch.save(
                     self.get_checkpoint(),
@@ -133,8 +133,8 @@ class ModelSaver(Callback):
         if self.opts.captioner_model == "clipcap":
             self.save_clipclap_model(model_name = model_name)
 
-def get_config():
-    config_path = os.path.join(os.getcwd(),'egg/zoo/emergent_captioner/finetuning/config.yml')
+def get_config(filename):
+    config_path = os.path.join(os.getcwd(),filename)
     with open(config_path) as f:
         config = yaml.load(f,Loader=yaml.FullLoader)
     return config

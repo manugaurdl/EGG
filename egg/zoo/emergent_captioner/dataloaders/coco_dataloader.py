@@ -182,7 +182,8 @@ class CocoWrapper:
         num_workers: int = 8,
         seed: int = 111,
     ):
-        self.tokenize(split)
+        if mle_train:
+            self.tokenize(split)
         shuffle = not debug
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"

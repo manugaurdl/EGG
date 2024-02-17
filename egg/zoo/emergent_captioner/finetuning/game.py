@@ -89,6 +89,7 @@ class ReinforceCaptionGame(nn.Module):
 
             reward = (policy_cider.detach() - baseline) + weighted_kl_div
             reinforce_loss = -1*((reward * log_prob).mean())
+
             # import ipdb;ipdb.set_trace()
             if self.training and not GREEDY_BASELINE:
                 self.baseline.update(policy_cider)
@@ -201,6 +202,7 @@ def build_game(opts, config):
         sender = ClipCapSender(
             clip_model=opts.sender_clip_model,
             clipcap_path=opts.mle_model_path,
+            official_clipcap_weights = config["official_clipcap_weights"],
             train_method= config["train_method"],
             do_sample=opts.do_sample,
             beam_size=opts.beam_size,
