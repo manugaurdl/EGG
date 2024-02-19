@@ -1,5 +1,5 @@
 DEBUG : False
-INIT_VAL : False
+INIT_VAL : True
 GREEDY_BASELINE : True
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 captions_type : "mistral_4" #coco, (mistral, mistral_4), blip_holistic
@@ -21,7 +21,7 @@ opts:
   checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/sr_len_50_lr_1e-7_bs_100
     
 WANDB :
-  logging : False
+  logging : True
   sweep : False
   sweep_id: ""
   sweep_run_count : 100

@@ -128,7 +128,7 @@ def main(params):
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     # torch.set_deterministic(True)
-    config_filename = f"egg/zoo/emergent_captioner/finetuning/{sys.argv[1:][0]}.yml"    # get this from sys args 
+    config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"    # get this from sys args 
     config = get_config(config_filename)
 
     if config['WANDB']['logging'] and (not config['WANDB']['sweep']) :
