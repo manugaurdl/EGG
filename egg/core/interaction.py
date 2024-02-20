@@ -189,10 +189,12 @@ class Interaction:
 
         def send_collect_tensor(tnsr):
             assert tnsr is not None
-
+            # try:
             tnsr = tnsr.contiguous().cuda()
             lst = [torch.zeros_like(tnsr) for _ in range(world_size)]
             distrib.all_gather(lst, tnsr)
+            # except:
+                # import ipdb;ipdb.set_trace()
             return torch.cat(lst, dim=0).to("cpu")
 
         def send_collect_dict(d):
@@ -218,8 +220,10 @@ class Interaction:
                 "receiver_output",
             ]
         )
-
-        interaction_as_dict = send_collect_dict(interaction_as_dict)
+        try:
+            interaction_as_dict = send_collect_dict(interaction_as_dict)
+        except: 
+            import ipdb;ipdb.set_trace()
 
         synced_aux_input = send_collect_dict(log.aux_input)
         interaction_as_dict["aux_input"] = synced_aux_input

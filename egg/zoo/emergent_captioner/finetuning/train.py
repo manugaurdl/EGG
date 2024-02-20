@@ -1,8 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
-
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-import wandb
 import sys
 import time
 import os
@@ -10,7 +5,7 @@ import torch
 import numpy as np
 import random
 from transformers import get_linear_schedule_with_warmup
-from egg.zoo.emergent_captioner.finetuning.utils import get_config, set_data_dir, get_cl_args
+from egg.zoo.emergent_captioner.finetuning.utils import get_config, set_data_dir, get_cl_args, init_wandb
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -37,21 +32,27 @@ torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 
-def main(params):
-    # import ipdb;ipdb.set_trace()
+# "MASTER_ADDR", "MASTER_PORT", "WORLD_SIZE", "RANK", "LOCAL_RANK"
+# os.environ["CUDA_VISIBLE_DEVICES"] = str((0))
 
+
+def main(params, config):
     start = time.time()
     opts = get_common_opts(params=params)
     opts.jatayu = os.path.isdir("/home/manugaur")
     opts.loss_type= config['train_method']
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
+    
+    if  opts.distributed_context.local_rank ==0:
+        init_wandb(config)
+    
     # print(opts)
     print(get_sha())
-
     if not opts.distributed_context.is_distributed and opts.debug:
         breakpoint()
 
+    
     name2wrapper = {
         "conceptual": ConceptualCaptionsWrapper,
         "coco": CocoWrapper,
@@ -62,7 +63,7 @@ def main(params):
     data_kwargs = dict(
         batch_size=opts.batch_size,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
-        num_workers=opts.num_workers,
+        num_workers=0,
         seed=opts.random_seed,
         debug = config['DEBUG'],
         mle_train = config["train_method"] =="mle",
@@ -72,7 +73,6 @@ def main(params):
     train_loader = wrapper.get_split(split="train", **data_kwargs)
     val_loader = wrapper.get_split(split="val",**data_kwargs)
     test_loader = wrapper.get_split(split="test", **data_kwargs)
-
     # train_loader = wrapper.get_split(split="train",shuffle = not config['DEBUG'], debug = config['DEBUG'], **data_kwargs)
     # val_loader = wrapper.get_split(split="val",shuffle = not config['DEBUG'], debug = config['DEBUG'],  **data_kwargs)
 
@@ -109,9 +109,12 @@ def main(params):
             ModelSaver(opts),
         ],
         debug=opts.debug,
-        )   
+        )  
+    # if opts.distributed_context.is_distributed:
+    #     trainer.game = trainer.game.module
+
     if opts.captioner_model == "clipcap":
-        trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
+        trainer.game.module.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
     trainer.train(config, opts)
 
@@ -128,13 +131,11 @@ def main(params):
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     # torch.set_deterministic(True)
-    config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"    # get this from sys args 
+    config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[-1]}.yml"    # get this from sys args 
+    # config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"    # get this from sys args 
     config = get_config(config_filename)
-
-    if config['WANDB']['logging'] and (not config['WANDB']['sweep']) :
-        wandb.init(entity= config["WANDB"]["entity"], project=config["WANDB"]['project'], config = config)
-        wandb.run.name = config['WANDB']['run_name']
-    
     config = set_data_dir(config)
     params = get_cl_args(config)
-    main(params)
+
+
+    main(params, config)

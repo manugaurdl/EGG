@@ -340,13 +340,16 @@ class ClipCapModel(nn.Module):
                 clean_up_tokenization_spaces=True,
             )
             # compute kl loss
-            kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
-            kl_div *= mask
-            kl_div = kl_div.sum(-1) / msg_lengths
+            # print(f"-------------->{indices.device}")
+            # print(f"-------------->{logits.device}")
 
+            # kl_div = self.kl_regularizer.compute_kl_loss(indices, logits)
+            # kl_div *= mask
+            # kl_div = kl_div.sum(-1) / msg_lengths
+            
             self.do_sample = False
 
-        return decoded_captions, log_probs, kl_div
+        return decoded_captions, log_probs, torch.randn(1)
 
     def maybe_patch_gpt(self, max_embeddings):
         if not getattr(self.gpt, "_patched", False):

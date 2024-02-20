@@ -40,7 +40,7 @@ class CocoDataset:
             pass
     def __len__(self):
         if self.debug:
-            return 256
+            return 4
         else:
             return len(self.samples)
     
@@ -191,7 +191,9 @@ class CocoWrapper:
         ds = CocoDataset(self.dataset_dir, samples, mle_train, split, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
 
         sampler = None
-        if dist.is_initialized():
+
+        if dist.is_initialized() and split =="train":
+            print(f"{split} data is distributed.")
             if shuffle is None:
                 shuffle = split != "test"
             sampler = MyDistributedSampler(
@@ -201,6 +203,8 @@ class CocoWrapper:
         if shuffle is None:
             shuffle = split != "test" and sampler is None
 
+        if sampler is not None :
+            shuffle=None
         loader = torch.utils.data.DataLoader(
             ds,
             batch_size=batch_size,
@@ -210,6 +214,7 @@ class CocoWrapper:
             pin_memory=True,
             drop_last=True,
         )
+
         return loader
 
 

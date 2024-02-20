@@ -141,6 +141,7 @@ class Trainer:
             ]
 
         if self.distributed_context.is_distributed:
+            print(f"Wrapping model to GPU:{self.distributed_context.local_rank}")
             device_id = self.distributed_context.local_rank
             torch.cuda.set_device(device_id)
             self.game.to(device_id)
@@ -189,14 +190,17 @@ class Trainer:
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
-                optimized_loss, interaction, reward = self.game(*batch, train_method = train_method)
-                if (
-                    self.distributed_context.is_distributed
-                    and self.aggregate_interaction_logs
-                ):
-                    interaction = Interaction.gather_distributed_interactions(
-                        interaction
-                    )
+                optimized_loss, interaction, reward = self.game.module(*batch, train_method = train_method)
+                # if (
+                #     self.distributed_context.is_distributed
+                #     and self.aggregate_interaction_logs
+                # ):
+                #     # try:
+                #     interaction = Interaction.gather_distributed_interactions(
+                #         interaction
+                    # )
+                    # except:
+                    #     import ipdb;ipdb.set_trace()
                 interaction = interaction.to("cpu")
                 mean_loss += optimized_loss
 
@@ -252,7 +256,7 @@ class Trainer:
 
             context = autocast() if self.scaler else nullcontext()
             with context:
-                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method)
+                optimized_loss, interaction, reward = self.game.module(*batch, GREEDY_BASELINE, train_method)
                 
                 #not accumulating gradients currently
                 if self.update_freq > 1:
@@ -317,6 +321,9 @@ class Trainer:
 
         n_epochs = config['opts']['n_epochs']
         WANDB = config['WANDB']['logging']
+        if self.distributed_context.is_distributed:
+            WANDB = WANDB and self.distributed_context.local_rank == 0
+        print(f"+++++++ WANDB  ={WANDB} LOCAL_RANK = {self.distributed_context.local_rank}  ++++++")
         INIT_VAL = config['INIT_VAL']
         GREEDY_BASELINE = config['GREEDY_BASELINE']
         SAVE_BEST_METRIC = config['SAVE_BEST_METRIC']
@@ -327,6 +334,8 @@ class Trainer:
             callback.on_train_begin(self)
 
         for epoch in range(self.start_epoch, n_epochs):
+            self.train_data.sampler.set_epoch(epoch)
+            # self.validation_data.sampler.set_epoch(epoch)
             #INIT VAL
             if epoch ==0 and INIT_VAL:
                 validation_loss = validation_interaction = None

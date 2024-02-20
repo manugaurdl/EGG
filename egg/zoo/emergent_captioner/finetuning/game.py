@@ -238,4 +238,5 @@ def build_game(opts, config):
         kl_div_coeff=opts.kl_div_coeff,
         test_logging_strategy=test_logging_strategy,
     )
+
     return game

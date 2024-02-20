@@ -10,7 +10,7 @@ import yaml
 import torch
 from transformers import GPT2LMHeadModel, LogitsProcessor, get_linear_schedule_with_warmup
 from egg.core import Callback, Interaction
-
+import wandb
 
 class MyCheckpoint(NamedTuple):
     epoch: int
@@ -28,6 +28,9 @@ class KLRegularizer:
         # 50256 is gpt2 beginning of sentence
         indices = torch.cat([torch.ones_like(indices[:, :1]) * 50256, indices], dim=1)
         # we take probs from bos until last token
+        # print(f"------->{self.lm.device}")
+        # for i in self.lm.named_parameters():
+        #     print(f"{i[0]} -> {i[1].device}")
         generated = self.lm(indices)["logits"].log_softmax(-1)[:, :-1, :]
 
         step_kl_div = []
@@ -75,19 +78,25 @@ class ModelSaver(Callback):
         self.opts = opts
 
     def get_checkpoint(self):
+        self.is_ddp = self.trainer.distributed_context.is_distributed
+
         optimizer_schedule_state_dict = None
         if self.trainer.optimizer_scheduler:
             optimizer_schedule_state_dict = (
                 self.trainer.optimizer_scheduler.state_dict()
             )
-        if self.trainer.distributed_context.is_distributed:
+
+        if self.is_ddp:
             game = self.trainer.game.module
+            self.trainer.game.module.loss.remove_fields_negatives()
+            self.trainer.game.module.sender.unpatch_model()
+
         else:
             game = self.trainer.game
         # cleaning a model such that it has default settings e.g. no buffer and no modules/tensors in the loss
         # this is done to avoid mandatory fields when loading a model e.g. a tensor of negatives
-        self.trainer.game.loss.remove_fields_negatives()
-        self.trainer.game.sender.unpatch_model()
+            self.trainer.game.loss.remove_fields_negatives()
+            self.trainer.game.sender.unpatch_model()
         return MyCheckpoint(
             epoch=self.epoch,
             model_state_dict=game.state_dict(),
@@ -97,7 +106,8 @@ class ModelSaver(Callback):
         )
 
     def save_clipclap_model(self, epoch=None, model_name = None, SAVE_BEST_METRIC = None ):
-        # print(bdfaefndsjkfhnasdknfjk)
+        self.is_ddp = self.trainer.distributed_context.is_distributed
+
         if hasattr(self.trainer, "checkpoint_path"):
             if (
                 self.trainer.checkpoint_path
@@ -116,7 +126,10 @@ class ModelSaver(Callback):
                     self.get_checkpoint(),
                     self.trainer.checkpoint_path / model_name,
                 )
-                self.trainer.game.sender.patch_model()
+                if self.is_ddp:
+                    self.trainer.game.module.sender.patch_model()
+                else:                    
+                    self.trainer.game.sender.patch_model()
 
     def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC: bool):
         self.epoch = epoch
@@ -143,12 +156,14 @@ def set_data_dir(config):
     """
     /home/manugaur —> /ssd_scratch/cvit/manu
     """
+    ssd_scratch = "/ssd_scratch/cvit/manu"
     jatayu  = os.path.isdir("/home/manugaur")
     if not jatayu:
-        config['opts']['dataset_dir'] = os.path.join("/ssd_scratch/cvit/manu",config['opts']['dataset_dir'].split("manugaur/")[-1])
-        config['opts']['clipcap_model_path'] = os.path.join("/ssd_scratch/cvit/manu",config['opts']['clipcap_model_path'].split("manugaur/")[-1])
-        config['opts']['checkpoint_dir'] = os.path.join("/ssd_scratch/cvit/manu",config['opts']['checkpoint_dir'].split("manugaur/")[-1])
+        config['opts']['dataset_dir'] = os.path.join(ssd_scratch, config['opts']['dataset_dir'].split("manugaur/")[-1])
+        config['opts']['mle_model_path'] = os.path.join(ssd_scratch, config['opts']['mle_model_path'].split("manugaur/")[-1])
+        config['opts']['checkpoint_dir'] = os.path.join(ssd_scratch,config['opts']['checkpoint_dir'].split("manugaur/")[-1])
         config['opts']['jatayu'] = jatayu
+        config["official_clipcap_weights"] = os.path.join(ssd_scratch, config["official_clipcap_weights"].split("manugaur/")[-1])
     return config
 
 def get_cl_args(config):
@@ -157,3 +172,8 @@ def get_cl_args(config):
         params.append(f"--{k}")
         params.append(f"{v}")
     return params
+
+def init_wandb(config):
+    if config['WANDB']['logging'] and (not config['WANDB']['sweep']) :
+        wandb.init(entity= config["WANDB"]["entity"], project=config["WANDB"]['project'], config = config)
+        wandb.run.name = config['WANDB']['run_name']
