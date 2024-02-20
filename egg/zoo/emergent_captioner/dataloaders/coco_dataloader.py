@@ -17,6 +17,8 @@ from PIL import Image
 from transformers import GPT2Tokenizer
 from tqdm import tqdm
 from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
+from torch.utils.data.distributed import DistributedSampler
+
 
 def open_pickle(path: str):
     with open(path, "rb") as f:
@@ -40,7 +42,7 @@ class CocoDataset:
             pass
     def __len__(self):
         if self.debug:
-            return 4
+            return 10
         else:
             return len(self.samples)
     
@@ -196,9 +198,11 @@ class CocoWrapper:
             print(f"{split} data is distributed.")
             if shuffle is None:
                 shuffle = split != "test"
-            sampler = MyDistributedSampler(
-                ds, shuffle=shuffle, drop_last=True, seed=seed
-            )
+
+            # sampler = MyDistributedSampler(
+            #     ds, shuffle=shuffle, drop_last=True, seed=seed
+            # )
+            sampler = DistributedSampler(ds, num_replicas=int(os.environ["LOCAL_WORLD_SIZE"]), rank= int(os.environ["LOCAL_RANK"]), shuffle=False, drop_last=False)
 
         if shuffle is None:
             shuffle = split != "test" and sampler is None

@@ -144,6 +144,7 @@ class Trainer:
             print(f"Wrapping model to GPU:{self.distributed_context.local_rank}")
             device_id = self.distributed_context.local_rank
             torch.cuda.set_device(device_id)
+            torch.cuda.empty_cache()
             self.game.to(device_id)
 
             # NB: here we are doing something that is a bit shady:
@@ -190,7 +191,9 @@ class Trainer:
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
-                optimized_loss, interaction, reward = self.game.module(*batch, train_method = train_method)
+                if self.distributed_context.is_distributed:
+                    self.game = self.game.module
+                optimized_loss, interaction, reward = self.game(*batch, train_method = train_method)
                 # if (
                 #     self.distributed_context.is_distributed
                 #     and self.aggregate_interaction_logs
@@ -256,7 +259,9 @@ class Trainer:
 
             context = autocast() if self.scaler else nullcontext()
             with context:
-                optimized_loss, interaction, reward = self.game.module(*batch, GREEDY_BASELINE, train_method)
+                if self.distributed_context.is_distributed:
+                    self.game = self.game.module
+                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method)
                 
                 #not accumulating gradients currently
                 if self.update_freq > 1:
@@ -330,67 +335,30 @@ class Trainer:
         train_method = config["train_method"]
         best_metric_score = 0
         global STEP
+
         for callback in self.callbacks:
+            """
+            In CallBack class, create self.trainer = callbacks.console_logger , finetuning.utils.ModelSaver , callbacks.checkpoint saver
+            """
             callback.on_train_begin(self)
 
         for epoch in range(self.start_epoch, n_epochs):
-            self.train_data.sampler.set_epoch(epoch)
-            # self.validation_data.sampler.set_epoch(epoch)
-            #INIT VAL
-            if epoch ==0 and INIT_VAL:
+
+            if self.distributed_context.is_distributed:
+                self.train_data.sampler.set_epoch(epoch)
+                # self.validation_data.sampler.set_epoch(epoch)     
+
+            def run_validation():
                 validation_loss = validation_interaction = None
                 if (
                     self.validation_data is not None
                     and self.validation_freq > 0
                     and (epoch + 1) % self.validation_freq == 0
                 ):
-                    for callback in self.callbacks:
-                        callback.on_validation_begin(epoch + 1)
-                    
-                    validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
-                    
-                    val_log = { "Val Loss" :validation_loss,
-                                "Val Reward" : val_reward,
-                                "CIDEr" : summary["CIDEr"],
-                                "SPICE" : summary["SPICE"],
-                                "Bleu_4" : summary["Bleu_4"],
-                                'METEOR': summary["METEOR"],
-                                "ROUGE_L" : summary['ROUGE_L']
-                                }
-                    if train_method == "mle":
-                        del val_log["Val Loss"]
-                        del val_log["Val Reward"]
-
-                    if opts.loss_type == 'discriminative':
-                        val_log["VAL_ACC@1"]=  validation_interaction.aux['acc'].mean().item()
-
-                    if WANDB:
-                        wandb.log(val_log, step = STEP)
-
-                    for callback in self.callbacks:
-                        callback.on_validation_end(
-                            validation_loss, validation_interaction, epoch + 1
-                        )
- 
-            # TRAIN EPOCH 
-            print(f"Training epoch {epoch}")
-            for callback in self.callbacks:
-                callback.on_epoch_begin(epoch + 1)
-
-            train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE, train_method, opts)
-            if WANDB:
-                wandb.log({"Avg Loss" : train_loss,
-                            "epoch" : epoch + 1}, step = STEP)
-
-            
-            validation_loss = validation_interaction = None
-            if (
-                self.validation_data is not None
-                and self.validation_freq > 0
-                and (epoch + 1) % self.validation_freq == 0
-            ):
-                for callback in self.callbacks:
-                    callback.on_validation_begin(epoch + 1)
+                    # for idx, callback in enumerate(self.callbacks): 
+                    #     if idx in [0,1]:
+                    #         continue
+                    #     callback.on_validation_begin(epoch + 1) # pass
                     validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
 
                     val_log = { "Val Loss" :validation_loss,
@@ -408,50 +376,69 @@ class Trainer:
                     if opts.loss_type == 'discriminative':
                         metric =  validation_interaction.aux['acc'].mean().item()
                         val_log["VAL_ACC@1"] = metric
+                    
                     else:
                         metric = summary["CIDEr"]
-                    
-                    #VAL PREDS : best epoch preds are saved
-                    if WANDB:
-                        val_preds = self.get_val_preds(validation_interaction)
-                        if metric > best_metric_score:
-                            save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
-                            with open(save_path, "wb") as f:
-                                pickle.dump(val_preds, f)
-
-                    if WANDB:
-                        wandb.log(val_log, step = STEP)
-
+                        
+                    # aggregated print for 1st obj, pass for other 2
                     for callback in self.callbacks:
-                        callback.on_validation_end(
-                            validation_loss, validation_interaction, epoch + 1
-                        )
+                        callback.on_validation_end(validation_loss, validation_interaction, epoch + 1)
+                    
+                    return val_log, validation_interaction, metric
+
+            #INIT VAL
+            if epoch ==0 and INIT_VAL and self.distributed_context.local_rank == 0:
+                val_log, validation_interaction, metric = run_validation()
+                        
+                if WANDB:
+                    wandb.log(val_log, step = STEP)
+                    if metric > best_metric_score:
+                        self.save_val_preds(validation_interaction)
+
+            # TRAIN EPOCH 
+            print(f"Training epoch {epoch}")
+
+            # for callback in self.callbacks:
+            #     callback.on_epoch_begin(epoch + 1)
+
+            train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE, train_method, opts)
+            if WANDB:
+                wandb.log({"Avg Loss" : train_loss,
+                            "epoch" : epoch + 1}, step = STEP)
+
+            if self.distributed_context.local_rank == 0:
+                val_log, validation_interaction, metric = run_validation()
+                        
+                if WANDB:
+                    wandb.log(val_log, step = STEP)
+                    if metric > best_metric_score:
+                        self.save_val_preds(validation_interaction)
             
-            
+            # Saving model
             if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch % opts.checkpoint_freq==0): 
-                for callback in self.callbacks:
+                for idx, callback in enumerate(self.callbacks):
                     """
-                    callbacks.ConsoleLogger: --> save_checkpoint --> 
+                    callbacks.ConsoleLogger: aggregated_print
                     finetuning.utils.ModelSaver: save_clipcap_model > {run_name}_e/final/best.pt                   
-                    callbacks.CheckpointSaver:
+                    callbacks.CheckpointSaver: pass
                     """
                     callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], SAVE_BEST_METRIC)
                      
                 if SAVE_BEST_METRIC:
                     best_metric_score = metric
 
-            if self.should_stop:
-                for callback in self.callbacks:
-                    callback.on_early_stopping(
-                        train_loss,
-                        train_interaction,
-                        epoch + 1,
-                        validation_loss,
-                        validation_interaction,
-                    )
-                break
+            # if self.should_stop:
+            #     for callback in self.callbacks:
+            #         callback.on_early_stopping(
+            #             train_loss,
+            #             train_interaction,
+            #             epoch + 1,
+            #             validation_loss,
+            #             validation_interaction,
+            #         )
+            #     break
 
-        for callback in self.callbacks:
+        for callback in self.callbacks: # pass, model saved {e_final.pt}, pass
             callback.on_train_end(epoch + 1, config['WANDB']['run_name'])
 
     def load(self, checkpoint: Checkpoint):
@@ -483,8 +470,14 @@ class Trainer:
         if latest_file is not None:
             self.load_from_checkpoint(latest_file)
     
-    def get_val_preds(self, full_interaction):
+    def save_val_preds(self, full_interaction):
         preds = [j for i in full_interaction.message for j in i]
         cocoids = [i.item() for i in full_interaction.aux_input['cocoid']]
-        return dict(zip(cocoids, preds))
+        val_preds =  dict(zip(cocoids, preds))
+        
+        save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
+
+        with open(save_path, "wb") as f:
+            pickle.dump(val_preds, f)
+
         

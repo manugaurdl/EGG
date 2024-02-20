@@ -43,7 +43,7 @@ def main(params, config):
     opts.loss_type= config['train_method']
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
-    
+
     if  opts.distributed_context.local_rank ==0:
         init_wandb(config)
     
@@ -80,7 +80,8 @@ def main(params, config):
     # print_grad_info(game)
     
     optimizer = torch.optim.AdamW(game.sender.parameters(), lr=opts.lr)
-    
+
+
     if config["train_method"] == "mle":
         total_steps = opts.n_epochs* len(train_loader)
         scheduler = get_linear_schedule_with_warmup(
@@ -110,11 +111,12 @@ def main(params, config):
         ],
         debug=opts.debug,
         )  
-    # if opts.distributed_context.is_distributed:
-    #     trainer.game = trainer.game.module
+    
+    if opts.distributed_context.is_distributed:
+        trainer.game = trainer.game.module
 
-    if opts.captioner_model == "clipcap":
-        trainer.game.module.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
+    if opts.captioner_model == "clipcap":   
+        trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
     trainer.train(config, opts)
 
@@ -130,9 +132,13 @@ def main(params, config):
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
-    # torch.set_deterministic(True)
-    config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[-1]}.yml"    # get this from sys args 
-    # config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"    # get this from sys args 
+    # torch.set_deterministic(True)    
+    if "LOCAL_RANK" in os.environ:
+        torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+    
+    else:
+        config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"    # get this from sys args 
+    
     config = get_config(config_filename)
     config = set_data_dir(config)
     params = get_cl_args(config)
