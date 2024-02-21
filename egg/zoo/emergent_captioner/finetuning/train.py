@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import random
 from transformers import get_linear_schedule_with_warmup
-from egg.zoo.emergent_captioner.finetuning.utils import get_config, set_data_dir, get_cl_args, init_wandb
+from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -37,6 +37,9 @@ np.random.seed(seed)
 
 
 def main(params, config):
+    print("$$$$"*100)
+    print(config["num_workers"])
+
     start = time.time()
     opts = get_common_opts(params=params)
     opts.jatayu = os.path.isdir("/home/manugaur")
@@ -46,12 +49,8 @@ def main(params, config):
 
     if  opts.distributed_context.local_rank ==0:
         init_wandb(config)
-    
-    # print(opts)
-    print(get_sha())
-    if not opts.distributed_context.is_distributed and opts.debug:
-        breakpoint()
 
+    print(get_sha())
     
     name2wrapper = {
         "conceptual": ConceptualCaptionsWrapper,
@@ -63,7 +62,7 @@ def main(params, config):
     data_kwargs = dict(
         batch_size=opts.batch_size,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
-        num_workers=0,
+        num_workers=config["num_workers"],
         seed=opts.random_seed,
         debug = config['DEBUG'],
         mle_train = config["train_method"] =="mle",
@@ -134,16 +133,18 @@ def main(params, config):
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
-    # torch.set_deterministic(True)    
+    # torch.set_deterministic(True)
+    use_ddp = False    
     if "LOCAL_RANK" in os.environ:
+        use_ddp = True
         torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
         config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[-1]}.yml"    # get this from sys args 
-
+        
     else:
-        config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"    # get this from sys args 
+        config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml" 
     
     config = get_config(config_filename)
-    config = set_data_dir(config)
+    config = process_config(config, use_ddp)
     params = get_cl_args(config)
 
 

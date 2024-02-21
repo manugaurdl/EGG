@@ -1,4 +1,4 @@
-DEBUG : False
+DEBUG : True
 INIT_VAL : True
 GREEDY_BASELINE : True
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
@@ -10,7 +10,7 @@ official_clipcap_weights : /home/manugaur/official_clipcap/coco_weights.pt
 
 opts: 
   baseline : mean
-  n_epochs : 10
+  n_epochs : 1
   batch_size : 1 #180
   lr :  1e-6 #2e-5
   max_len : 50

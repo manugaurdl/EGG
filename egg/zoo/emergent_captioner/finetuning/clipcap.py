@@ -298,7 +298,7 @@ class ClipCapModel(nn.Module):
                 # at test time we use beam search regardless of the decoding method
                 # used at training time
                 print("BEAM SEARCH GENERATION")
-                print(f"USING GPU:{os.environ['LOCAL_RANK']}")
+                # print(f"USING GPU:{os.environ['LOCAL_RANK']}")
 
                 generated = self.gpt.generate(
                     input_ids,
@@ -412,9 +412,14 @@ class ClipCapSender(nn.Module):
         if train_method != "mle":
             print("| LOADED CLIPCAP MODEL")
             
-            x = torch.load(official_clipcap_weights)
-            y = torch.load(clipcap_path)[1]
-            state_dict = {k : y["sender.clipcap." + k]  for k in x.keys()}
+            desired_format_state_dict = torch.load(official_clipcap_weights)
+            saved_state_dict = torch.load(clipcap_path)[1]
+            state_dict = {}
+            for idx, k in enumerate(desired_format_state_dict.keys()):
+                try:
+                    state_dict[k] = saved_state_dict["sender.clipcap." + k]
+                except:
+                    print("error encountered")
             self.clipcap.load_state_dict(state_dict)
             # self.clipcap.load_state_dict(torch.load(official_clipcap_weights))
 

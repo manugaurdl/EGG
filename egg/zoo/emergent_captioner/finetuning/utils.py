@@ -153,7 +153,7 @@ def get_config(filename):
         config = yaml.load(f,Loader=yaml.FullLoader)
     return config
 
-def set_data_dir(config):
+def process_config(config, use_ddp):
     """
     /home/manugaur —> /ssd_scratch/cvit/manu
     """
@@ -165,6 +165,10 @@ def set_data_dir(config):
         config['opts']['checkpoint_dir'] = os.path.join(ssd_scratch,config['opts']['checkpoint_dir'].split("manugaur/")[-1])
         config['opts']['jatayu'] = jatayu
         config["official_clipcap_weights"] = os.path.join(ssd_scratch, config["official_clipcap_weights"].split("manugaur/")[-1])
+    
+    if use_ddp:
+        config["num_workers"] = 0
+
     return config
 
 def get_cl_args(config):

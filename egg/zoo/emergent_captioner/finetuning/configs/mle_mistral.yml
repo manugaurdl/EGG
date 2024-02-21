@@ -7,6 +7,7 @@ train_method : "mle" # (discriminative, cider, mle)
 prefix_len : 10
 warmup_ratio : 0.034
 official_clipcap_weights : /home/manugaur/official_clipcap/coco_weights.pt
+num_workers : 16
 
 opts: 
   baseline : mean
@@ -18,7 +19,7 @@ opts:
   num_workers : 16
   dataset_dir : /home/manugaur/coco
   mle_model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50/best.pt
-  checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/mle_len50
+  checkpoint_dir : /home/manugaur/EGG/checkpoints/temp #mistral_4/mle_len_50
     
 WANDB :
   logging : False
@@ -27,6 +28,6 @@ WANDB :
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : "ada_ddp_3_gpu_mle_mistral_reproduce" # "mle_len_50_mistral_4"
+  run_name : "debug_2_proc_launching" # "mle_len_50_mistral_4"
 
-#debug, epoch
+#init_val, debug, epoch, logging
