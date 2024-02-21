@@ -69,10 +69,12 @@ def main(params, config):
         mle_train = config["train_method"] =="mle",
         max_len_token = opts.max_len,
         prefix_len = config["prefix_len"],
+        is_dist_leader = opts.distributed_context.is_leader,
     )
     train_loader = wrapper.get_split(split="train", **data_kwargs)
     val_loader = wrapper.get_split(split="val",**data_kwargs)
     test_loader = wrapper.get_split(split="test", **data_kwargs)
+
     # train_loader = wrapper.get_split(split="train",shuffle = not config['DEBUG'], debug = config['DEBUG'], **data_kwargs)
     # val_loader = wrapper.get_split(split="val",shuffle = not config['DEBUG'], debug = config['DEBUG'],  **data_kwargs)
 
@@ -135,7 +137,8 @@ if __name__ == "__main__":
     # torch.set_deterministic(True)    
     if "LOCAL_RANK" in os.environ:
         torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
-    
+        config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[-1]}.yml"    # get this from sys args 
+
     else:
         config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"    # get this from sys args 
     

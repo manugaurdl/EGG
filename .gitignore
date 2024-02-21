@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 job_ada.sh
+*.out 
 *.ipynb
 wandb/
 *.txt

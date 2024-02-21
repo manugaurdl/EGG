@@ -11,7 +11,7 @@ official_clipcap_weights : /home/manugaur/official_clipcap/coco_weights.pt
 opts: 
   baseline : mean
   n_epochs : 10
-  batch_size : 180
+  batch_size : 1 #180
   lr :  1e-6 #2e-5
   max_len : 50
   checkpoint_freq : 0
@@ -21,11 +21,12 @@ opts:
   checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/cider_g_len_50
     
 WANDB :
-  logging : True
+  logging : False
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : "cider_g_len_50_mistral_4"
+  run_name : "dummy" #"cider_g_len_50_mistral_4"
 
+#debug, init_val, logging

@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, LogitsProcessorList
-
+import os
 from egg.zoo.emergent_captioner.finetuning.utils import (
     KLRegularizer,
     StopTokenLogitsProcessor,
@@ -298,6 +298,7 @@ class ClipCapModel(nn.Module):
                 # at test time we use beam search regardless of the decoding method
                 # used at training time
                 print("BEAM SEARCH GENERATION")
+                print(f"USING GPU:{os.environ['LOCAL_RANK']}")
 
                 generated = self.gpt.generate(
                     input_ids,

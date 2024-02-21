@@ -42,7 +42,7 @@ class CocoDataset:
             pass
     def __len__(self):
         if self.debug:
-            return 10
+            return 60
         else:
             return len(self.samples)
     
@@ -180,6 +180,7 @@ class CocoWrapper:
         mle_train : bool,
         max_len_token : int,
         prefix_len : int,
+        is_dist_leader : bool,
         transform: Callable,
         num_workers: int = 8,
         seed: int = 111,
@@ -203,6 +204,7 @@ class CocoWrapper:
             #     ds, shuffle=shuffle, drop_last=True, seed=seed
             # )
             sampler = DistributedSampler(ds, num_replicas=int(os.environ["LOCAL_WORLD_SIZE"]), rank= int(os.environ["LOCAL_RANK"]), shuffle=False, drop_last=False)
+
 
         if shuffle is None:
             shuffle = split != "test" and sampler is None

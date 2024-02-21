@@ -9,6 +9,8 @@ import pathlib
 import pickle
 from typing import List, Optional
 from tqdm import tqdm
+import torch.distributed as dist
+
 try:
     # requires python >= 3.7
     from contextlib import nullcontext
@@ -191,8 +193,7 @@ class Trainer:
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
-                if self.distributed_context.is_distributed:
-                    self.game = self.game.module
+
                 optimized_loss, interaction, reward = self.game(*batch, train_method = train_method)
                 # if (
                 #     self.distributed_context.is_distributed
@@ -259,8 +260,6 @@ class Trainer:
 
             context = autocast() if self.scaler else nullcontext()
             with context:
-                if self.distributed_context.is_distributed:
-                    self.game = self.game.module
                 optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method)
                 
                 #not accumulating gradients currently
@@ -327,8 +326,8 @@ class Trainer:
         n_epochs = config['opts']['n_epochs']
         WANDB = config['WANDB']['logging']
         if self.distributed_context.is_distributed:
-            WANDB = WANDB and self.distributed_context.local_rank == 0
-        print(f"+++++++ WANDB  ={WANDB} LOCAL_RANK = {self.distributed_context.local_rank}  ++++++")
+            WANDB = WANDB and self.distributed_context.is_leader
+        print(f"+++++++ WANDB  ={WANDB} LOCAL_RANK = {self.distributed_context.is_leader}  ++++++")
         INIT_VAL = config['INIT_VAL']
         GREEDY_BASELINE = config['GREEDY_BASELINE']
         SAVE_BEST_METRIC = config['SAVE_BEST_METRIC']
@@ -387,15 +386,16 @@ class Trainer:
                     return val_log, validation_interaction, metric
 
             #INIT VAL
-            if epoch ==0 and INIT_VAL and self.distributed_context.local_rank == 0:
+            if epoch ==0 and INIT_VAL and self.distributed_context.is_leader:
                 val_log, validation_interaction, metric = run_validation()
                         
                 if WANDB:
                     wandb.log(val_log, step = STEP)
                     if metric > best_metric_score:
-                        self.save_val_preds(validation_interaction)
+                        self.save_val_preds(validation_interaction, config)
 
             # TRAIN EPOCH 
+            dist.barrier()
             print(f"Training epoch {epoch}")
 
             # for callback in self.callbacks:
@@ -406,26 +406,26 @@ class Trainer:
                 wandb.log({"Avg Loss" : train_loss,
                             "epoch" : epoch + 1}, step = STEP)
 
-            if self.distributed_context.local_rank == 0:
+            if self.distributed_context.is_leader:
                 val_log, validation_interaction, metric = run_validation()
                         
                 if WANDB:
                     wandb.log(val_log, step = STEP)
                     if metric > best_metric_score:
-                        self.save_val_preds(validation_interaction)
+                        self.save_val_preds(validation_interaction, config)
             
-            # Saving model
-            if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch % opts.checkpoint_freq==0): 
-                for idx, callback in enumerate(self.callbacks):
-                    """
-                    callbacks.ConsoleLogger: aggregated_print
-                    finetuning.utils.ModelSaver: save_clipcap_model > {run_name}_e/final/best.pt                   
-                    callbacks.CheckpointSaver: pass
-                    """
-                    callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], SAVE_BEST_METRIC)
-                     
-                if SAVE_BEST_METRIC:
-                    best_metric_score = metric
+                # Saving model
+                if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch % opts.checkpoint_freq==0): 
+                    for idx, callback in enumerate(self.callbacks):
+                        """
+                        callbacks.ConsoleLogger: aggregated_print
+                        finetuning.utils.ModelSaver: save_clipcap_model > {run_name}_e/final/best.pt                   
+                        callbacks.CheckpointSaver: pass
+                        """
+                        callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], SAVE_BEST_METRIC)
+                        
+                    if SAVE_BEST_METRIC:
+                        best_metric_score = metric
 
             # if self.should_stop:
             #     for callback in self.callbacks:
@@ -470,7 +470,7 @@ class Trainer:
         if latest_file is not None:
             self.load_from_checkpoint(latest_file)
     
-    def save_val_preds(self, full_interaction):
+    def save_val_preds(self, full_interaction, config):
         preds = [j for i in full_interaction.message for j in i]
         cocoids = [i.item() for i in full_interaction.aux_input['cocoid']]
         val_preds =  dict(zip(cocoids, preds))

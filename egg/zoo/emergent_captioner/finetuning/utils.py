@@ -86,17 +86,18 @@ class ModelSaver(Callback):
                 self.trainer.optimizer_scheduler.state_dict()
             )
 
-        if self.is_ddp:
-            game = self.trainer.game.module
-            self.trainer.game.module.loss.remove_fields_negatives()
-            self.trainer.game.module.sender.unpatch_model()
+        # if self.is_ddp:
+        #     game = self.trainer.game.module
+        #     self.trainer.game.module.loss.remove_fields_negatives()
+        #     self.trainer.game.module.sender.unpatch_model()
 
-        else:
-            game = self.trainer.game
+        # else:
+        game = self.trainer.game
         # cleaning a model such that it has default settings e.g. no buffer and no modules/tensors in the loss
         # this is done to avoid mandatory fields when loading a model e.g. a tensor of negatives
-            self.trainer.game.loss.remove_fields_negatives()
-            self.trainer.game.sender.unpatch_model()
+        self.trainer.game.loss.remove_fields_negatives()
+        self.trainer.game.sender.unpatch_model()
+        
         return MyCheckpoint(
             epoch=self.epoch,
             model_state_dict=game.state_dict(),
@@ -126,10 +127,10 @@ class ModelSaver(Callback):
                     self.get_checkpoint(),
                     self.trainer.checkpoint_path / model_name,
                 )
-                if self.is_ddp:
-                    self.trainer.game.module.sender.patch_model()
-                else:                    
-                    self.trainer.game.sender.patch_model()
+                # if self.is_ddp:
+                #     self.trainer.game.module.sender.patch_model()
+                # else:                    
+                self.trainer.game.sender.patch_model()
 
     def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC: bool):
         self.epoch = epoch
