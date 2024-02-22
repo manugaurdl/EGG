@@ -42,7 +42,7 @@ class CocoDataset:
             pass
     def __len__(self):
         if self.debug:
-            return 60
+            return 40
         else:
             return len(self.samples)
     

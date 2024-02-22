@@ -27,6 +27,6 @@ WANDB :
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : "dummy" #"cider_g_len_50_mistral_4"
+  run_name : "check_num_proc_ddp_4_gpu" #"cider_g_len_50_mistral_4"
 
 #debug, init_val, logging

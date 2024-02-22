@@ -419,7 +419,7 @@ class ClipCapSender(nn.Module):
                 try:
                     state_dict[k] = saved_state_dict["sender.clipcap." + k]
                 except:
-                    print("error encountered")
+                    import ipdb;ipdb.set_trace()
             self.clipcap.load_state_dict(state_dict)
             # self.clipcap.load_state_dict(torch.load(official_clipcap_weights))
 

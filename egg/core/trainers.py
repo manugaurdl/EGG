@@ -195,16 +195,17 @@ class Trainer:
                 batch = batch.to(self.device)
 
                 optimized_loss, interaction, reward = self.game(*batch, train_method = train_method)
-                # if (
-                #     self.distributed_context.is_distributed
-                #     and self.aggregate_interaction_logs
-                # ):
-                #     # try:
-                #     interaction = Interaction.gather_distributed_interactions(
-                #         interaction
-                    # )
-                    # except:
-                    #     import ipdb;ipdb.set_trace()
+                """
+                interaction : sender_input=None, receiver_input=None, labels = tensor, aux_input = {cocoid, captions, tokens, mask}, message, receiver_output=None, message_length=None, aux = {"kl_div" = torch.rand(1)}
+                """
+                # lst = []
+                # for _ in range(self.distributed_context.world_size):
+                #     lst.append(torch.zeros_like(interaction.labels))
+
+                # dist.all_gather(lst, interaction.labels)
+                # interaction = torch.cat(lst, dim=0).to("cpu")
+                # torch.save(interaction, "/ssd_scratch/cvit/manu/temp_interaction.pt")
+
                 interaction = interaction.to("cpu")
                 mean_loss += optimized_loss
 
@@ -217,8 +218,8 @@ class Trainer:
                 n_batches += 1
 
         mean_loss /= n_batches
+        #if data is dict/tensor --> its gets extended N_batch times. If its a list, a new list of list gets created of len = N_batch
         full_interaction = Interaction.from_iterable(interactions)
-        
         img_ids = full_interaction.aux_input['cocoid']
         captions = full_interaction.aux_input['captions']
         preds_per_batch = full_interaction.message
@@ -291,11 +292,15 @@ class Trainer:
 
             n_batches += 1
             mean_loss += optimized_loss.detach()
-            if (
-                self.distributed_context.is_distributed
-                and self.aggregate_interaction_logs
-            ):
-                interaction = Interaction.gather_distributed_interactions(interaction)
+            # print("before gather")
+            # print(interaction.aux["acc"])
+
+            # if (self.distributed_context.is_distributed and self.aggregate_interaction_logs):
+            #     interaction = Interaction.gather_distributed_interactions(interaction)
+            
+            # print("after gather")
+            # print(interaction.aux["acc"])
+
             interaction = interaction.to("cpu")
 
             for callback in self.callbacks:
@@ -319,6 +324,7 @@ class Trainer:
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
+
         return mean_loss.item(), full_interaction
 
     def train(self, config, opts):
@@ -395,7 +401,8 @@ class Trainer:
                         self.save_val_preds(validation_interaction, config)
 
             # TRAIN EPOCH 
-            dist.barrier()
+            if self.distributed_context.is_distributed:
+                dist.barrier()
             print(f"Training epoch {epoch}")
 
             # for callback in self.callbacks:

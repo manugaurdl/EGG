@@ -37,8 +37,6 @@ np.random.seed(seed)
 
 
 def main(params, config):
-    print("$$$$"*100)
-    print(config["num_workers"])
 
     start = time.time()
     opts = get_common_opts(params=params)
