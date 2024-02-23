@@ -448,8 +448,8 @@ class Trainer:
             #         )
             #     break
 
-        for callback in self.callbacks: # pass, model saved {e_final.pt}, pass
-            callback.on_train_end(epoch + 1, config['WANDB']['run_name'])
+        # for callback in self.callbacks: # pass, model saved {e_final.pt}, pass
+        #     callback.on_train_end(epoch + 1, config['WANDB']['run_name'])
 
     def load(self, checkpoint: Checkpoint):
         self.game.load_state_dict(checkpoint.model_state_dict, strict=False)

@@ -81,8 +81,7 @@ class ReinforceCaptionGame(nn.Module):
             if not GREEDY_BASELINE:
                 # get policy cap first.
                 baseline = self.baseline.predict(policy_cider.detach())
-
-            reward = (policy_cider.detach() - baseline) + weighted_kl_div
+            reward = (policy_cider.detach() - baseline) #+ weighted_kl_div
             reinforce_loss = -1*((reward * log_prob).mean())
 
             # import ipdb;ipdb.set_trace()
