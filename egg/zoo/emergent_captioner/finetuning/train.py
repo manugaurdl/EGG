@@ -68,12 +68,9 @@ def main(params, config):
         prefix_len = config["prefix_len"],
         is_dist_leader = opts.distributed_context.is_leader,
     )
-    train_loader = wrapper.get_split(split="train", **data_kwargs)
-    val_loader = wrapper.get_split(split="val",**data_kwargs)
-    test_loader = wrapper.get_split(split="test", **data_kwargs)
-
-    # train_loader = wrapper.get_split(split="train",shuffle = not config['DEBUG'], debug = config['DEBUG'], **data_kwargs)
-    # val_loader = wrapper.get_split(split="val",shuffle = not config['DEBUG'], debug = config['DEBUG'],  **data_kwargs)
+    train_loader = wrapper.get_split(split="train", caps_per_img = 1, **data_kwargs)
+    val_loader = wrapper.get_split(split="val", caps_per_img = 4, **data_kwargs)
+    # test_loader = wrapper.get_split(split="test", **data_kwargs)
 
     game = build_game(opts, config)
     # print_grad_info(game)

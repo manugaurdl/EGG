@@ -26,7 +26,7 @@ def open_pickle(path: str):
     return file 
 
 class CocoDataset:
-    def __init__(self, root, samples, mle_train, split,captions_type, max_len_token, prefix_len, transform, debug):
+    def __init__(self, root, samples, mle_train, split, caps_per_img, captions_type, max_len_token, prefix_len, transform, debug):
         self.root = root
         self.samples = samples
         self.transform = transform
@@ -40,6 +40,8 @@ class CocoDataset:
             self.path2tokens = os.path.join(root, f"tokenized_caps/{self.captions_type}/{self.split}")
             # self.id2tokens = torch.load
             pass
+        self.caps_per_img = caps_per_img
+
     def __len__(self):
         if self.debug:
             return 40
@@ -77,7 +79,7 @@ class CocoDataset:
         # compare with storing all 5 captions as single tensor, with padding as -1
         tokens = []
         masks = []
-        for i in range(4):
+        for i in range(self.caps_per_img):
             t, m = self.pad(torch.load(path + f"_{i}.pt"))
             tokens.append(t)
             masks.append(m)
@@ -175,6 +177,7 @@ class CocoWrapper:
     def get_split(
         self,
         split: str,
+        caps_per_img : int,
         debug : bool,
         batch_size: int,
         mle_train : bool,
@@ -187,12 +190,11 @@ class CocoWrapper:
     ):
         if mle_train:
             self.tokenize(split)
-        shuffle = not debug
+        shuffle = not debug and split != "test"
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
 
-        ds = CocoDataset(self.dataset_dir, samples, mle_train, split, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
-
+        ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
         sampler = None
 
         if dist.is_initialized() and split =="train":
