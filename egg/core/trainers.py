@@ -341,69 +341,72 @@ class Trainer:
         best_metric_score = 0
         global STEP
 
+        
+        def run_validation(epoch : int):
+            validation_loss = validation_interaction = None
+            if (
+                self.validation_data is not None
+                and self.validation_freq > 0
+                and (epoch + 1) % self.validation_freq == 0
+            ):
+                # for idx, callback in enumerate(self.callbacks): 
+                #     if idx in [0,1]:
+                #         continue
+                #     callback.on_validation_begin(epoch + 1) # pass
+                validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
+
+                val_log = { "Val Loss" :validation_loss,
+                            "Val Reward" : val_reward,
+                            "CIDEr" : summary["CIDEr"],
+                            "SPICE" : summary["SPICE"],
+                            "Bleu_4" : summary["Bleu_4"],
+                            'METEOR': summary["METEOR"],
+                            "ROUGE_L" : summary['ROUGE_L']
+                            }
+                if train_method == "mle":
+                    del val_log["Val Loss"]
+                    del val_log["Val Reward"]
+
+                if opts.loss_type == 'discriminative':
+                    metric =  validation_interaction.aux['acc'].mean().item()
+                    val_log["VAL_ACC@1"] = metric
+                
+                else:
+                    metric = summary["CIDEr"]
+                    
+                # aggregated print for 1st obj, pass for other 2
+                for callback in self.callbacks:
+                    callback.on_validation_end(validation_loss, validation_interaction, epoch + 1)
+                
+                return val_log, validation_interaction, metric
+        
+        #INIT VAL
+        if INIT_VAL and self.distributed_context.is_leader:
+            val_log, validation_interaction, metric = run_validation(epoch = 0)
+                    
+            if WANDB:
+                val_log["epoch"] = 0
+                wandb.log(val_log, step = STEP)
+                if metric > best_metric_score:
+                    self.save_val_preds(validation_interaction, config)
+
         for callback in self.callbacks:
             """
             In CallBack class, create self.trainer = callbacks.console_logger , finetuning.utils.ModelSaver , callbacks.checkpoint saver
             """
             callback.on_train_begin(self)
 
+        
         for epoch in range(self.start_epoch, n_epochs):
 
             if self.distributed_context.is_distributed:
                 self.train_data.sampler.set_epoch(epoch)
                 # self.validation_data.sampler.set_epoch(epoch)     
 
-            def run_validation():
-                validation_loss = validation_interaction = None
-                if (
-                    self.validation_data is not None
-                    and self.validation_freq > 0
-                    and (epoch + 1) % self.validation_freq == 0
-                ):
-                    # for idx, callback in enumerate(self.callbacks): 
-                    #     if idx in [0,1]:
-                    #         continue
-                    #     callback.on_validation_begin(epoch + 1) # pass
-                    validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
-
-                    val_log = { "Val Loss" :validation_loss,
-                                "Val Reward" : val_reward,
-                                "CIDEr" : summary["CIDEr"],
-                                "SPICE" : summary["SPICE"],
-                                "Bleu_4" : summary["Bleu_4"],
-                                'METEOR': summary["METEOR"],
-                                "ROUGE_L" : summary['ROUGE_L']
-                                }
-                    if train_method == "mle":
-                        del val_log["Val Loss"]
-                        del val_log["Val Reward"]
-
-                    if opts.loss_type == 'discriminative':
-                        metric =  validation_interaction.aux['acc'].mean().item()
-                        val_log["VAL_ACC@1"] = metric
-                    
-                    else:
-                        metric = summary["CIDEr"]
-                        
-                    # aggregated print for 1st obj, pass for other 2
-                    for callback in self.callbacks:
-                        callback.on_validation_end(validation_loss, validation_interaction, epoch + 1)
-                    
-                    return val_log, validation_interaction, metric
-
-            #INIT VAL
-            if epoch ==0 and INIT_VAL and self.distributed_context.is_leader:
-                val_log, validation_interaction, metric = run_validation()
-                        
-                if WANDB:
-                    wandb.log(val_log, step = STEP)
-                    if metric > best_metric_score:
-                        self.save_val_preds(validation_interaction, config)
-
-            # TRAIN EPOCH 
+            # Train epoch
             if self.distributed_context.is_distributed:
                 dist.barrier()
-            print(f"Training epoch {epoch}")
+            print(f"Training epoch {epoch + 1}")
 
             # for callback in self.callbacks:
             #     callback.on_epoch_begin(epoch + 1)
@@ -414,7 +417,7 @@ class Trainer:
                             "epoch" : epoch + 1}, step = STEP)
 
             if self.distributed_context.is_leader:
-                val_log, validation_interaction, metric = run_validation()
+                val_log, validation_interaction, metric = run_validation(epoch + 1)
                         
                 if WANDB:
                     wandb.log(val_log, step = STEP)
@@ -422,7 +425,7 @@ class Trainer:
                         self.save_val_preds(validation_interaction, config)
             
                 # Saving model
-                if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch % opts.checkpoint_freq==0): 
+                if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch + 1 % opts.checkpoint_freq==0): 
                     for idx, callback in enumerate(self.callbacks):
                         """
                         callbacks.ConsoleLogger: aggregated_print

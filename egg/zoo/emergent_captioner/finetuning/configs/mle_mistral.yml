@@ -1,4 +1,4 @@
-DEBUG : True
+DEBUG : False
 INIT_VAL : True
 GREEDY_BASELINE : True
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
@@ -19,15 +19,15 @@ opts:
   num_workers : 16
   dataset_dir : /home/manugaur/coco
   mle_model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50/best.pt
-  checkpoint_dir : /home/manugaur/EGG/checkpoints/temp/mle_len_50
+  checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50_ada_no_ddp.pt
     
 WANDB :
-  logging : False
+  logging : True
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : "debug_2_proc_launching" # "mle_len_50_mistral_4"
+  run_name : "mle_len_50_mistral4_ada_no_ddp" # "mle_len_50_mistral_4"
 
 #init_val, debug, epoch, logging

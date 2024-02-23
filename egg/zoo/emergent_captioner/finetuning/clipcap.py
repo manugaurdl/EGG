@@ -416,10 +416,8 @@ class ClipCapSender(nn.Module):
             saved_state_dict = torch.load(clipcap_path)[1]
             state_dict = {}
             for idx, k in enumerate(desired_format_state_dict.keys()):
-                try:
-                    state_dict[k] = saved_state_dict["sender.clipcap." + k]
-                except:
-                    import ipdb;ipdb.set_trace()
+                state_dict[k] = saved_state_dict["sender.clipcap." + k]
+
             self.clipcap.load_state_dict(state_dict)
             # self.clipcap.load_state_dict(torch.load(official_clipcap_weights))
 
