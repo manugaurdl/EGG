@@ -20,21 +20,19 @@ opts:
   checkpoint_freq : 1
   num_workers : 16
   dataset_dir : /home/manugaur/coco
-  checkpoint_dir : /home/manugaur/EGG/checkpoints/coco/mle_len_50  #
+  checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/mle
     
 WANDB :
-  logging : False
+  logging : True
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : "mle_len_50_mistral4_ada_no_ddp" # "mle_len_50_mistral_4"
+  run_name : "mle" # "mle_len_50_mistral_4"
  
 inference : 
   batch_size : 180
   output_dir : /home/manugaur/EGG/inference_preds/
-  #captions_type, debug, init_val
 
-
-#checkpoint_dir, debug,init_val, logging, bsz, wandb_name
+#debug,init_val, logging, bsz

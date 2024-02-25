@@ -312,10 +312,12 @@ class Trainer:
             print(f"Loss : {optimized_loss.item():.5f}")
             print(f"Avg Loss : {(mean_loss.item())/n_batches:.5f}")
             train_log = { "Loss" :optimized_loss.item(),
-                          "log_prob" : interaction.aux['log_prob'].mean().item(),
                             "Reward" : reward,
                             "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"]
                             }
+            if train_method != "mle":
+                train_log["log_prob"] = interaction.aux['log_prob'].mean().item()
+
             if opts.loss_type != 'cider':
                 train_log["acc@1"] : interaction.aux['acc'].mean().item()
 
@@ -499,7 +501,7 @@ class Trainer:
         else:    
             save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
         
-        
+
         with open(save_path, "wb") as f:
             pickle.dump(val_preds, f)
 

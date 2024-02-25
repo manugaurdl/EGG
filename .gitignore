@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 job_ada.sh
+inference_preds/
 val_test_preds/
 *.out 
 *.ipynb

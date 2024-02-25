@@ -153,7 +153,7 @@ def get_config(filename):
         config = yaml.load(f,Loader=yaml.FullLoader)
     return config
 
-def process_config(config, use_ddp):
+def process_config(config, use_ddp, sys_args):
     """
     /home/manugaur —> /ssd_scratch/cvit/manu
     """
@@ -168,6 +168,10 @@ def process_config(config, use_ddp):
     
     if use_ddp:
         config["num_workers"] = 0
+    
+    config["captions_type"] = sys_args[1].split("/")[0]
+    config["opts"]["checkpoint_dir"] = os.path.join(config['opts']['checkpoint_dir'].split("checkpoints")[0], f"checkpoints/{sys_args[1]}") #data/method
+    config["WANDB"]["run_name"] = f"{sys_args[0]}_{sys_args[1].split('/')[0]}" #{method}_{data}
     return config
 
 def get_cl_args(config):
