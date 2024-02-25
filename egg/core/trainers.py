@@ -310,6 +310,7 @@ class Trainer:
             print(f"Loss : {optimized_loss.item():.5f}")
             print(f"Avg Loss : {(mean_loss.item())/n_batches:.5f}")
             train_log = { "Loss" :optimized_loss.item(),
+                          "log_prob" : interaction.aux['log_prob'].mean().item(),
                             "Reward" : reward,
                             "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"]
                             }
@@ -386,9 +387,13 @@ class Trainer:
                     
             if WANDB:
                 val_log["epoch"] = 0
+                val_log["val_log_prob"] =  validation_interaction.aux['log_prob'].mean().item()
                 wandb.log(val_log, step = STEP)
                 if metric > best_metric_score:
                     self.save_val_preds(validation_interaction, config)
+        if config["inference"]["flag"]:
+            self.save_val_preds(validation_interaction, config)
+            return
 
         for callback in self.callbacks:
             """
@@ -420,6 +425,7 @@ class Trainer:
                 val_log, validation_interaction, metric = run_validation(epoch + 1)
                         
                 if WANDB:
+                    val_log["val_log_prob"] =  validation_interaction.aux['log_prob'].mean().item()
                     wandb.log(val_log, step = STEP)
                     if metric > best_metric_score:
                         self.save_val_preds(validation_interaction, config)
@@ -484,8 +490,12 @@ class Trainer:
         preds = [j for i in full_interaction.message for j in i]
         cocoids = [i.item() for i in full_interaction.aux_input['cocoid']]
         val_preds =  dict(zip(cocoids, preds))
+
+        if config["inference"]["flag"]:
+            save_path = os.path.join(config["opts"]["checkpoint_dir"], config["inference"]["model_name"] + f".pkl")                                        
+        else:    
+            save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
         
-        save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
 
         with open(save_path, "wb") as f:
             pickle.dump(val_preds, f)

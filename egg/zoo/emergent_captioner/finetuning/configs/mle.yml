@@ -8,26 +8,37 @@ prefix_len : 10
 warmup_ratio : 0.034
 official_clipcap_weights : /home/manugaur/official_clipcap/coco_weights.pt
 num_workers : 16
+CAPS_PER_IMG_train: 4
+CAPS_PER_IMG_val: 4
 
 opts: 
   baseline : mean
   n_epochs : 10
-  batch_size : 10
+  batch_size : 40 #10 for ada
   lr :  2e-5
   max_len : 50
   checkpoint_freq : 1
   num_workers : 16
   dataset_dir : /home/manugaur/coco
-  mle_model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50/best.pt
-  checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50_ada_no_ddp.pt
+  checkpoint_dir : /home/manugaur/EGG/checkpoints/coco/mle_len_50  #
     
 WANDB :
-  logging : True
+  logging : False
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
   run_name : "mle_len_50_mistral4_ada_no_ddp" # "mle_len_50_mistral_4"
+ 
+inference : 
+  flag : False
+  caps_per_img : 4
+  batch_size : 180
+  model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50/best.pt
+  output_dir : /home/manugaur/EGG/val_test_preds/
+  model_name : mistral_mle
+  #captions_type, debug, init_val
 
-#init_val, debug, epoch, logging
+
+#checkpoint_dir, debug,init_val, logging, bsz, wandb_name

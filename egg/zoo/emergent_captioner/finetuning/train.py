@@ -45,7 +45,14 @@ def main(params, config):
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
 
-    if  opts.distributed_context.local_rank ==0:
+    # Getting val_test preds?
+    if config["inference"]["flag"]:
+        opts.mle_model_path = config["inference"]["model_path"]
+        config["opts"]["checkpoint_dir"] = config["inference"]["output_dir"]
+        config["WANDB"]["logging"] = False
+        opts.batch_size = config["inference"]["batch_size"]
+
+    if opts.distributed_context.local_rank ==0:
         init_wandb(config)
 
     print(get_sha())
@@ -56,7 +63,7 @@ def main(params, config):
         "flickr": FlickrWrapper,
     }
     # args
-    wrapper = name2wrapper[opts.train_dataset](config["captions_type"], opts.dataset_dir, opts.jatayu)
+    wrapper = name2wrapper[opts.train_dataset](config["captions_type"], config["inference"]["flag"], opts.dataset_dir, opts.jatayu)
     data_kwargs = dict(
         batch_size=opts.batch_size,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
@@ -67,10 +74,15 @@ def main(params, config):
         max_len_token = opts.max_len,
         prefix_len = config["prefix_len"],
         is_dist_leader = opts.distributed_context.is_leader,
+        inference = config["inference"]["flag"],
     )
-    train_loader = wrapper.get_split(split="train", caps_per_img = 1, **data_kwargs)
-    val_loader = wrapper.get_split(split="val", caps_per_img = 4, **data_kwargs)
-    # test_loader = wrapper.get_split(split="test", **data_kwargs)
+
+    train_loader = wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], **data_kwargs)
+    if config["inference"]["flag"]:
+        val_loader = wrapper.get_split(split="val_test", caps_per_img = config["inference"]["caps_per_img"], **data_kwargs)
+    else:
+        val_loader = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], **data_kwargs)
+    
 
     game = build_game(opts, config)
     # print_grad_info(game)
@@ -130,6 +142,7 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     # torch.set_deterministic(True)
     use_ddp = False    
+
     if "LOCAL_RANK" in os.environ:
         use_ddp = True
         torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))

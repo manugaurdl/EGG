@@ -88,7 +88,7 @@ class ReinforceCaptionGame(nn.Module):
             if self.training and not GREEDY_BASELINE:
                 self.baseline.update(policy_cider)
 
-            aux_info = {'acc' : torch.randn(1,2), "kl_div" : kl_div}
+            aux_info = {'acc' : torch.randn(1,2), "kl_div" : kl_div, "log_prob" : log_prob}
             
             logging_strategy = self.test_logging_strategy
 
@@ -119,6 +119,7 @@ class ReinforceCaptionGame(nn.Module):
                 self.baseline.update(loss)
 
             aux_info["kl_div"] = kl_div
+            aux_info["log_prob"] =  log_prob
 
             logging_strategy = (
                 self.train_logging_strategy if self.training else self.test_logging_strategy
@@ -149,6 +150,7 @@ class ReinforceCaptionGame(nn.Module):
             else:
                 val_captions, log_prob, kl_div = outputs
                 aux_info = {"kl_div" :kl_div}
+                aux_info["log_prob"] =  log_prob
 
                 logging_strategy = (
                     self.train_logging_strategy if self.training else self.test_logging_strategy

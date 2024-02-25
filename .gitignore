@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 job_ada.sh
+val_test_preds/
 *.out 
 *.ipynb
 wandb/
