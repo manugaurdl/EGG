@@ -30,12 +30,8 @@ WANDB :
   run_name : "sr_len_50_lr_1e-7_bs_100_blip2mistral"
 
 inference : 
-  flag : False
-  caps_per_img : 4
   batch_size : 180
-  model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50/best.pt
-  output_dir : /home/manugaur/EGG/val_test_preds/
-  model_name : mistral_mle
+  output_dir : /home/manugaur/EGG/inference_preds/
   #captions_type, debug, init_val
 
 

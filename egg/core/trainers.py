@@ -61,6 +61,7 @@ class Trainer:
         train_data: DataLoader,
         optimizer_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
         validation_data: Optional[DataLoader] = None,
+        inference_data : Optional[DataLoader] = None,
         device: torch.device = None,
         callbacks: Optional[List[Callback]] = None,
         grad_norm: float = None,
@@ -83,6 +84,7 @@ class Trainer:
         self.optimizer_scheduler = optimizer_scheduler
         self.train_data = train_data
         self.validation_data = validation_data
+        self.inference_data = inference_data #test_val
         common_opts = get_opts()
         self.validation_freq = common_opts.validation_freq
         self.device = common_opts.device if device is None else device
@@ -179,12 +181,12 @@ class Trainer:
         else:
             self.scaler = None
 
-    def eval(self, data=None, GREEDY_BASELINE = False, train_method = None):
+    def eval(self, inference : bool, data=None, GREEDY_BASELINE = False, train_method = None):
         global STEP
         mean_loss = 0.0
         interactions = []
         n_batches = 0
-        validation_data = self.validation_data if data is None else data
+        validation_data = self.inference_data if inference  else self.validation_data
         self.game.eval()
         with torch.no_grad():
             for batch_id, batch in tqdm(enumerate(validation_data), total = len(validation_data)):
@@ -328,7 +330,7 @@ class Trainer:
 
         return mean_loss.item(), full_interaction
 
-    def train(self, config, opts):
+    def train(self,config, opts, inference = False):
 
         n_epochs = config['opts']['n_epochs']
         WANDB = config['WANDB']['logging']
@@ -343,7 +345,7 @@ class Trainer:
         global STEP
 
         
-        def run_validation(epoch : int):
+        def run_validation(epoch : int, inference : bool = False):
             validation_loss = validation_interaction = None
             if (
                 self.validation_data is not None
@@ -354,7 +356,7 @@ class Trainer:
                 #     if idx in [0,1]:
                 #         continue
                 #     callback.on_validation_begin(epoch + 1) # pass
-                validation_loss, validation_interaction, val_reward, summary = self.eval(GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
+                validation_loss, validation_interaction, val_reward, summary = self.eval(inference = inference, GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
 
                 val_log = { "Val Loss" :validation_loss,
                             "Val Reward" : val_reward,
@@ -383,7 +385,7 @@ class Trainer:
         
         #INIT VAL
         if INIT_VAL and self.distributed_context.is_leader:
-            val_log, validation_interaction, metric = run_validation(epoch = 0)
+            val_log, validation_interaction, metric = run_validation(epoch = 0, inference = inference)
                     
             if WANDB:
                 val_log["epoch"] = 0
@@ -391,8 +393,9 @@ class Trainer:
                 wandb.log(val_log, step = STEP)
                 if metric > best_metric_score:
                     self.save_val_preds(validation_interaction, config)
-        if config["inference"]["flag"]:
-            self.save_val_preds(validation_interaction, config)
+        
+        if inference:
+            self.save_val_preds(validation_interaction, config, inference = True)
             return
 
         for callback in self.callbacks:
@@ -486,17 +489,17 @@ class Trainer:
         if latest_file is not None:
             self.load_from_checkpoint(latest_file)
     
-    def save_val_preds(self, full_interaction, config):
+    def save_val_preds(self, full_interaction, config, inference = False):
         preds = [j for i in full_interaction.message for j in i]
         cocoids = [i.item() for i in full_interaction.aux_input['cocoid']]
         val_preds =  dict(zip(cocoids, preds))
 
-        if config["inference"]["flag"]:
-            save_path = os.path.join(config["opts"]["checkpoint_dir"], config["inference"]["model_name"] + f".pkl")                                        
+        if inference:
+            save_path = os.path.join(config["inference"]["output_dir"], f"{config['captions_type']}_{config['train_method']}.pkl")                                        
         else:    
             save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
         
-
+        
         with open(save_path, "wb") as f:
             pickle.dump(val_preds, f)
 

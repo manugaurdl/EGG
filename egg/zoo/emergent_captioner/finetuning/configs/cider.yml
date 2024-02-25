@@ -1,4 +1,4 @@
-DEBUG : False
+DEBUG : True
 INIT_VAL : True
 GREEDY_BASELINE : True
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
@@ -13,7 +13,7 @@ CAPS_PER_IMG_val: 4
 
 opts: 
   baseline : mean
-  n_epochs : 10
+  n_epochs : 1
   batch_size : 180
   lr :  1e-6 #1e-7 for blip
   max_len : 50
@@ -33,12 +33,8 @@ WANDB :
   run_name : cider_g_mistral4_len_50_lr_1e-7 #"cider_g_len_50_mistral_4"
 
 inference : 
-  flag : False
-  caps_per_img : 4
   batch_size : 180
-  model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50/best.pt
-  output_dir : /home/manugaur/EGG/val_test_preds/
-  model_name : mistral_mle
+  output_dir : /home/manugaur/EGG/inference_preds/
   #captions_type, debug, init_val
 
 

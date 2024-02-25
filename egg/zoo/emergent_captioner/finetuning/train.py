@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import random
 from transformers import get_linear_schedule_with_warmup
-from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb
+from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -45,13 +45,6 @@ def main(params, config):
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
 
-    # Getting val_test preds?
-    if config["inference"]["flag"]:
-        opts.mle_model_path = config["inference"]["model_path"]
-        config["opts"]["checkpoint_dir"] = config["inference"]["output_dir"]
-        config["WANDB"]["logging"] = False
-        opts.batch_size = config["inference"]["batch_size"]
-
     if opts.distributed_context.local_rank ==0:
         init_wandb(config)
 
@@ -63,7 +56,7 @@ def main(params, config):
         "flickr": FlickrWrapper,
     }
     # args
-    wrapper = name2wrapper[opts.train_dataset](config["captions_type"], config["inference"]["flag"], opts.dataset_dir, opts.jatayu)
+    wrapper = name2wrapper[opts.train_dataset](config["captions_type"], opts.dataset_dir, opts.jatayu)
     data_kwargs = dict(
         batch_size=opts.batch_size,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
@@ -74,14 +67,13 @@ def main(params, config):
         max_len_token = opts.max_len,
         prefix_len = config["prefix_len"],
         is_dist_leader = opts.distributed_context.is_leader,
-        inference = config["inference"]["flag"],
     )
 
     train_loader = wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], **data_kwargs)
-    if config["inference"]["flag"]:
-        val_loader = wrapper.get_split(split="val_test", caps_per_img = config["inference"]["caps_per_img"], **data_kwargs)
-    else:
-        val_loader = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], **data_kwargs)
+    val_loader = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], **data_kwargs)
+    data_kwargs["batch_size"] = config["inference"]["batch_size"]
+    data_kwargs["mle_train"] = False
+    test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], **data_kwargs)
     
 
     game = build_game(opts, config)
@@ -101,6 +93,7 @@ def main(params, config):
             train_data=train_loader,
             optimizer_scheduler = scheduler,
             validation_data =val_loader,
+            inference_data = test_loader,
             callbacks=[
                 ConsoleLogger(as_json=True, print_train_loss=True),
                 ModelSaver(opts),
@@ -113,6 +106,7 @@ def main(params, config):
         optimizer=optimizer,
         train_data=train_loader,
         validation_data =val_loader,
+        inference_data = test_loader,
         callbacks=[
             ConsoleLogger(as_json=True, print_train_loss=True),
             ModelSaver(opts),
@@ -128,10 +122,24 @@ def main(params, config):
 
     trainer.train(config, opts)
 
+    # Get inference preds
+    if not os.path.isdir(config["inference"]["output_dir"]):
+        os.makedirs(config["inference"]["output_dir"])
+
+    if opts.captioner_model == "clipcap":   
+        trainer.game.sender.unpatch_model()
+        trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
+        trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
+    config["WANDB"]["logging"] = False
+
+    trainer.train(config, opts, inference = True)
+    
+    
     # _, test_interaction, test_reward = trainer.eval(val_loader)
 
     # log_stats(test_interaction, "TEST SET")
     # dump_interaction(test_interaction, opts, name="finetuned_")
+
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")
@@ -149,7 +157,7 @@ if __name__ == "__main__":
         config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[-1]}.yml"    # get this from sys args 
         
     else:
-        config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml" 
+        config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"
     
     config = get_config(config_filename)
     config = process_config(config, use_ddp)

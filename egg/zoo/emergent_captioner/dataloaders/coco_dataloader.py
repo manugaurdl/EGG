@@ -103,7 +103,7 @@ class CocoDataset:
 
 class CocoWrapper:
 
-    def __init__(self, captions_type : str, inference : bool,  dataset_dir: str = None, jatayu: bool = False):
+    def __init__(self, captions_type : str,  dataset_dir: str = None, jatayu: bool = False):
         self.num_omitted_ids = 0
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
@@ -113,10 +113,9 @@ class CocoWrapper:
             self.id2caption = open_pickle(os.path.join(dataset_dir, f"synthetic_data/cocoid2caption_{self.captions_type}_preproc.pkl"))
             assert isinstance(list(self.id2caption.values())[0], list), "cocoid2cap is not id --> list of caps"
         self.split2samples = self._load_splits(jatayu) # {test,val,train,restval} --> {test[0] :(img_path, list of 5 caps, cocoid)}
-        if inference:
-            val_test_list = self.split2samples['test']
-            val_test_list.extend(self.split2samples['val'])
-            self.split2samples['val_test'] = val_test_list
+        val_test_list = self.split2samples['test']
+        val_test_list.extend(self.split2samples['val'])
+        self.split2samples['test'] = val_test_list
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
 
@@ -188,14 +187,13 @@ class CocoWrapper:
         max_len_token : int,
         prefix_len : int,
         is_dist_leader : bool,
-        inference : bool,
         transform: Callable,
         num_workers: int = 8,
         seed: int = 111,
     ):
-        if mle_train and not inference:
+        if mle_train and split != "test":
             self.tokenize(split)
-        shuffle = not debug and split != "val_test"
+        shuffle = not debug and split != "test"
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
 

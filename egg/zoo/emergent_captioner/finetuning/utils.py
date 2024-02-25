@@ -168,7 +168,6 @@ def process_config(config, use_ddp):
     
     if use_ddp:
         config["num_workers"] = 0
-
     return config
 
 def get_cl_args(config):
@@ -182,3 +181,13 @@ def init_wandb(config):
     if config['WANDB']['logging'] and (not config['WANDB']['sweep']) :
         wandb.init(entity= config["WANDB"]["entity"], project=config["WANDB"]['project'], config = config)
         wandb.run.name = config['WANDB']['run_name']
+
+def get_best_state_dict(config):
+    print("| LOADED BEST MODEL FOR INFERENCE")
+    
+    desired_format_state_dict = torch.load(config["official_clipcap_weights"])
+    saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "best.pt"))[1]
+    state_dict = {}
+    for idx, k in enumerate(desired_format_state_dict.keys()):
+        state_dict[k] = saved_state_dict["sender.clipcap." + k]
+    return state_dict
