@@ -174,7 +174,6 @@ def init(
 
     if params is None:
         params = sys.argv[1:]
-    # import ipdb;ipdb.set_trace()
     common_opts = _get_params(arg_parser, params)
 
     if common_opts.random_seed is None:

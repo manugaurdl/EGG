@@ -1,4 +1,4 @@
-DEBUG : True
+DEBUG : False
 INIT_VAL : True
 GREEDY_BASELINE : True
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
@@ -13,7 +13,7 @@ CAPS_PER_IMG_val: 4
 
 opts: 
   baseline : mean
-  n_epochs : 1
+  n_epochs : 10
   batch_size : 180
   lr :  1e-6 #1e-7 for blip
   max_len : 50
@@ -35,7 +35,6 @@ WANDB :
 inference : 
   batch_size : 180
   output_dir : /home/manugaur/EGG/inference_preds/
-  #captions_type, debug, init_val
 
 
-#debug, init_val, logging, bsz, lr, wandb_name
+#debug, init_val, logging, batch_size, lr

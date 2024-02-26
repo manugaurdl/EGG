@@ -37,14 +37,12 @@ np.random.seed(seed)
 
 
 def main(params, config):
-
     start = time.time()
     opts = get_common_opts(params=params)
     opts.jatayu = os.path.isdir("/home/manugaur")
     opts.loss_type= config['train_method']
     store_job_and_task_id(opts)
     setup_for_distributed(opts.distributed_context.is_leader)
-
     if opts.distributed_context.local_rank ==0:
         init_wandb(config)
 

@@ -163,9 +163,10 @@ def process_config(config, use_ddp, sys_args):
         config['opts']['dataset_dir'] = os.path.join(ssd_scratch, config['opts']['dataset_dir'].split("manugaur/")[-1])
         config['opts']['mle_model_path'] = os.path.join(ssd_scratch, config['opts']['mle_model_path'].split("manugaur/")[-1])
         config['opts']['checkpoint_dir'] = os.path.join(ssd_scratch,config['opts']['checkpoint_dir'].split("manugaur/")[-1])
-        config['opts']['jatayu'] = jatayu
         config["official_clipcap_weights"] = os.path.join(ssd_scratch, config["official_clipcap_weights"].split("manugaur/")[-1])
-    
+        config["inference"]["output_dir"] = os.path.join(ssd_scratch, config["inference"]["output_dir"].split("manugaur/")[-1])
+        config['opts']['jatayu'] = jatayu
+
     if use_ddp:
         config["num_workers"] = 0
     config["captions_type"] = sys_args[1].split("/")[0]
@@ -173,7 +174,6 @@ def process_config(config, use_ddp, sys_args):
     config["WANDB"]["run_name"] = f"{sys_args[0]}_{sys_args[1].split('/')[0]}" #{method}_{data}
     if "mle_model_path" in config["opts"]:
         config["opts"]["mle_model_path"] = os.path.join(config['opts']['mle_model_path'].split("/checkpoints")[0], f"checkpoints/{sys_args[1].split('/')[0]}/mle/best.pt")
-        
     return config
 
 def get_cl_args(config):

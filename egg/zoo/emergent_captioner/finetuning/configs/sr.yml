@@ -24,7 +24,7 @@ opts:
   checkpoint_dir : /home/manugaur/EGG/checkpoints/blip2mistral/sr
     
 WANDB :
-  logging : True
+  logging : False
   sweep : False
   sweep_id: ""
   sweep_run_count : 100

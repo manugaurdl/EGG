@@ -24,7 +24,6 @@ class DistributedContext:
 
 
 def maybe_init_distributed(args) -> DistributedContext:
-    # import ipdb;ipdb.set_trace()
     assert not hasattr(
         args, "distributed_context"
     ), "distributed context is already initialized?!"
@@ -60,37 +59,37 @@ def maybe_init_distributed(args) -> DistributedContext:
             backend="nccl", init_method=init_method, world_size=world_size, rank=rank
         )
     # is it slurm?
-    elif all(key in os.environ for key in slurm_keys):
-        init_method = "env://"
-        local_rank = int(os.environ["SLURM_LOCALID"])
-        rank = int(os.environ["SLURM_PROCID"])
-        world_size = int(os.environ["SLURM_NTASKS"])
+    # elif all(key in os.environ for key in slurm_keys):
+    #     init_method = "env://"
+    #     local_rank = int(os.environ["SLURM_LOCALID"])
+    #     rank = int(os.environ["SLURM_PROCID"])
+    #     world_size = int(os.environ["SLURM_NTASKS"])
 
-        hostnames = subprocess.check_output(
-            ["scontrol", "show", "hostnames", os.environ["SLURM_JOB_NODELIST"]]
-        )
-        leader_addr = hostnames.split()[0].decode("utf-8")
+    #     hostnames = subprocess.check_output(
+    #         ["scontrol", "show", "hostnames", os.environ["SLURM_JOB_NODELIST"]]
+    #     )
+    #     leader_addr = hostnames.split()[0].decode("utf-8")
 
-        os.environ["MASTER_ADDR"] = leader_addr
-        os.environ["MASTER_PORT"] = str(args.distributed_port)
-        os.environ["WORLD_SIZE"] = str(world_size)
-        os.environ["RANK"] = str(rank)
+    #     os.environ["MASTER_ADDR"] = leader_addr
+    #     os.environ["MASTER_PORT"] = str(args.distributed_port)
+    #     os.environ["WORLD_SIZE"] = str(world_size)
+    #     os.environ["RANK"] = str(rank)
 
-        if world_size > 1:
-            # no point in being distributed if it is alone
-            context = DistributedContext(
-                is_distributed=True,
-                rank=rank,
-                local_rank=local_rank,
-                world_size=world_size,
-                mode="slurm",
-            )
-            dist.init_process_group(
-                backend="nccl",
-                init_method=init_method,
-                world_size=world_size,
-                rank=rank,
-            )
+    #     if world_size > 1:
+    #         # no point in being distributed if it is alone
+    #         context = DistributedContext(
+    #             is_distributed=True,
+    #             rank=rank,
+    #             local_rank=local_rank,
+    #             world_size=world_size,
+    #             mode="slurm",
+    #         )
+    #         dist.init_process_group(
+    #             backend="nccl",
+    #             init_method=init_method,
+    #             world_size=world_size,
+    #             rank=rank,
+    #         )
 
     return context
 
