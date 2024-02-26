@@ -20,7 +20,7 @@ opts:
   checkpoint_freq : 0
   num_workers : 16
   dataset_dir : /home/manugaur/coco
-  mle_model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle_len_50/best.pt  #blip2mistral/mle_len_50/best.pt #coco
+  mle_model_path : /home/manugaur/EGG/checkpoints/mistral_4/mle/best.pt  #blip2mistral/mle_len_50/best.pt #coco
   checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/cider_g_len_50_lr_1e-7 #blip2mistral/cider_g_len_50  #cider_g_coco
     
 WANDB :

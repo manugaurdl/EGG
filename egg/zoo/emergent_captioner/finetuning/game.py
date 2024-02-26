@@ -113,7 +113,7 @@ class ReinforceCaptionGame(nn.Module):
             
             baseline = self.baseline.predict(loss.detach())
 
-            reward = (loss.detach() - baseline) + weighted_kl_div
+            reward = (loss.detach() - baseline)# + weighted_kl_div
             reinforce_loss = (reward * log_prob).mean()
             if self.training:
                 self.baseline.update(loss)
