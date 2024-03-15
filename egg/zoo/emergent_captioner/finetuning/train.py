@@ -80,6 +80,7 @@ def main(params, config):
     # print_grad_info(game)
     
     optimizer = torch.optim.AdamW(game.sender.parameters(), lr=opts.lr)
+    # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
 
 
     if config["train_method"] == "mle":
@@ -117,7 +118,7 @@ def main(params, config):
     if opts.distributed_context.is_distributed:
         trainer.game = trainer.game.module
 
-    if opts.captioner_model == "clipcap":   
+    if opts.captioner_model == "clipcap" and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
     trainer.train(config, opts)

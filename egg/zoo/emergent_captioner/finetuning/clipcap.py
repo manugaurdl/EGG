@@ -413,13 +413,29 @@ class ClipCapSender(nn.Module):
             print("| LOADED CLIPCAP MODEL")
             
             desired_format_state_dict = torch.load(official_clipcap_weights)
-            saved_state_dict = torch.load(clipcap_path)[1]
-            state_dict = {}
-            for idx, k in enumerate(desired_format_state_dict.keys()):
-                state_dict[k] = saved_state_dict["sender.clipcap." + k]
+            # saved_state_dict = torch.load(clipcap_path)[1]
+            
+            
+            #### LOADING PREV CODEBASE MLE MODEL
+            state_dict = torch.load(clipcap_path)['model_state_dict']
+
+            state_dict["clip_project.model.0.weight"] = state_dict["mapping_network.model.0.weight"]
+            state_dict["clip_project.model.2.weight"] = state_dict["mapping_network.model.2.weight"]
+            state_dict["clip_project.model.0.bias"] = state_dict["mapping_network.model.0.bias"]
+            state_dict["clip_project.model.2.bias"] = state_dict["mapping_network.model.2.bias"]
+            del state_dict["mapping_network.model.0.weight"]
+            del state_dict["mapping_network.model.2.weight"]
+            del state_dict["mapping_network.model.0.bias"]
+            del state_dict["mapping_network.model.2.bias"]
+
+
+            
+            # state_dict = {}
+            # for idx, k in enumerate(desired_format_state_dict.keys()):
+            #     state_dict[k] = saved_state_dict["sender.clipcap." + k]
 
             self.clipcap.load_state_dict(state_dict)
-            # self.clipcap.load_state_dict(torch.load(official_clipcap_weights))
+            # self.clipcap.load_state_dict(desired_format_state_dict)
 
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):

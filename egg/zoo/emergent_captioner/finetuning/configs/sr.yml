@@ -1,4 +1,4 @@
-DEBUG : True
+DEBUG : False
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
@@ -8,15 +8,15 @@ prefix_len : 10
 warmup_ratio : 0.034
 official_clipcap_weights : /home/manugaur/official_clipcap/coco_weights.pt
 num_workers : 16
-CAPS_PER_IMG_train: 4
-CAPS_PER_IMG_val: 4
+CAPS_PER_IMG_train: 5
+CAPS_PER_IMG_val: 5
 
 opts: 
   baseline : mean
-  n_epochs : 1
+  n_epochs : 10
   batch_size : 100
-  lr :  1e-7 #2e-5
-  max_len : 50
+  lr : 1e-7 #2e-5
+  max_len : 40
   checkpoint_freq : 0
   num_workers : 16
   dataset_dir : /home/manugaur/coco
@@ -30,10 +30,11 @@ WANDB :
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : "sr_len_50_lr_1e-7_bs_100_blip2mistral"
+  run_name : lr_1e-7_prev_mle_wts #suffix to "sr_{data}_"
 
 inference : 
-  batch_size : 180
+  batch_size : 100
   output_dir : /home/manugaur/EGG/inference_preds/
 
-#debug, init_val, logging, bsz, lr
+#DEBUG, INIT_VAL, logging, batch_size, n_epochs
+# max_len
