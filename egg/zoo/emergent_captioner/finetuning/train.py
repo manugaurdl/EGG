@@ -155,8 +155,8 @@ if __name__ == "__main__":
     if "LOCAL_RANK" in os.environ:
         use_ddp = True
         torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
-    
-    config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"
+
+    config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0].split('_')[0]}.yml"
     config = get_config(config_filename)
     config = process_config(config, use_ddp, sys.argv[1:])
     params = get_cl_args(config)
