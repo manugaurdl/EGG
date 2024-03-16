@@ -208,7 +208,7 @@ class CocoWrapper:
             # sampler = MyDistributedSampler(
             #     ds, shuffle=shuffle, drop_last=True, seed=seed
             # )
-            sampler = DistributedSampler(ds, num_replicas=int(os.environ["LOCAL_WORLD_SIZE"]), rank= int(os.environ["LOCAL_RANK"]), shuffle=True, drop_last=False)
+            sampler = DistributedSampler(ds, num_replicas=int(os.environ["LOCAL_WORLD_SIZE"]), rank= int(os.environ["LOCAL_RANK"]), shuffle=True, drop_last=True)
 
 
         if shuffle is None:

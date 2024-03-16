@@ -1,4 +1,6 @@
-# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL file
+egg/zoo/emergent_captioner/finetuning/configs/
+job.sh
 job_ada.sh
 inference_preds/
 val_test_preds/
