@@ -24,13 +24,13 @@ opts:
   checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/cider_g_len_50_lr_1e-7 #blip2mistral/cider_g_len_50  #cider_g_coco
     
 WANDB :
-  logging : False
+  logging : True
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : manugaur
   project : emergent_captioner
-  run_name : cider_g_mistral4_len_50_lr_1e-7 #"cider_g_len_50_mistral_4"
+  run_name :  #suffix to "cider_{data}_"
 
 inference : 
   batch_size : 180

@@ -330,10 +330,12 @@ class ClipCapModel(nn.Module):
             mask = (extra_tokens == 0).float()
 
             # get logprob for each sampled token for all captions
-            log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
-            log_probs *= mask # everything after "." is zeroed
-            log_probs = log_probs.sum(1) / msg_lengths #averaged
-
+            try:
+                log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
+                log_probs *= mask # everything after "." is zeroed
+                log_probs = log_probs.sum(1) / msg_lengths #averaged
+            except:
+                breakpoint()
             # put captions in textual form
             decoded_captions = self.tokenizer.batch_decode(
                 indices,
@@ -414,12 +416,28 @@ class ClipCapSender(nn.Module):
             
             desired_format_state_dict = torch.load(official_clipcap_weights)
             saved_state_dict = torch.load(clipcap_path)[1]
+            
+            
+            ################################################################################
+            
+            #### LOADING PREV CODEBASE MLE MODEL
+            # state_dict = torch.load(clipcap_path)['model_state_dict']
+            # state_dict["clip_project.model.0.weight"] = state_dict["mapping_network.model.0.weight"]
+            # state_dict["clip_project.model.2.weight"] = state_dict["mapping_network.model.2.weight"]
+            # state_dict["clip_project.model.0.bias"] = state_dict["mapping_network.model.0.bias"]
+            # state_dict["clip_project.model.2.bias"] = state_dict["mapping_network.model.2.bias"]
+            # del state_dict["mapping_network.model.0.weight"]
+            # del state_dict["mapping_network.model.2.weight"]
+            # del state_dict["mapping_network.model.0.bias"]
+            # del state_dict["mapping_network.model.2.bias"]
+            
+            #### LOAD EGG MLE MODEL
             state_dict = {}
             for idx, k in enumerate(desired_format_state_dict.keys()):
                 state_dict[k] = saved_state_dict["sender.clipcap." + k]
 
+            ##################################################################################
             self.clipcap.load_state_dict(state_dict)
-            # self.clipcap.load_state_dict(torch.load(official_clipcap_weights))
 
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):

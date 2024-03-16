@@ -1,4 +1,4 @@
-DEBUG : True
+DEBUG : False
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
@@ -13,9 +13,9 @@ CAPS_PER_IMG_val: 4
 
 opts: 
   baseline : mean
-  n_epochs : 1
+  n_epochs : 20
   batch_size : 100
-  lr :  1e-7 #2e-5
+  lr : 3e-8 #2e-5
   max_len : 50
   checkpoint_freq : 0
   num_workers : 16
@@ -30,10 +30,11 @@ WANDB :
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : "sr_len_50_lr_1e-7_bs_100_blip2mistral"
+  run_name : 4_caps_len40_bsz_100_lr_3e-8 #suffix to "sr_{data}_"
 
 inference : 
-  batch_size : 180
+  batch_size : 100
   output_dir : /home/manugaur/EGG/inference_preds/
 
-#debug, init_val, logging, bsz, lr
+#DEBUG, INIT_VAL, logging, batch_size, n_epochs
+# max_len
