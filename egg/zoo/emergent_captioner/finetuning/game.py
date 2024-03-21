@@ -10,7 +10,7 @@ from egg.zoo.emergent_captioner.finetuning.blip import BlipSender
 from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender
 from egg.zoo.emergent_captioner.finetuning.losses import get_loss, CiderReward, DiscriminativeLoss
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
-
+from egg.zoo.emergent_captioner.finetuning.lora import LoRA
 
 class ReinforceCaptionGame(nn.Module):
     def __init__(
@@ -226,6 +226,15 @@ def build_game(opts, config):
         num_hard_negatives=opts.num_hard_negatives,
     )
     # remember that with non-diff losses you should use a wrapper around recv
+    if config["lora"]:
+
+        original_weights = {}
+        for name, param in sender.clipcap.gpt.named_parameters():
+            original_weights[name] = param.clone().detach()
+        
+        LoRA(sender)
+
+
     game = ReinforceCaptionGame(
         sender=sender,
         receiver=receiver,

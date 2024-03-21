@@ -199,3 +199,15 @@ def get_best_state_dict(config):
     for idx, k in enumerate(desired_format_state_dict.keys()):
         state_dict[k] = saved_state_dict["sender.clipcap." + k]
     return state_dict
+
+def int2mil(number):
+    if abs(number) >= 100_000:
+        formatted_number = "{:.1f}M".format(number / 1_000_000)
+    else:
+        formatted_number = str(number)
+    return formatted_number
+
+def trainable_params(model):
+    # print(f'{int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))} trainable params')
+    return int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))
+    # return sum(p.numel() for p in model.parameters() if p.requires_grad == True)

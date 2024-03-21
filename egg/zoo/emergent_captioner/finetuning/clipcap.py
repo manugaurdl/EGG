@@ -16,6 +16,7 @@ from egg.zoo.emergent_captioner.finetuning.utils import (
     StopTokenLogitsProcessor,
 )
 from egg.zoo.emergent_captioner.utils import convert_models_to_fp32
+from egg.zoo.emergent_captioner.finetuning.utils import int2mil, trainable_params
 
 
 class MLP(nn.Module):
