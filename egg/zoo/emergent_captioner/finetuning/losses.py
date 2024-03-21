@@ -34,9 +34,9 @@ class Loss(nn.Module):
     def get_similarity_scores(self, text_feats, image_feats, img_idxs, aux_input=None):
         cosine_in_batch = text_feats @ image_feats.t() # (B x B) sim matrix
 
-        targets = cosine_in_batch.diag(0).unsqueeze(1) # targets are the image itself
+        targets = cosine_in_batch.diag(0).unsqueeze(1) # targets are the image itself --> extract the main diagnol (B x 1)
         cosine_in_batch.fill_diagonal_(float("-inf"))  # mask targets.
-        cosine_in_batch = torch.cat([targets, cosine_in_batch], dim=1) # (B +1 X B )
+        cosine_in_batch = torch.cat([targets, cosine_in_batch], dim=1) # B x (1+B)
 
         cosine_sims = cosine_in_batch
 
@@ -72,9 +72,10 @@ class DiscriminativeLoss(Loss):
         sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
 
         labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
-        # dist over bsz + 1 classes. logprob for target class in the 0th column. For each sample(row), target logprob : row[0]
+        # dist over bsz classes. Even tensor of shape (bsz + 1), -inf values won't count due to softmax. 
+        # logprob for target class in the 0th column. For each sample(row),logprob of target class : row[0]
         loss = F.cross_entropy(sims, labels, reduction="none")
-        # highest sim should be the first column for each row i.e sim.argmax for each row should be == 0.
+        # For each row, highest value should be the first colum i.e argmax for each row in sims should be == 0.
         acc = (sims.argmax(dim=1) == labels).detach().float() 
 
         return loss, {"acc": acc}

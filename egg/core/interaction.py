@@ -159,10 +159,13 @@ class Interaction:
         aux_input = None
         if has_aux_input:
             aux_input = {}
-            for k in interactions[0].aux_input:
+            for idx, k in enumerate(interactions[0].aux_input):
+                #receiver_output not concatenated
+                if idx ==2:
+                    continue
                 aux_input[k] = _check_cat([x.aux_input[k] for x in interactions])
         aux = {}
-        for k in interactions[0].aux:
+        for idx, k in enumerate(interactions[0].aux):
             aux[k] = _check_cat([x.aux[k] for x in interactions])
 
         return Interaction(

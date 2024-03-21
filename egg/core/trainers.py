@@ -402,7 +402,7 @@ class Trainer:
 
         for callback in self.callbacks:
             """
-            In CallBack class, create self.trainer = callbacks.console_logger , finetuning.utils.ModelSaver , callbacks.checkpoint saver
+            In CallBack class, create self.trainer = callbacks.console_logger , finetuning.utils.ModelSaver , callbacks.checkpointsaver
             """
             callback.on_train_begin(self)
 

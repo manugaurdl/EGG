@@ -91,33 +91,133 @@ class CocoDataset:
         # image = Image.open(str(file_path)).convert("RGB")
 
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
-        sender_input, recv_input = self.transform(image)
+        sender_input, recv_input = self.transform(image) # they are same
+        
+        """ Saving sender_inputs"""
+        
+        # save_dir = f"/home/manugaur/EGG/sender_inputs/{self.split}"
+        # if not os.path.isdir(save_dir):
+        #     os.makedirs(save_dir)
+        # torch.save(sender_input, os.path.join(save_dir, f"{image_id}.pt"))
+
         if self.mle_train:
             padded_tokens, mask = self.get_tokens(image_id)
-            aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:5], "tokens": padded_tokens, "mask" : mask}
+            aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:self.caps_per_img], "tokens": padded_tokens, "mask" : mask}
         else:
-            aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:5]}
+            aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:self.caps_per_img]}
 
         return sender_input, torch.tensor([idx]), recv_input, aux
 
+class CocoNegDataset:
+    def __init__(self, root, samples, mle_train, split, caps_per_img, captions_type, max_len_token, prefix_len, transform, debug, bags, cocoid2samples_idx):
+        self.root = root
+        self.samples = samples
+        self.transform = transform
+        self.debug = debug
+        self.split = split
+        self.mle_train = mle_train
+        self.max_len_token = max_len_token
+        self.prefix_len = prefix_len
+        self.captions_type = captions_type
+        if self.mle_train:
+            self.path2tokens = os.path.join(root, f"tokenized_caps/{self.captions_type}/{self.split}")
+            # self.id2tokens = torch.load
+            pass
+        self.caps_per_img = caps_per_img
+        
+        self.cocoid2samples_idx = cocoid2samples_idx[split]
+        self.bags = bags
+
+    def __len__(self):
+        if self.debug:
+            return 40
+        else:
+            return len(self.bags)
+
+
+    def __getitem__(self, idx):
+
+        bag = self.bags[idx]
+        sender_inputs = []
+        aux_list = []
+        cocoids =[]
+        bag_of_caps = []
+
+        for cocoid in bag:
+            sample_idx = self.cocoid2samples_idx[cocoid]
+            file_path, captions, image_id = self.samples[sample_idx]
+            assert image_id == cocoid
+
+            sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/{self.split}", f"{cocoid}.pt")))
+
+            # aux_list.append({"cocoid": torch.tensor([image_id]), "captions": captions[:5]}) 
+            # aux_list.append({"captions": captions[:5]}) 
+            cocoids.append(cocoid)
+            bag_of_caps.append(captions[:self.caps_per_img])
+        # sender_input = torch.stack(sender_inputs)
+
+        return sender_inputs, cocoids, bag_of_caps
+
+def hard_neg_collate(og_batch):
+    cocoids = []
+    sender_input = []
+    all_bags_caps = [] 
+
+    for i in og_batch:
+        sender_input.extend(i[0]) 
+        cocoids.extend(i[1])
+        all_bags_caps.extend(i[-1])
+
+    sender_input = torch.stack(sender_input)
+    cocoids = torch.tensor(cocoids)
+
+    # caps zipped and changed from 5 X 100 --> 100 X 5
+    aux = {"cocoid" : cocoids, 
+            "captions" : [list(caps_per_capidx) for caps_per_capidx in zip(*all_bags_caps)]}
+    
+    # batch : sender_inp, sample_idxs, receiver input, aux_dict  dds
+    return sender_input, cocoids, sender_input, aux
 
 class CocoWrapper:
 
-    def __init__(self, captions_type : str,  dataset_dir: str = None, jatayu: bool = False):
+    def __init__(self, captions_type : str,  dataset_dir: str, jatayu: bool, neg_mining : dict):
         self.num_omitted_ids = 0
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
         self.dataset_dir = Path(dataset_dir)
         self.captions_type = captions_type
+        self.neg_mining = neg_mining
+
         if self.captions_type != "coco":
             self.id2caption = open_pickle(os.path.join(dataset_dir, f"synthetic_data/cocoid2caption_{self.captions_type}_preproc.pkl"))
             assert isinstance(list(self.id2caption.values())[0], list), "cocoid2cap is not id --> list of caps"
+        
         self.split2samples = self._load_splits(jatayu) # {test,val,train,restval} --> {test[0] :(img_path, list of 5 caps, cocoid)}
-        val_test_list = self.split2samples['test']
-        val_test_list.extend(self.split2samples['val'])
-        self.split2samples['test'] = val_test_list
+        self.cocoid2samples_idx = self.get_cocoid2sample_idx()   # cocoid <--> dataset idx 
+
+        # val_test_list = self.split2samples['test']
+        # val_test_list.extend(self.split2samples['val'])
+        # self.split2samples['test'] = val_test_list
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        
+        if self.neg_mining["do"]:
+            self.split2bags = self.load_bags(jatayu)
+
         print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
+
+    def load_bags(self, jatayu):
+        if jatayu:
+            path2bags = "/home/manugaur/EGG/hard_negs/bags/top_k_sim/"
+        else:
+            path2bags = "/ssd_scratch/cvit/manu/EGG/hard_negs/bags/top_k_sim/"
+
+        split2bags = {}
+
+        for split in ["train", "test", "val"]:
+            with open(os.path.join(path2bags, split, f"cocoid_bag_size_{self.neg_mining['bag_size']}.json"), "r") as f:
+                bags = json.load(f)
+            split2bags[split] = bags
+        return split2bags
 
     def tokenize(self,split):
         """
@@ -156,7 +256,7 @@ class CocoWrapper:
         split2samples = defaultdict(list)
         
         for img_ann in annotations["images"]:
-            # import ipdb;ipdb.set_trace()
+
             file_path = self.dataset_dir / img_ann["filepath"] / img_ann["filename"]
             cocoid = img_ann["cocoid"]
             try:
@@ -177,6 +277,15 @@ class CocoWrapper:
             print(f"| Split {k} has {len(v)} elements.")
         return split2samples
 
+    def get_cocoid2sample_idx(self):
+        cocoid2samples_idx = {}
+        for split in list(self.split2samples.keys()):
+            cocoid2idx = {}
+            for idx, sample in enumerate(self.split2samples[split]):
+                cocoid2idx[sample[-1]] = idx
+            cocoid2samples_idx[split] = cocoid2idx
+        return cocoid2samples_idx
+
     def get_split(
         self,
         split: str,
@@ -196,8 +305,13 @@ class CocoWrapper:
         shuffle = not debug and split != "test"
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
+       
+        if self.neg_mining["do"]:
+            bags = self.split2bags[split]
 
-        ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
+            ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx )
+        else :
+            ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
         sampler = None
 
         if dist.is_initialized() and split =="train":
@@ -216,15 +330,31 @@ class CocoWrapper:
 
         if sampler is not None :
             shuffle=None
-        loader = torch.utils.data.DataLoader(
-            ds,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            sampler=sampler,
-            num_workers=num_workers,
-            pin_memory=True,
-            drop_last=True,
-        )
+
+        if self.neg_mining["do"]:
+            bags_per_batch = int(batch_size/self.neg_mining["bag_size"])
+
+            loader = torch.utils.data.DataLoader(
+                ds,
+                batch_size=bags_per_batch,
+                shuffle=True,
+                sampler=sampler,
+                collate_fn = hard_neg_collate,
+                num_workers=num_workers,
+                pin_memory=True,
+                drop_last=True,
+            )
+        else:
+                
+            loader = torch.utils.data.DataLoader(
+                ds,
+                batch_size=batch_size,
+                shuffle=True,
+                sampler=sampler,
+                num_workers=num_workers,
+                pin_memory=True,
+                drop_last=True,
+            )
 
         return loader
 

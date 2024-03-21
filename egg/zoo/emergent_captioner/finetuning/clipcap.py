@@ -438,6 +438,7 @@ class ClipCapSender(nn.Module):
 
             ##################################################################################
             self.clipcap.load_state_dict(state_dict)
+            # self.clipcap.load_state_dict(desired_format_state_dict)
 
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):

@@ -3,6 +3,7 @@ import time
 import os
 import torch
 import numpy as np
+from tqdm import tqdm
 import random
 from transformers import get_linear_schedule_with_warmup
 from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict
@@ -54,7 +55,8 @@ def main(params, config):
         "flickr": FlickrWrapper,
     }
     # args
-    wrapper = name2wrapper[opts.train_dataset](config["captions_type"], opts.dataset_dir, opts.jatayu)
+    wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"])
+    
     data_kwargs = dict(
         batch_size=opts.batch_size,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
@@ -72,7 +74,9 @@ def main(params, config):
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
     data_kwargs["mle_train"] = False
     test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], **data_kwargs)
-    
+
+    # for idx, batch in tqdm(enumerate(train_loader),total = len(train_loader)):
+    #     pass
 
     game = build_game(opts, config)
     # print_grad_info(game)

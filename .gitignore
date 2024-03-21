@@ -1,5 +1,8 @@
 # Byte-compiled / optimized / DLL file
 egg/zoo/emergent_captioner/finetuning/configs/
+hard_negs/
+sender_inputs/
+bags_of_hard_negs.py
 job.sh
 job_ada.sh
 inference_preds/
