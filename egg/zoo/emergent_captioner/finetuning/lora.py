@@ -9,7 +9,7 @@ def enable_disable_lora(layers, enabled=True):
         layer.parametrizations["weight"][0].enabled = enabled
 
 class LoRAParametrization(nn.Module):
-    def __init__(self, features_in, features_out, rank=1, alpha=1, device = None):
+    def __init__(self, features_in, features_out, rank, alpha, device = None):
         super().__init__()
         # device : same device as feats
         self.lora_A = nn.Parameter(torch.zeros((rank,features_out)).to(device))
@@ -32,29 +32,33 @@ class LoRAParametrization(nn.Module):
             return original_weights
 
 
-def linear_layer_parameterization(layer, device, rank=1, lora_alpha=1):
+def linear_layer_parameterization(layer, device, rank, lora_alpha=16):
     features_in, features_out = layer.weight.shape
     return LoRAParametrization(
         features_in, features_out, rank=rank, alpha=lora_alpha, device=device
     )
 
-def parameterize(layer):
+def parameterize(layer, rank):
     parametrize.register_parametrization(
-layer, "weight", linear_layer_parameterization(layer, layer.weight.device)
+layer, "weight", linear_layer_parameterization(layer, layer.weight.device, rank)
 )
 
-def LoRA(model):
+def LoRA(model, rank, use_wpe):
     print(f"trainable params before LORA :{trainable_params(model)}")
 
     for i in range(12):
-        parameterize(model.clipcap.gpt.transformer.h[i].attn.c_attn)
-        parameterize(model.clipcap.gpt.transformer.h[i].attn.c_proj)
-        # parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc)
-        # parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj)
+        parameterize(model.clipcap.gpt.transformer.h[i].attn.c_attn, rank)
+        parameterize(model.clipcap.gpt.transformer.h[i].attn.c_proj, rank)
+        parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc, rank)
+        parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, rank)
 
     #freeze all_params
+    condition = 'lora' in name or  "gpt.transformer.wte" in name or "clip_project" in name 
+    if use_wpe:
+        condition = condition or "gpt.transformer.wpe" in name
+    
     for name, param in model.named_parameters():
-        if 'lora' in name or  "gpt.transformer.wte" in name or "gpt.transformer.wpe" in name or "clip_project" in name:
+        if condition:
             continue
         else:
             param.requires_grad = False

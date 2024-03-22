@@ -407,7 +407,10 @@ class Trainer:
                 wandb.log(val_log, step = STEP)
                 if metric > best_metric_score:
                     self.save_val_preds(validation_interaction, config)
-        
+            
+            print(val_log)
+
+
         if inference:
             self.save_val_preds(validation_interaction, config, inference = True)
             return

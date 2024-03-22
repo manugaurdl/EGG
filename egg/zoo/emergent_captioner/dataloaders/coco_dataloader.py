@@ -180,7 +180,7 @@ def hard_neg_collate(og_batch):
 
 class CocoWrapper:
 
-    def __init__(self, captions_type : str,  dataset_dir: str, jatayu: bool, neg_mining : dict):
+    def __init__(self, captions_type : str,  dataset_dir: str, jatayu: bool, neg_mining : dict, ONLY_VAL : bool):
         self.num_omitted_ids = 0
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
@@ -193,11 +193,15 @@ class CocoWrapper:
             assert isinstance(list(self.id2caption.values())[0], list), "cocoid2cap is not id --> list of caps"
         
         self.split2samples = self._load_splits(jatayu) # {test,val,train,restval} --> {test[0] :(img_path, list of 5 caps, cocoid)}
-        self.cocoid2samples_idx = self.get_cocoid2sample_idx()   # cocoid <--> dataset idx 
+        self.cocoid2samples_idx = self.get_cocoid2sample_idx()   # cocoid <--> dataset idx         
 
-        # val_test_list = self.split2samples['test']
-        # val_test_list.extend(self.split2samples['val'])
-        # self.split2samples['test'] = val_test_list
+        val_test_list = self.split2samples['test']
+        val_test_list.extend(self.split2samples['val'])
+        self.split2samples['test'] = val_test_list
+
+        if ONLY_VAL:
+            self.split2samples['test'] = self.split2samples['val']
+        
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         
         if self.neg_mining["do"]:
@@ -290,6 +294,7 @@ class CocoWrapper:
         self,
         split: str,
         caps_per_img : int,
+        neg_mining : bool,
         debug : bool,
         batch_size: int,
         mle_train : bool,
@@ -306,9 +311,8 @@ class CocoWrapper:
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
        
-        if self.neg_mining["do"]:
+        if neg_mining:
             bags = self.split2bags[split]
-
             ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx )
         else :
             ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
@@ -331,7 +335,7 @@ class CocoWrapper:
         if sampler is not None :
             shuffle=None
 
-        if self.neg_mining["do"]:
+        if neg_mining:
             bags_per_batch = int(batch_size/self.neg_mining["bag_size"])
 
             loader = torch.utils.data.DataLoader(

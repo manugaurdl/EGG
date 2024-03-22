@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import random
 from transformers import get_linear_schedule_with_warmup
-from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict
+from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict, int2mil
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -55,7 +55,7 @@ def main(params, config):
         "flickr": FlickrWrapper,
     }
     # args
-    wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"])
+    wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"], ONLY_VAL= config["ONLY_VAL"])
     
     data_kwargs = dict(
         batch_size=opts.batch_size,
@@ -69,11 +69,11 @@ def main(params, config):
         is_dist_leader = opts.distributed_context.is_leader,
     )
 
-    train_loader = wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], **data_kwargs)
-    val_loader = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], **data_kwargs)
+    train_loader = wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = config["neg_mining"]["do"],  **data_kwargs)
+    val_loader = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = config["neg_mining"]["val"],  **data_kwargs)
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
     data_kwargs["mle_train"] = False
-    test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], **data_kwargs)
+    test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = config["neg_mining"]["val"], **data_kwargs)
 
     # for idx, batch in tqdm(enumerate(train_loader),total = len(train_loader)):
     #     pass
@@ -84,7 +84,7 @@ def main(params, config):
     optimizer = torch.optim.AdamW(game.sender.parameters(), lr=opts.lr)
     # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
 
-
+    # Create trainers object
     if config["train_method"] == "mle":
         total_steps = opts.n_epochs* len(train_loader)
         scheduler = get_linear_schedule_with_warmup(
@@ -122,10 +122,12 @@ def main(params, config):
 
     if opts.captioner_model == "clipcap" and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
+    
+    #Training
+    if not config["ONLY_INFERENCE"] and not config["ONLY_VAL"] :
+        trainer.train(config, opts)
 
-    trainer.train(config, opts)
-
-    # Get inference preds
+    #Get inference preds
     if not os.path.isdir(config["inference"]["output_dir"]):
         os.makedirs(config["inference"]["output_dir"])
 
@@ -136,13 +138,6 @@ def main(params, config):
     config["WANDB"]["logging"] = False
 
     trainer.train(config, opts, inference = True)
-    
-    
-    # _, test_interaction, test_reward = trainer.eval(val_loader)
-
-    # log_stats(test_interaction, "TEST SET")
-    # dump_interaction(test_interaction, opts, name="finetuned_")
-
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")
