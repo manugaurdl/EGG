@@ -108,7 +108,7 @@ class ReinforceCaptionGame(nn.Module):
 
             with torch.no_grad():
                 text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
-                loss, aux_info = self.loss(text_feats, img_feats, labels, aux_input)
+                loss, aux_info = self.loss(text_feats, img_feats, labels, aux_input, self.training)
             weighted_kl_div = self.kl_div_coeff * kl_div
             
             baseline = self.baseline.predict(loss.detach())

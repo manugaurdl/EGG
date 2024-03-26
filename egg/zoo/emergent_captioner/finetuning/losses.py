@@ -31,10 +31,9 @@ class Loss(nn.Module):
 
         self.num_hard_negatives = num_hard_negatives
 
-    def get_similarity_scores(self, text_feats, image_feats, img_idxs, aux_input=None):
+    def get_similarity_scores(self, text_feats, image_feats, img_idxs, training, aux_input=None):
         cosine_in_batch = text_feats @ image_feats.t() # (B x B) sim matrix
         
-        cos_sim_l2_norm_matrix = F.normalize(text_feats, p=2, dim=1) @ F.normalize(image_feats, p=2, dim=1).t()
         targets = cosine_in_batch.diag(0).unsqueeze(1) # targets are the image itself --> extract the main diagnol (B x 1)
         cosine_in_batch.fill_diagonal_(float("-inf"))  # mask targets.
         cosine_in_batch = torch.cat([targets, cosine_in_batch], dim=1) # B x (1+B)
@@ -58,8 +57,12 @@ class Loss(nn.Module):
         
         if aux_input is not None:
             aux_input["receiver_output"] = cosine_sims.detach()
-
-        return cosine_sims, cos_sim_l2_norm_matrix
+        
+        if training:
+            return cosine_sims
+        else:
+            cos_sim_l2_norm_matrix = F.normalize(text_feats, p=2, dim=1) @ F.normalize(image_feats, p=2, dim=1).t()
+            return cosine_sims, cos_sim_l2_norm_matrix
 
     def remove_fields_negatives(self):
         self.nns = None
@@ -70,8 +73,11 @@ class Loss(nn.Module):
 
 
 class DiscriminativeLoss(Loss):
-    def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
-        sims, cos_sim = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
+    def forward(self, text_feats, img_feats, img_idxs, training, aux_input=None):
+        if training:
+            sims = self.get_similarity_scores(text_feats, img_feats, img_idxs,training,  aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
+        else:
+            sims, cos_sim = self.get_similarity_scores(text_feats, img_feats, img_idxs,training, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
 
         labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
         # dist over bsz classes. Even though tensor of shape (bsz + 1), -inf values won't count due to softmax. 
@@ -85,6 +91,9 @@ class DiscriminativeLoss(Loss):
         # return loss, {"acc": acc_1}       
         top_5 = torch.topk(sims, 5, dim = 1)[1].detach()
         acc_5 = torch.any(top_5 ==0, dim = 1).detach().float()
+        if training:
+            return loss, {"acc": acc_1, "acc_5": acc_5}
+         
         clip_s = torch.clamp(cos_sim.diag(0)*100, min = 0)
         return loss, {"acc": acc_1, "acc_5": acc_5, "clip_s" : clip_s}
 
