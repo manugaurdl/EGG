@@ -75,7 +75,7 @@ class Loss(nn.Module):
 class DiscriminativeLoss(Loss):
     def forward(self, text_feats, img_feats, img_idxs, training, aux_input=None):
         if training:
-            sims = self.get_similarity_scores(text_feats, img_feats, img_idxs,training,  aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
+            sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, training, aux_input=aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
         else:
             sims, cos_sim = self.get_similarity_scores(text_feats, img_feats, img_idxs,training, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
 
