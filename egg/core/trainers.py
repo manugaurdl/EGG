@@ -7,6 +7,7 @@ import os
 import wandb
 import pathlib
 import pickle
+import json
 from typing import List, Optional
 from tqdm import tqdm
 import torch.distributed as dist
@@ -396,7 +397,7 @@ class Trainer:
                 return val_log, validation_interaction, metric
         
         #INIT VAL
-        if INIT_VAL and self.distributed_context.is_leader:
+        if inference or (INIT_VAL and self.distributed_context.is_leader):
             val_log, validation_interaction, metric = run_validation(epoch = 0, inference = inference)
                     
             if WANDB:
@@ -408,8 +409,18 @@ class Trainer:
             
             print(val_log)
 
-
         if inference:
+            test_log = {}
+            test_log['recall_1'] = validation_interaction.aux['acc'].mean().item()
+            test_log['recall_5'] = validation_interaction.aux['acc_5'].mean().item()
+            test_log['CLIP_s'] = validation_interaction.aux['clip_s'].mean().item()
+            
+            inference_log_dir = os.path.join(config["inference"]["output_dir"].split("/inference")[0], "inference_log")
+            if not os.path.isdir(inference_log_dir):
+                os.makedirs(inference_log_dir)
+            
+            with open(os.path.join(inference_log_dir,  f"{config['captions_type']}_{config['opts']['checkpoint_dir'].split('/')[-1]}.json"), "w") as f:
+                json.dump(test_log, f)
             self.save_val_preds(validation_interaction, config, inference = True)
             return
 
@@ -510,7 +521,8 @@ class Trainer:
         val_preds =  dict(zip(cocoids, preds))
 
         if inference:
-            save_path = os.path.join(config["inference"]["output_dir"], f"{config['captions_type']}_{config['train_method']}.pkl")                                        
+            save_path = os.path.join(config["inference"]["output_dir"], f"{config['captions_type']}_{config['opts']['checkpoint_dir'].split('/')[-1]}.pkl")                                        
+            # save_path = os.path.join(config["inference"]["output_dir"], f"{config['captions_type']}_mle.pkl")                                        
         else:    
             save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
         

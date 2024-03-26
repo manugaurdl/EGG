@@ -5,9 +5,10 @@
 
 import math
 from PIL import Image
-
+import random
 import torch
 from torchvision import transforms
+from torch.utils.data import Sampler
 from torch.utils.data.distributed import DistributedSampler
 
 try:
@@ -16,6 +17,20 @@ try:
     BICUBIC = InterpolationMode.BICUBIC
 except ImportError:
     BICUBIC = Image.BICUBIC
+
+
+class ValSampler(Sampler):
+    def __init__(self, ds):
+        self.ds_len = ds.__len__()
+    
+    def __iter__(self):
+        random.seed(42)
+        indices = list(range(self.ds_len))
+        random.shuffle(indices)
+        return iter(indices)
+    
+    def __len__(self):
+        return self.ds_len
 
 
 class MyDistributedSampler(DistributedSampler):

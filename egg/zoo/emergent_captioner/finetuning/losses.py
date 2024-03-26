@@ -82,11 +82,11 @@ class DiscriminativeLoss(Loss):
         #argmax --> recall@1 
         acc_1 = (sims.argmax(dim=1) == labels).detach().float() 
 
-        return loss, {"acc": acc_1}       
-        # top_5 = torch.topk(sims, 5, dim = 1)[1].detach()
-        # acc_5 = torch.any(top_5 ==0, dim = 1).detach().float()
-        # clip_s = torch.clamp(cos_sim.diag(0)*100, min = 0)
-        # return loss, {"acc": acc_1, "acc_5": acc_5, "clip_s" : clip_s}
+        # return loss, {"acc": acc_1}       
+        top_5 = torch.topk(sims, 5, dim = 1)[1].detach()
+        acc_5 = torch.any(top_5 ==0, dim = 1).detach().float()
+        clip_s = torch.clamp(cos_sim.diag(0)*100, min = 0)
+        return loss, {"acc": acc_1, "acc_5": acc_5, "clip_s" : clip_s}
 
 class CiderReward(Loss):
     def forward(self, preds, aux_input):

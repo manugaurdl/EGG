@@ -4,9 +4,6 @@ import torch.nn.functional as F
 from egg.zoo.emergent_captioner.finetuning.utils import int2mil, trainable_params
 import torch.nn.utils.parametrize as parametrize
 
-def enable_disable_lora(layers, enabled=True):
-    for layer in layers: #[net.linear1, net.linear2, net.linear3] -->  all the layers to parameterize
-        layer.parametrizations["weight"][0].enabled = enabled
 
 class LoRAParametrization(nn.Module):
     def __init__(self, features_in, features_out, rank, alpha, device = None):
@@ -22,14 +19,14 @@ class LoRAParametrization(nn.Module):
         #   As a result, we simply set α to the first r we try and do not tune it. 
         #   This scaling helps to reduce the need to retune hyperparameters when we vary r.
         self.scale = alpha / rank
-        self.enabled = True
+        # self.enabled = True
 
     def forward(self, original_weights):
-        if self.enabled:
-            # Return W + (B*A)*scale
-            return original_weights + torch.matmul(self.lora_B, self.lora_A).view(original_weights.shape) * self.scale
-        else:
-            return original_weights
+        # if self.enabled:
+        # Return W + (B*A)*scale
+        return original_weights + torch.matmul(self.lora_B, self.lora_A).view(original_weights.shape) * self.scale
+        # else:
+        #     return original_weights
 
 
 def linear_layer_parameterization(layer, device, rank, lora_alpha=16):

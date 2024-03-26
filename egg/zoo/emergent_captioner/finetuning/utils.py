@@ -176,7 +176,12 @@ def process_config(config, use_ddp, sys_args):
     if "mle_model_path" in config["opts"]:
         config["opts"]["mle_model_path"] = os.path.join(config['opts']['mle_model_path'].split("/checkpoints")[0], f"checkpoints/{sys_args[1]}/mle_len_50/best.pt") #clip_mle_mlp_best_cider
     
+    print(f"| Loaded MLE model :{config['opts']['mle_model_path']}")
     if config["ONLY_INFERENCE"] or config["ONLY_VAL"]:
+        config["WANDB"]["logging"] = False
+    
+    if config["DEBUG"]:
+        config["SAVE_BEST_METRIC"] = False
         config["WANDB"]["logging"] = False
     return config
 
@@ -198,8 +203,15 @@ def get_best_state_dict(config):
     desired_format_state_dict = torch.load(config["official_clipcap_weights"])
     saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "best.pt"))[1]
     state_dict = {}
-    for idx, k in enumerate(desired_format_state_dict.keys()):
-        state_dict[k] = saved_state_dict["sender.clipcap." + k]
+    
+    #LORA
+    for param,weight in saved_state_dict.items():
+        if "sender.clipcap" in param:
+            state_dict[param.split('clipcap.')[-1]]= weight
+    
+    #else:
+    # for idx, k in enumerate(desired_format_state_dict.keys()):
+    #     state_dict[k] = saved_state_dict["sender.clipcap." + k]
     return state_dict
 
 def int2mil(number):

@@ -55,7 +55,7 @@ def main(params, config):
         "flickr": FlickrWrapper,
     }
     # args
-    wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"], ONLY_VAL= config["ONLY_VAL"])
+    wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"])
     
     data_kwargs = dict(
         batch_size=opts.batch_size,
@@ -122,9 +122,9 @@ def main(params, config):
 
     if opts.captioner_model == "clipcap" and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
-    
+
     #Training
-    if not config["ONLY_INFERENCE"] and not config["ONLY_VAL"] :
+    if not config["ONLY_INFERENCE"]:
         trainer.train(config, opts)
 
     #Get inference preds
@@ -137,7 +137,7 @@ def main(params, config):
         trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
     config["WANDB"]["logging"] = False
 
-    trainer.train(config, opts, inference = True)
+    trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")

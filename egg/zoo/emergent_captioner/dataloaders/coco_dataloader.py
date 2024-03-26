@@ -16,7 +16,7 @@ import torch.distributed as dist
 from PIL import Image
 from transformers import GPT2Tokenizer
 from tqdm import tqdm
-from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler
+from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler, ValSampler
 from torch.utils.data.distributed import DistributedSampler
 
 
@@ -180,7 +180,7 @@ def hard_neg_collate(og_batch):
 
 class CocoWrapper:
 
-    def __init__(self, captions_type : str,  dataset_dir: str, jatayu: bool, neg_mining : dict, ONLY_VAL : bool):
+    def __init__(self, captions_type : str,  dataset_dir: str, jatayu: bool, neg_mining : dict):
         self.num_omitted_ids = 0
         if dataset_dir is None:
             dataset_dir = "/checkpoint/rdessi/datasets/coco"
@@ -198,9 +198,6 @@ class CocoWrapper:
         # val_test_list = self.split2samples['test']
         # val_test_list.extend(self.split2samples['val'])
         # self.split2samples['test'] = val_test_list
-
-        if ONLY_VAL:
-            self.split2samples['test'] = self.split2samples['val']
         
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         
@@ -307,7 +304,7 @@ class CocoWrapper:
     ):
         if mle_train and split != "test":
             self.tokenize(split)
-        shuffle = not debug and split != "test"
+        shuffle = not debug and split == "train"
         samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
        
@@ -328,9 +325,8 @@ class CocoWrapper:
             # )
             sampler = DistributedSampler(ds, num_replicas=int(os.environ["LOCAL_WORLD_SIZE"]), rank= int(os.environ["LOCAL_RANK"]), shuffle=True, drop_last=True)
 
-
-        if shuffle is None:
-            shuffle = split != "test" and sampler is None
+        if split in ["val", "test"]:
+            sampler = ValSampler(ds)
 
         if sampler is not None :
             shuffle=None
@@ -341,7 +337,7 @@ class CocoWrapper:
             loader = torch.utils.data.DataLoader(
                 ds,
                 batch_size=bags_per_batch,
-                shuffle=False,
+                shuffle=shuffle,
                 sampler=sampler,
                 collate_fn = hard_neg_collate,
                 num_workers=num_workers,
@@ -353,7 +349,7 @@ class CocoWrapper:
             loader = torch.utils.data.DataLoader(
                 ds,
                 batch_size=batch_size,
-                shuffle=False,
+                shuffle=shuffle,
                 sampler=sampler,
                 num_workers=num_workers,
                 pin_memory=True,
