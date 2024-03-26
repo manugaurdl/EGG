@@ -202,8 +202,6 @@ class Trainer:
         self.game.eval()
         with torch.no_grad():
             for batch_id, batch in tqdm(enumerate(validation_data), total = len(validation_data)):
-                if self.debug and batch_id == 10:
-                    break
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)

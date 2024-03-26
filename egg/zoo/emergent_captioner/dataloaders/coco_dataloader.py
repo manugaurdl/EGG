@@ -195,9 +195,9 @@ class CocoWrapper:
         self.split2samples = self._load_splits(jatayu) # {test,val,train,restval} --> {test[0] :(img_path, list of 5 caps, cocoid)}
         self.cocoid2samples_idx = self.get_cocoid2sample_idx()   # cocoid <--> dataset idx         
 
-        val_test_list = self.split2samples['test']
-        val_test_list.extend(self.split2samples['val'])
-        self.split2samples['test'] = val_test_list
+        # val_test_list = self.split2samples['test']
+        # val_test_list.extend(self.split2samples['val'])
+        # self.split2samples['test'] = val_test_list
 
         if ONLY_VAL:
             self.split2samples['test'] = self.split2samples['val']
@@ -341,7 +341,7 @@ class CocoWrapper:
             loader = torch.utils.data.DataLoader(
                 ds,
                 batch_size=bags_per_batch,
-                shuffle=True,
+                shuffle=False,
                 sampler=sampler,
                 collate_fn = hard_neg_collate,
                 num_workers=num_workers,
@@ -353,7 +353,7 @@ class CocoWrapper:
             loader = torch.utils.data.DataLoader(
                 ds,
                 batch_size=batch_size,
-                shuffle=True,
+                shuffle=False,
                 sampler=sampler,
                 num_workers=num_workers,
                 pin_memory=True,

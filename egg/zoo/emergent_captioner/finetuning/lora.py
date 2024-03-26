@@ -43,7 +43,7 @@ def parameterize(layer, rank):
 layer, "weight", linear_layer_parameterization(layer, layer.weight.device, rank)
 )
 
-def LoRA(model, rank, use_wpe):
+def LoRA(model, rank):
     print(f"trainable params before LORA :{trainable_params(model)}")
 
     for i in range(12):
@@ -53,11 +53,11 @@ def LoRA(model, rank, use_wpe):
         parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, rank)
 
     #freeze all_params
-    condition = 'lora' in name or  "gpt.transformer.wte" in name or "clip_project" in name 
-    if use_wpe:
-        condition = condition or "gpt.transformer.wpe" in name
+
     
     for name, param in model.named_parameters():
+        condition = 'lora' in name or  "gpt.transformer.wte" in name or "clip_project" in name 
+
         if condition:
             continue
         else:

@@ -232,7 +232,7 @@ def build_game(opts, config):
         for name, param in sender.clipcap.gpt.named_parameters():
             original_weights[name] = param.clone().detach()
         
-        LoRA(sender, config["lora_rank"], config['use_wpe'])
+        LoRA(sender, config["lora_rank"])
         
     game = ReinforceCaptionGame(
         sender=sender,

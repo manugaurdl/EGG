@@ -33,7 +33,8 @@ class Loss(nn.Module):
 
     def get_similarity_scores(self, text_feats, image_feats, img_idxs, aux_input=None):
         cosine_in_batch = text_feats @ image_feats.t() # (B x B) sim matrix
-
+        
+        cos_sim_l2_norm_matrix = F.normalize(text_feats, p=2, dim=1) @ F.normalize(image_feats, p=2, dim=1).t()
         targets = cosine_in_batch.diag(0).unsqueeze(1) # targets are the image itself --> extract the main diagnol (B x 1)
         cosine_in_batch.fill_diagonal_(float("-inf"))  # mask targets.
         cosine_in_batch = torch.cat([targets, cosine_in_batch], dim=1) # B x (1+B)
@@ -54,10 +55,11 @@ class Loss(nn.Module):
             )
 
             cosine_sims = torch.cat([cosine_in_batch, cosine_negatives], dim=1)
+        
+        if aux_input is not None:
+            aux_input["receiver_output"] = cosine_sims.detach()
 
-        aux_input["receiver_output"] = cosine_sims.detach()
-
-        return cosine_sims
+        return cosine_sims, cos_sim_l2_norm_matrix
 
     def remove_fields_negatives(self):
         self.nns = None
@@ -69,16 +71,22 @@ class Loss(nn.Module):
 
 class DiscriminativeLoss(Loss):
     def forward(self, text_feats, img_feats, img_idxs, aux_input=None):
-        sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
+        sims, cos_sim = self.get_similarity_scores(text_feats, img_feats, img_idxs, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
 
         labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
-        # dist over bsz classes. Even tensor of shape (bsz + 1), -inf values won't count due to softmax. 
+        # dist over bsz classes. Even though tensor of shape (bsz + 1), -inf values won't count due to softmax. 
         # logprob for target class in the 0th column. For each sample(row),logprob of target class : row[0]
         loss = F.cross_entropy(sims, labels, reduction="none")
         # For each row, highest value should be the first colum i.e argmax for each row in sims should be == 0.
-        acc = (sims.argmax(dim=1) == labels).detach().float() 
+        
+        #argmax --> recall@1 
+        acc_1 = (sims.argmax(dim=1) == labels).detach().float() 
 
-        return loss, {"acc": acc}
+        return loss, {"acc": acc_1}       
+        # top_5 = torch.topk(sims, 5, dim = 1)[1].detach()
+        # acc_5 = torch.any(top_5 ==0, dim = 1).detach().float()
+        # clip_s = torch.clamp(cos_sim.diag(0)*100, min = 0)
+        # return loss, {"acc": acc_1, "acc_5": acc_5, "clip_s" : clip_s}
 
 class CiderReward(Loss):
     def forward(self, preds, aux_input):
