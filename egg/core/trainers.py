@@ -414,7 +414,8 @@ class Trainer:
             test_log['recall_1'] = validation_interaction.aux['acc'].mean().item()
             test_log['recall_5'] = validation_interaction.aux['acc_5'].mean().item()
             test_log['CLIP_s'] = validation_interaction.aux['clip_s'].mean().item()
-            
+            test_log.update(val_log)
+
             inference_log_dir = os.path.join(config["inference"]["output_dir"].split("/inference")[0], "inference_log")
             if not os.path.isdir(inference_log_dir):
                 os.makedirs(inference_log_dir)
