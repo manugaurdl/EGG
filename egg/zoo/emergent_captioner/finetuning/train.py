@@ -131,10 +131,13 @@ def main(params, config):
     if not os.path.isdir(config["inference"]["output_dir"]):
         os.makedirs(config["inference"]["output_dir"])
 
+    # getting MLE preds : comment this and path to inference_preds and inference_log
+
     if opts.captioner_model == "clipcap":   
         trainer.game.sender.unpatch_model()
         trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
         trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
+    
     config["WANDB"]["logging"] = False
 
     trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.

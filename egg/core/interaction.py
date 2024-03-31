@@ -165,8 +165,10 @@ class Interaction:
                     continue
                 aux_input[k] = _check_cat([x.aux_input[k] for x in interactions])
         aux = {}
+
         for idx, k in enumerate(interactions[0].aux):
             aux[k] = _check_cat([x.aux[k] for x in interactions])
+
 
         return Interaction(
             sender_input=_check_cat([x.sender_input for x in interactions]),

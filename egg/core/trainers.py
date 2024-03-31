@@ -42,6 +42,7 @@ from egg.zoo.emergent_captioner.utils import (
     store_job_and_task_id,
 )
 from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metrics
+from egg.zoo.emergent_captioner.finetuning.losses import DiscriminativeLoss
 
 try:
     from torch.cuda.amp import GradScaler, autocast
@@ -207,7 +208,7 @@ class Trainer:
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
 
-                optimized_loss, interaction, reward = self.game(*batch, train_method = train_method)
+                optimized_loss, interaction, reward = self.game(*batch, train_method = train_method, inference=inference)
                 """
                 interaction : sender_input=None, receiver_input=None, labels = tensor, aux_input = {cocoid, captions, tokens, mask}, message, receiver_output=None, message_length=None, aux = {"kl_div" = torch.rand(1)}
                 """
@@ -226,9 +227,19 @@ class Trainer:
                     callback.on_batch_end(
                         interaction, optimized_loss, n_batches, is_training=False
                     )
-
+                if interaction.sender_input is None:
+                    interaction.sender_input = torch.rand((3,1)).float()
+                
+                if inference or isinstance(self.game.loss, DiscriminativeLoss):
+                    if interaction.receiver_input is None:
+                        interaction.receiver_input = torch.rand((3,1)).float()
+                    #only for SR loss --> during SR training or MLE/CiDEr inference
+                    interaction.aux["mean_rank"] = interaction.aux["mean_rank"].view(1,1)
+                    interaction.aux["median_rank"] = interaction.aux["median_rank"].view(1,1) 
+            
                 interactions.append(interaction)
                 n_batches += 1
+
 
         mean_loss /= n_batches
         #if data is dict/tensor --> its gets extended N_batch times. If its a list, a new list of list gets created of len = N_batch
@@ -420,8 +431,11 @@ class Trainer:
             if not os.path.isdir(inference_log_dir):
                 os.makedirs(inference_log_dir)
             
+            # with open("/home/manugaur/EGG/inference_log/blip2mistral_mle.json", "w") as f:
+            #     json.dump(test_log, f)
             with open(os.path.join(inference_log_dir,  f"{config['captions_type']}_{config['opts']['checkpoint_dir'].split('/')[-1]}.json"), "w") as f:
-                json.dump(test_log, f)
+                json.dump(test_log, f)    
+                
             self.save_val_preds(validation_interaction, config, inference = True)
             return
 
@@ -527,8 +541,7 @@ class Trainer:
         else:    
             save_path = os.path.join(config["opts"]["checkpoint_dir"].split("checkpoints")[0] + "val_preds", config["WANDB"]["run_name"] + f"_val_preds.pkl")                                        
         
-
+        # print("$$$$"*100)
+        # print(save_path)
         with open(save_path, "wb") as f:
             pickle.dump(val_preds, f)
-
-        

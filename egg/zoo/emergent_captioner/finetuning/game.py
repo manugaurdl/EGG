@@ -22,6 +22,7 @@ class ReinforceCaptionGame(nn.Module):
         baseline: str = "no",
         train_logging_strategy: LoggingStrategy = None,
         test_logging_strategy: LoggingStrategy = None,
+        prefix_len : int =10,
     ):
         super(ReinforceCaptionGame, self).__init__()
         self.sender = sender
@@ -44,9 +45,9 @@ class ReinforceCaptionGame(nn.Module):
             else test_logging_strategy
         )
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        self.prefix_len = prefix_len
 
-
-    def forward(self, sender_input, labels,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, prefix_len = 10):
+    def forward(self, sender_input, labels,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False):
         """
         receiver : clip
         sender : clip VIT + clipcap model
@@ -60,7 +61,7 @@ class ReinforceCaptionGame(nn.Module):
                     }
         """
         CIDER_OPTIM = isinstance(self.loss, CiderReward)
-        if CIDER_OPTIM:
+        if CIDER_OPTIM and not inference:
             # get policy cap
             policy_captions, log_prob, kl_div = self.sender(sender_input, aux_input, CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
         
@@ -103,12 +104,13 @@ class ReinforceCaptionGame(nn.Module):
                 aux=aux_info,
                 )
         
-        elif isinstance(self.loss, DiscriminativeLoss):
+        elif isinstance(self.loss, DiscriminativeLoss) or inference:
             captions, log_prob, kl_div = self.sender(sender_input, aux_input) # logprob : (B) --> only one logprob per caption (averaged over all words)
-
+            if inference:
+                self.loss = DiscriminativeLoss()
             with torch.no_grad():
                 text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
-                loss, aux_info = self.loss(text_feats, img_feats, labels, self.training, aux_input)
+                loss, aux_info = self.loss(text_feats, img_feats, self.training, True,  aux_input)
             weighted_kl_div = self.kl_div_coeff * kl_div
             
             baseline = self.baseline.predict(loss.detach())
@@ -241,6 +243,7 @@ def build_game(opts, config):
         baseline=opts.baseline,
         kl_div_coeff=opts.kl_div_coeff,
         test_logging_strategy=test_logging_strategy,
+        prefix_len = config['prefix_len'],
     )
 
     return game

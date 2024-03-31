@@ -31,7 +31,7 @@ class Loss(nn.Module):
 
         self.num_hard_negatives = num_hard_negatives
 
-    def get_similarity_scores(self, text_feats, image_feats, img_idxs, training, aux_input=None):
+    def get_similarity_scores(self, text_feats, image_feats, training, aux_input=None):
         cosine_in_batch = text_feats @ image_feats.t() # (B x B) sim matrix
         
         targets = cosine_in_batch.diag(0).unsqueeze(1) # targets are the image itself --> extract the main diagnol (B x 1)
@@ -73,11 +73,11 @@ class Loss(nn.Module):
 
 
 class DiscriminativeLoss(Loss):
-    def forward(self, text_feats, img_feats, img_idxs, training, aux_input=None):
+    def forward(self, text_feats, img_feats, training, get_acc_5, aux_input):
         if training:
-            sims = self.get_similarity_scores(text_feats, img_feats, img_idxs, training, aux_input=aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
+            sims = self.get_similarity_scores(text_feats, img_feats, training, aux_input=aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
         else:
-            sims, cos_sim = self.get_similarity_scores(text_feats, img_feats, img_idxs,training, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
+            sims, cos_sim = self.get_similarity_scores(text_feats, img_feats,training, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
 
         labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
         # dist over bsz classes. Even though tensor of shape (bsz + 1), -inf values won't count due to softmax. 
@@ -86,16 +86,28 @@ class DiscriminativeLoss(Loss):
         # For each row, highest value should be the first colum i.e argmax for each row in sims should be == 0.
         
         #argmax --> recall@1 
+        out = {}
         acc_1 = (sims.argmax(dim=1) == labels).detach().float() 
-
-        # return loss, {"acc": acc_1}       
-        top_5 = torch.topk(sims, 5, dim = 1)[1].detach()
-        acc_5 = torch.any(top_5 ==0, dim = 1).detach().float()
+        out["acc"]= acc_1
+        # return loss, {"acc": acc_1}
+        if get_acc_5:      
+            top_5 = torch.topk(sims, 5, dim = 1)[1].detach()
+            acc_5 = torch.any(top_5 ==0, dim = 1).detach().float()
+            out["acc_5"]= acc_5
+        
         if training:
-            return loss, {"acc": acc_1, "acc_5": acc_5}
-         
+            return loss, out
+        
+        rank = torch.where(torch.argsort(-sims, dim =1) == 0)[1]
+        rank+=1 # rank is indexed from 1 
+        mean_rank = rank.float().mean()
+        median_rank = rank.median()
+        out["mean_rank"] = mean_rank
+        out["median_rank"] = median_rank
         clip_s = torch.clamp(cos_sim.diag(0)*100, min = 0)
-        return loss, {"acc": acc_1, "acc_5": acc_5, "clip_s" : clip_s}
+        out["clip_s"] =clip_s
+        
+        return loss, out
 
 class CiderReward(Loss):
     def forward(self, preds, aux_input):

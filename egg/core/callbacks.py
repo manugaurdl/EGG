@@ -72,7 +72,11 @@ class ConsoleLogger(Callback):
 
     def aggregate_print(self, loss: float, logs: Interaction, mode: str, epoch: int):
         dump = dict(loss=loss)
-        aggregated_metrics = dict((k, v.mean().item()) for k, v in logs.aux.items())
+        aggregated_metrics = {}
+        for idx, (k, v) in enumerate(logs.aux.items()):
+            if idx==3:
+                v = v.float()
+            aggregated_metrics[k] = v.mean().item()
         dump.update(aggregated_metrics)
 
         if self.as_json:
