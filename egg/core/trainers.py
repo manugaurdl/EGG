@@ -404,9 +404,11 @@ class Trainer:
                 # aggregated print for 1st obj, pass for other 2
                 for callback in self.callbacks:
                     callback.on_validation_end(validation_loss, validation_interaction, epoch + 1)
-                
+
+                torch.cuda.empty_cache()
+
                 return val_log, validation_interaction, metric
-        
+
         #INIT VAL
         if inference or (INIT_VAL and self.distributed_context.is_leader):
             val_log, validation_interaction, metric = run_validation(epoch = 0, inference = inference)
@@ -438,7 +440,8 @@ class Trainer:
                 
             self.save_val_preds(validation_interaction, config, inference = True)
             return
-
+            
+        
         for callback in self.callbacks:
             """
             In CallBack class, create self.trainer = callbacks.console_logger , finetuning.utils.ModelSaver , callbacks.checkpointsaver

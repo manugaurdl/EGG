@@ -40,6 +40,7 @@ np.random.seed(seed)
 def main(params, config):
     start = time.time()
     opts = get_common_opts(params=params)
+    opts.fp16 = config['fp16']
     opts.jatayu = os.path.isdir("/home/manugaur")
     opts.loss_type= config['train_method']
     store_job_and_task_id(opts)

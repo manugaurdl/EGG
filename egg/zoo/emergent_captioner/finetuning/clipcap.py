@@ -316,6 +316,7 @@ class ClipCapModel(nn.Module):
             # logits after generation bruh
             suffix = self.gpt.get_input_embeddings()(indices) # B, 10, 768 embd. 
             inputs_embeds = torch.cat([prompts, suffix], dim=1) # B, 20,768 emb
+
             logits = self.gpt(inputs_embeds=inputs_embeds)
             logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, max_batch_len, 55257) 
             logits = logits/(temp if temp > 0 else 1.0)
@@ -374,7 +375,7 @@ class ClipCapModel(nn.Module):
                 self.gpt._originally_with_no_bias = True
             else:
                 self.gpt._originally_with_no_bias = False
-            self.gpt.get_output_embeddings().bias.data[-max_embeddings:] = float("-inf")
+            self.gpt.get_output_embeddings().bias.data[-max_embeddings:] = float("-inf")#-1e+4
 
     def maybe_unpatch_gpt(self):
         if getattr(self.gpt, "_patched", False):
@@ -443,7 +444,13 @@ class ClipCapSender(nn.Module):
 
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
+        #if loading CLIP on GPU
         image_feats = self.clip_vit(images)
+
+        #if lazy loading clip_feats
+        # image_feats = images.squeeze(1)
+        # if image_feats.dtype != torch.float16:
+        #     print("img feat not fp16")
         if train_method == "mle":
             if self.training:
                 image_feats = self.repeat_tensors(aux_input['tokens'].shape[1], image_feats) #ABC --> AAA..BBB..CCC..

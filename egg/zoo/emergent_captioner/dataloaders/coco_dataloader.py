@@ -41,10 +41,11 @@ class CocoDataset:
             # self.id2tokens = torch.load
             pass
         self.caps_per_img = caps_per_img
+        self.lazy_feat_dir = "/ssd_scratch/cvit/manu/EGG/lazy_clip_feats"
 
     def __len__(self):
         if self.debug:
-            return 180
+            return 300
         else:
             return len(self.samples)
     
@@ -88,13 +89,15 @@ class CocoDataset:
 
     def __getitem__(self, idx):
         file_path, captions, image_id = self.samples[idx]
-        # image = Image.open(str(file_path)).convert("RGB")
 
+        # # If load CLIP to GPU
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
         sender_input, recv_input = self.transform(image) # they are same
         
+        ## Lazy loading
+        # sender_input = torch.load(os.path.join(self.lazy_feat_dir, f"{image_id}.pt"), map_location="cpu")#.float()
+
         """ Saving sender_inputs"""
-        
         # save_dir = f"/home/manugaur/EGG/sender_inputs/{self.split}"
         # if not os.path.isdir(save_dir):
         #     os.makedirs(save_dir)
@@ -106,7 +109,7 @@ class CocoDataset:
         else:
             aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:self.caps_per_img]}
 
-        return sender_input, torch.tensor([idx]), recv_input, aux
+        return sender_input, torch.tensor(image_id), sender_input, aux
 
 class CocoNegDataset:
     def __init__(self, root, samples, mle_train, split, caps_per_img, captions_type, max_len_token, prefix_len, transform, debug, bags, cocoid2samples_idx):

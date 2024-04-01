@@ -67,8 +67,8 @@ class StopTokenLogitsProcessor(LogitsProcessor):
         # iterate each batch of prefix tokens ; input_ids (B , 10)
         for i, input_id in enumerate(input_ids):
             if input_id[-1].item() in self.stop_word_ids:
-                scores[i, : self.vocab_size] = torch.finfo().min
-                scores[i, self.vocab_size :] = float("-inf")
+                scores[i, : self.vocab_size] = -65504 #torch.finfo().min #-1e+4
+                scores[i, self.vocab_size :] =  float("-inf") #-1e+4
                 scores[i, self.eos_token_id] = 0.0
         return scores
 

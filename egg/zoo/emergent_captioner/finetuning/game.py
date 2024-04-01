@@ -47,7 +47,7 @@ class ReinforceCaptionGame(nn.Module):
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.prefix_len = prefix_len
 
-    def forward(self, sender_input, labels,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False):
+    def forward(self, sender_input, cocoids ,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False):
         """
         receiver : clip
         sender : clip VIT + clipcap model
@@ -60,6 +60,7 @@ class ReinforceCaptionGame(nn.Module):
                     captions : 5 coco GT cap for each image : list of 5 lists --> each sublist has bsz captions
                     }
         """
+        
         CIDER_OPTIM = isinstance(self.loss, CiderReward)
         if CIDER_OPTIM and not inference:
             # get policy cap
@@ -95,7 +96,7 @@ class ReinforceCaptionGame(nn.Module):
 
             interaction = logging_strategy.filtered_interaction(
                 sender_input=sender_input,
-                labels=labels,
+                labels=cocoids,
                 receiver_input=receiver_input,
                 aux_input=aux_input,
                 message=policy_captions,
@@ -111,6 +112,8 @@ class ReinforceCaptionGame(nn.Module):
             with torch.no_grad():
                 text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
                 loss, aux_info = self.loss(text_feats, img_feats, self.training, True,  aux_input)
+                # text_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
+                # loss, aux_info = self.loss(text_feats, receiver_input.squeeze(1), self.training, True,  aux_input)
             weighted_kl_div = self.kl_div_coeff * kl_div
             
             baseline = self.baseline.predict(loss.detach())
@@ -119,6 +122,13 @@ class ReinforceCaptionGame(nn.Module):
             reinforce_loss = (reward * log_prob).mean()
             if self.training:
                 self.baseline.update(loss)
+            
+            # if reinforce_loss.isnan().any() : 
+            #     print("reinforce")
+            # if log_prob.isnan().any():
+            #     print("log_prob")
+            # if reward.isnan().any():
+            #     print("reward")
 
             aux_info["kl_div"] = kl_div
             aux_info["log_prob"] =  log_prob
@@ -128,7 +138,7 @@ class ReinforceCaptionGame(nn.Module):
             )
             interaction = logging_strategy.filtered_interaction(
                 sender_input=sender_input,
-                labels=labels,
+                labels=cocoids,
                 receiver_input=receiver_input,
                 aux_input=aux_input,
                 message=captions,
@@ -159,7 +169,7 @@ class ReinforceCaptionGame(nn.Module):
                 )
                 interaction = logging_strategy.filtered_interaction(
                     sender_input=sender_input,
-                    labels=labels,
+                    labels=cocoids,
                     receiver_input=receiver_input,
                     aux_input=aux_input,
                     message=val_captions,
@@ -168,8 +178,6 @@ class ReinforceCaptionGame(nn.Module):
                     aux=aux_info,
                 )
                 return torch.randn(1), interaction, torch.randn(1)
-
-
 
 
             # weighted_kl_div = self.kl_div_coeff * kl_div
@@ -181,7 +189,7 @@ class ReinforceCaptionGame(nn.Module):
             )
             interaction = logging_strategy.filtered_interaction(
                 sender_input=sender_input,
-                labels=labels,
+                labels=cocoids,
                 receiver_input=receiver_input,
                 aux_input=aux_input,
                 message=captions,
@@ -217,7 +225,10 @@ def build_game(opts, config):
         raise RuntimeError
 
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
-
+    # if loading clip lazy feats
+    # receiver.clip.visual = None
+    # torch.cuda.empty_cache()
+    
     test_logging_strategy = LoggingStrategy(
         False, False, True, True, True, False, False
     )
