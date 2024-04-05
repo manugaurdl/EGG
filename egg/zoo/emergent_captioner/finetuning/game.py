@@ -153,7 +153,7 @@ class ReinforceCaptionGame(nn.Module):
                 targets = aux_input['tokens'].view(-1, aux_input["tokens"].shape[-1])
                 mask = aux_input['mask'].view(-1, aux_input["mask"].shape[-1])
                 # targets, mask = targets.to(device), mask.to(device)
-                logits = outputs.logits[:, prefix_len - 1: -1]
+                logits = outputs.logits[:, self.prefix_len - 1: -1]
                 loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), targets.to(torch.long).flatten(), ignore_index=0) # (B,T) flattened to (B*T)
                 # probs = torch.nn.functional.softmax(logits, dim=-1)
                 # preds = torch.multinomial(probs.view(-1, probs.shape[-1]), num_samples=1) # preds is flattened out --> (B*max_cap_len , 1)

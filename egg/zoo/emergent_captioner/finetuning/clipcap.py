@@ -283,6 +283,7 @@ class ClipCapModel(nn.Module):
             else:
                 temp = 1.0
             flag = False
+
             if self.training or greedy_baseline:
                 generated = self.gpt.generate(
                     input_ids,
@@ -291,7 +292,7 @@ class ClipCapModel(nn.Module):
                     num_beams=self.beam_size,
                     num_return_sequences=1,
                     logits_processor=LogitsProcessorList([self.logits_processor]),
-                    top_k=len(self.tokenizer),
+                    top_k= len(self.tokenizer),
                     temperature = temp
                 )
                 

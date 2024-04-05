@@ -75,7 +75,6 @@ def main(params, config):
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
     data_kwargs["mle_train"] = False
     test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = config["neg_mining"]["val"], **data_kwargs)
-
     # for idx, batch in tqdm(enumerate(train_loader),total = len(train_loader)):
     #     pass
 
@@ -121,7 +120,7 @@ def main(params, config):
     if opts.distributed_context.is_distributed:
         trainer.game = trainer.game.module
 
-    if opts.captioner_model == "clipcap" and config["train_method"] != "mle":   
+    if opts.captioner_model == "clipcap" : #and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
     #Training
@@ -141,7 +140,8 @@ def main(params, config):
     
     config["WANDB"]["logging"] = False
 
-    trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
+    if config["train_method"] != "mle":
+        trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")

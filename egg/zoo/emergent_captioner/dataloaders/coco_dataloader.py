@@ -329,7 +329,7 @@ class CocoWrapper:
             sampler = DistributedSampler(ds, num_replicas=int(os.environ["LOCAL_WORLD_SIZE"]), rank= int(os.environ["LOCAL_RANK"]), shuffle=True, drop_last=True)
 
         if split in ["val", "test"]:
-            sampler = ValSampler(ds)
+            sampler = ValSampler(ds, debug)
 
         if sampler is not None :
             shuffle=None

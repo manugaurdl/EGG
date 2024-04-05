@@ -10,7 +10,7 @@ import torch
 from torchvision import transforms
 from torch.utils.data import Sampler
 from torch.utils.data.distributed import DistributedSampler
-
+import json
 try:
     from torchvision.transforms import InterpolationMode
 
@@ -20,13 +20,20 @@ except ImportError:
 
 
 class ValSampler(Sampler):
-    def __init__(self, ds):
+    def __init__(self, ds, debug):
         self.ds_len = ds.__len__()
-    
+        self.debug = debug
     def __iter__(self):
-        random.seed(42)
-        indices = list(range(self.ds_len))
-        random.shuffle(indices)
+        
+        if self.debug:
+            random.seed(42)
+            indices = list(range(self.ds_len))
+            random.shuffle(indices)
+        
+        else:
+            with open("/home/manugaur/EGG/data/sampler_indices_val_and_test.json", "r") as f:
+                indices = json.load(f)
+            
         return iter(indices)
     
     def __len__(self):
