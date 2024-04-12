@@ -71,10 +71,13 @@ def main(params, config):
     )
 
     train_loader = wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = config["neg_mining"]["do"],  **data_kwargs)
-    val_loader = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = config["neg_mining"]["val"],  **data_kwargs)
+    val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
+    val_loader_neg = None
+    if config["neg_mining"]["do"]:
+        val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True,  **data_kwargs)
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
     data_kwargs["mle_train"] = False
-    test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = config["neg_mining"]["val"], **data_kwargs)
+    test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False, **data_kwargs)
     # for idx, batch in tqdm(enumerate(train_loader),total = len(train_loader)):
     #     pass
 
@@ -95,7 +98,8 @@ def main(params, config):
             optimizer=optimizer,
             train_data=train_loader,
             optimizer_scheduler = scheduler,
-            validation_data =val_loader,
+            validation_data_rand =val_loader_rand,
+            validation_data_neg =val_loader_neg,
             inference_data = test_loader,
             callbacks=[
                 ConsoleLogger(as_json=True, print_train_loss=True),
@@ -108,7 +112,8 @@ def main(params, config):
         game=game,
         optimizer=optimizer,
         train_data=train_loader,
-        validation_data =val_loader,
+        validation_data_rand =val_loader_rand,
+        validation_data_neg =val_loader_neg,
         inference_data = test_loader,
         callbacks=[
             ConsoleLogger(as_json=True, print_train_loss=True),

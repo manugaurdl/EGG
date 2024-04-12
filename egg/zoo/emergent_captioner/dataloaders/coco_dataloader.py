@@ -133,7 +133,7 @@ class CocoNegDataset:
 
     def __len__(self):
         if self.debug:
-            return 40
+            return 30
         else:
             return len(self.bags)
 
@@ -329,7 +329,10 @@ class CocoWrapper:
             sampler = DistributedSampler(ds, num_replicas=int(os.environ["LOCAL_WORLD_SIZE"]), rank= int(os.environ["LOCAL_RANK"]), shuffle=True, drop_last=True)
 
         if split in ["val", "test"]:
-            sampler = ValSampler(ds, debug)
+            if neg_mining:
+                sampler = ValSampler(ds, debug, self.neg_mining["bag_size"])
+            else:
+                sampler = ValSampler(ds, debug, None)
 
         if sampler is not None :
             shuffle=None

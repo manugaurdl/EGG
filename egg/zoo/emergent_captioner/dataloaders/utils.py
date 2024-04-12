@@ -20,20 +20,25 @@ except ImportError:
 
 
 class ValSampler(Sampler):
-    def __init__(self, ds, debug):
+    def __init__(self, ds, debug, neg_bag_size):
         self.ds_len = ds.__len__()
         self.debug = debug
+        self.neg_bag_size = neg_bag_size
+
     def __iter__(self):
         
         if self.debug:
             random.seed(42)
             indices = list(range(self.ds_len))
             random.shuffle(indices)
-        
         else:
-            with open("/home/manugaur/EGG/data/sampler_indices_val_and_test.json", "r") as f:
-                indices = json.load(f)
-            
+            if self.neg_bag_size is None:
+                with open("/home/manugaur/EGG/data/sampler_indices_val_and_test.json", "r") as f:
+                    indices = json.load(f)
+            else:
+                with open(f"/home/manugaur/EGG/data/neg_bsz_{self.neg_bag_size}.json", "r") as f:
+                    indices = json.load(f)                
+        
         return iter(indices)
     
     def __len__(self):

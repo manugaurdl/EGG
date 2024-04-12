@@ -74,7 +74,8 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         train_data: DataLoader,
         optimizer_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
-        validation_data: Optional[DataLoader] = None,
+        validation_data_rand: Optional[DataLoader] = None,
+        validation_data_neg: Optional[DataLoader] = None,
         inference_data : Optional[DataLoader] = None,
         device: torch.device = None,
         callbacks: Optional[List[Callback]] = None,
@@ -97,8 +98,9 @@ class Trainer:
         self.optimizer = optimizer
         self.optimizer_scheduler = optimizer_scheduler
         self.train_data = train_data
-        self.validation_data = validation_data
-        self.inference_data = inference_data #test_val
+        self.val_loader_rand = validation_data_rand
+        self.val_loader_neg = validation_data_neg
+        self.inference_loader = inference_data 
         common_opts = get_opts()
         self.validation_freq = common_opts.validation_freq
         self.device = common_opts.device if device is None else device
@@ -195,15 +197,16 @@ class Trainer:
         else:
             self.scaler = None
 
-    def eval(self, inference : bool, data=None, GREEDY_BASELINE = False, train_method = None):
+    def eval(self, loader, inference : bool, data=None, GREEDY_BASELINE = False, train_method = None):
+        
         global STEP
         mean_loss = 0.0
         interactions = []
         n_batches = 0
-        validation_data = self.inference_data if inference  else self.validation_data
         self.game.eval()
+
         with torch.no_grad():
-            for batch_id, batch in tqdm(enumerate(validation_data), total = len(validation_data)):
+            for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
@@ -365,14 +368,46 @@ class Trainer:
         GREEDY_BASELINE = config['GREEDY_BASELINE']
         SAVE_BEST_METRIC = config['SAVE_BEST_METRIC']
         train_method = config["train_method"]
+        SAVE_USING_NEG = config["neg_mining"]["save_using_neg"] and config["neg_mining"]["do"]  
         best_metric_score = 0
         global STEP
 
-        
-        def run_validation(epoch : int, inference : bool = False):
+        inference_log_dir = os.path.join(config["inference"]["output_dir"].split("/inference")[0], "inference_log")
+        if not os.path.isdir(inference_log_dir):
+            os.makedirs(inference_log_dir)
+
+        def prepare_logs(summary, loss, interaction, reward, train_method, loss_type, epoch):
+
+            val_log = { "Val Loss" : loss,
+                        "Val Reward" : reward,
+                        "CIDEr" : summary["CIDEr"],
+                        "SPICE" : summary["SPICE"],
+                        "Bleu_4" : summary["Bleu_4"],
+                        'METEOR': summary["METEOR"],
+                        "ROUGE_L" : summary['ROUGE_L']
+                        }
+
+            if train_method == "mle":
+                del val_log["Val Loss"]
+                del val_log["Val Reward"]
+
+            if loss_type == 'discriminative':
+                metric =  interaction.aux['acc'].mean().item()
+                val_log["VAL_R@1"] = metric
+            
+            else:
+                metric = summary["CIDEr"]            
+
+            # aggregated print for 1st obj, pass for other 2
+            for callback in self.callbacks:
+                callback.on_validation_end(loss, interaction, epoch + 1)
+
+            return val_log, metric
+
+        def run_validation(loader, epoch : int, inference : bool = False):
             validation_loss = validation_interaction = None
             if (
-                self.validation_data is not None
+                loader is not None
                 and self.validation_freq > 0
                 and (epoch + 1) % self.validation_freq == 0
             ):
@@ -380,68 +415,75 @@ class Trainer:
                 #     if idx in [0,1]:
                 #         continue
                 #     callback.on_validation_begin(epoch + 1) # pass
-                validation_loss, validation_interaction, val_reward, summary = self.eval(inference = inference, GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
+                validation_loss, validation_interaction, val_reward, summary = self.eval(loader, inference = inference, GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
 
-                val_log = { "Val Loss" :validation_loss,
-                            "Val Reward" : val_reward,
-                            "CIDEr" : summary["CIDEr"],
-                            "SPICE" : summary["SPICE"],
-                            "Bleu_4" : summary["Bleu_4"],
-                            'METEOR': summary["METEOR"],
-                            "ROUGE_L" : summary['ROUGE_L']
-                            }
-                if train_method == "mle":
-                    del val_log["Val Loss"]
-                    del val_log["Val Reward"]
-
-                if opts.loss_type == 'discriminative':
-                    metric =  validation_interaction.aux['acc'].mean().item()
-                    val_log["VAL_ACC@1"] = metric
-                
-                else:
-                    metric = summary["CIDEr"]
-                    
-                # aggregated print for 1st obj, pass for other 2
-                for callback in self.callbacks:
-                    callback.on_validation_end(validation_loss, validation_interaction, epoch + 1)
+                val_log, metric = prepare_logs(summary, validation_loss, validation_interaction, val_reward, train_method, opts.loss_type, epoch)
 
                 torch.cuda.empty_cache()
 
                 return val_log, validation_interaction, metric
 
+        def log(log, interaction, metric, epoch, name, inference=False):
+                """val log is plotted on wandb. Inference log is saved as json."""
+
+                if inference:
+                    #save inference preds
+                    self.save_val_preds(interaction, config, inference = True)
+                    
+                    # save inference log
+                    test_log = {}
+                    test_log['recall_1'] = interaction.aux['acc'].mean().item()
+                    test_log['recall_5'] = interaction.aux['acc_5'].mean().item()
+                    test_log['CLIP_s'] = interaction.aux['clip_s'].mean().item()
+                    test_log.update(log)
+
+        
+                    with open(os.path.join(inference_log_dir,  f"{config['captions_type']}_{config['opts']['checkpoint_dir'].split('/')[-1]}.json"), "w") as f:
+                        json.dump(test_log, f)    
+                    # with open("/home/manugaur/EGG/inference_log/blip2mistral_mle.json", "w") as f:
+                    #     json.dump(test_log, f)
+
+                else:
+
+                    log["epoch"] = epoch
+                    log["val_log_prob"] =  interaction.aux['log_prob'].mean().item()
+                    
+                    if WANDB:
+                        if name == "rand":
+                            wandb.log(log, step = STEP)
+                        else:
+                            wandb.log({"VAL_R@1_NEG" : log["VAL_R@1"]}, step = STEP)
+
+
+
+        def rand_neg_val(epoch : int, inference : bool = False, WANDB : bool = False):
+
+            if inference:
+                test_log, interaction, metric = run_validation(self.inference_loader, epoch, inference)
+                log(test_log, interaction, metric, None, None, inference)
+            
+            else:
+                rand_log, rand_interaction, metric = run_validation(self.val_loader_rand, epoch, inference)
+                if self.val_loader_neg is not None:
+                    neg_log, neg_interaction, neg_metric = run_validation(self.val_loader_neg, epoch, inference)
+
+                if WANDB:
+                    log(rand_log, rand_interaction, metric, epoch, "rand")
+                if self.val_loader_neg is not None:
+                    log(neg_log, neg_interaction, neg_metric, epoch, "neg")
+                
+                if SAVE_USING_NEG:
+                    return neg_metric
+            
+            return metric
+
         #INIT VAL
         if inference or (INIT_VAL and self.distributed_context.is_leader):
-            val_log, validation_interaction, metric = run_validation(epoch = 0, inference = inference)
+            metric = rand_neg_val(epoch = 0, inference = inference)
                     
-            if WANDB:
-                val_log["epoch"] = 0
-                val_log["val_log_prob"] =  validation_interaction.aux['log_prob'].mean().item()
-                wandb.log(val_log, step = STEP)
-                if metric > best_metric_score:
-                    self.save_val_preds(validation_interaction, config)
-            
-            print(val_log)
-
-        if inference:
-            test_log = {}
-            test_log['recall_1'] = validation_interaction.aux['acc'].mean().item()
-            test_log['recall_5'] = validation_interaction.aux['acc_5'].mean().item()
-            test_log['CLIP_s'] = validation_interaction.aux['clip_s'].mean().item()
-            test_log.update(val_log)
-
-            inference_log_dir = os.path.join(config["inference"]["output_dir"].split("/inference")[0], "inference_log")
-            if not os.path.isdir(inference_log_dir):
-                os.makedirs(inference_log_dir)
-            
-            # with open("/home/manugaur/EGG/inference_log/blip2mistral_mle.json", "w") as f:
-            #     json.dump(test_log, f)
-            with open(os.path.join(inference_log_dir,  f"{config['captions_type']}_{config['opts']['checkpoint_dir'].split('/')[-1]}.json"), "w") as f:
-                json.dump(test_log, f)    
-                
-            self.save_val_preds(validation_interaction, config, inference = True)
+        if inference:                
             return
-            
-        
+
         for callback in self.callbacks:
             """
             In CallBack class, create self.trainer = callbacks.console_logger , finetuning.utils.ModelSaver , callbacks.checkpointsaver
@@ -469,13 +511,7 @@ class Trainer:
                             "epoch" : epoch + 1}, step = STEP)
 
             if self.distributed_context.is_leader:
-                val_log, validation_interaction, metric = run_validation(epoch + 1)
-                        
-                if WANDB:
-                    val_log["val_log_prob"] =  validation_interaction.aux['log_prob'].mean().item()
-                    wandb.log(val_log, step = STEP)
-                    if metric > best_metric_score:
-                        self.save_val_preds(validation_interaction, config)
+                metric = rand_neg_val(epoch + 1)
             
                 # Saving model
                 if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch + 1 % opts.checkpoint_freq==0): 
@@ -490,19 +526,6 @@ class Trainer:
                     if SAVE_BEST_METRIC:
                         best_metric_score = metric
 
-            # if self.should_stop:
-            #     for callback in self.callbacks:
-            #         callback.on_early_stopping(
-            #             train_loss,
-            #             train_interaction,
-            #             epoch + 1,
-            #             validation_loss,
-            #             validation_interaction,
-            #         )
-            #     break
-
-        # for callback in self.callbacks: # pass, model saved {e_final.pt}, pass
-        #     callback.on_train_end(epoch + 1, config['WANDB']['run_name'])
 
     def load(self, checkpoint: Checkpoint):
         self.game.load_state_dict(checkpoint.model_state_dict, strict=False)
