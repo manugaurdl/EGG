@@ -58,11 +58,7 @@ class Loss(nn.Module):
         if aux_input is not None:
             aux_input["receiver_output"] = cosine_sims.detach()
         
-        if training:
-            return cosine_sims
-        else:
-            cos_sim_l2_norm_matrix = F.normalize(text_feats, p=2, dim=1) @ F.normalize(image_feats, p=2, dim=1).t()
-            return cosine_sims, cos_sim_l2_norm_matrix
+        return cosine_sims
 
     def remove_fields_negatives(self):
         self.nns = None
@@ -74,10 +70,8 @@ class Loss(nn.Module):
 
 class DiscriminativeLoss(Loss):
     def forward(self, text_feats, img_feats, training, get_acc_5, aux_input):
-        if training:
-            sims = self.get_similarity_scores(text_feats, img_feats, training, aux_input=aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
-        else:
-            sims, cos_sim = self.get_similarity_scores(text_feats, img_feats,training, aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
+
+        sims = self.get_similarity_scores(text_feats, img_feats, training, aux_input=aux_input) # Sim matrix of size [B | B X B]. First column = targets of self retrieval
 
         labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
         # dist over bsz classes. Even though tensor of shape (bsz + 1), -inf values won't count due to softmax. 
@@ -89,7 +83,7 @@ class DiscriminativeLoss(Loss):
         out = {}
         acc_1 = (sims.argmax(dim=1) == labels).detach().float() 
         out["acc"]= acc_1
-        # return loss, {"acc": acc_1}
+
         if get_acc_5:      
             top_5 = torch.topk(sims, 5, dim = 1)[1].detach()
             acc_5 = torch.any(top_5 ==0, dim = 1).detach().float()
@@ -104,7 +98,7 @@ class DiscriminativeLoss(Loss):
         median_rank = rank.median()
         out["mean_rank"] = mean_rank
         out["median_rank"] = median_rank
-        clip_s = torch.clamp(cos_sim.diag(0)*100, min = 0)
+        clip_s = torch.clamp(sims.diag(0)*100, min = 0)
         out["clip_s"] =clip_s
         
         return loss, out

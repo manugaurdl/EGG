@@ -312,7 +312,7 @@ class CocoWrapper:
         assert samples, f"Wrong split {split}"
        
         if neg_mining:
-            bags = self.split2bags[split]
+            bags = self.split2bags[split] # samples in bags are in clip_idx format. As bag created from dist matrix.
             ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx )
         else :
             ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
