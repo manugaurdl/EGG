@@ -204,12 +204,12 @@ class CocoWrapper:
         
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         
-        if self.neg_mining["do"]:
-            self.split2bags = self.load_bags(jatayu)
+
+        self.split2bags = self.load_bags(jatayu, self.neg_mining["do"])
 
         print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
 
-    def load_bags(self, jatayu):
+    def load_bags(self, jatayu, neg_training):
         if jatayu:
             path2bags = "/home/manugaur/EGG/hard_negs/bags/top_k_sim/"
         else:
@@ -217,7 +217,10 @@ class CocoWrapper:
 
         split2bags = {}
 
-        for split in ["train", "test", "val"]:
+        splits  = ["test", "val"]
+        if neg_training :
+            splits.append("train")
+        for split in splits:
             with open(os.path.join(path2bags, split, f"cocoid_bag_size_{self.neg_mining['bag_size']}.json"), "r") as f:
                 bags = json.load(f)
             split2bags[split] = bags
@@ -277,8 +280,8 @@ class CocoWrapper:
         if "restval" in split2samples:
             split2samples["train"] += split2samples["restval"]
 
-        for k, v in split2samples.items():
-            print(f"| Split {k} has {len(v)} elements.")
+        # for k, v in split2samples.items():
+        #     print(f"| Split {k} has {len(v)} elements.")
         return split2samples
 
     def get_cocoid2sample_idx(self):

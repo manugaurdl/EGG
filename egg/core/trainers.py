@@ -447,16 +447,15 @@ class Trainer:
 
                     log["epoch"] = epoch
                     log["val_log_prob"] =  interaction.aux['log_prob'].mean().item()
-                    
-                    if WANDB:
-                        if name == "rand":
-                            wandb.log(log, step = STEP)
-                        else:
-                            wandb.log({"VAL_R@1_NEG" : log["VAL_R@1"]}, step = STEP)
+
+                    if name == "rand":
+                        wandb.log(log, step = STEP)
+                    else:
+                        wandb.log({"VAL_R@1_NEG" : log["VAL_R@1"]}, step = STEP)
 
 
 
-        def rand_neg_val(epoch : int, inference : bool = False, WANDB : bool = False):
+        def rand_neg_val(epoch : int, WANDB : bool,  inference : bool = False):
 
             if inference:
                 test_log, interaction, metric = run_validation(self.inference_loader, epoch, inference)
@@ -469,8 +468,9 @@ class Trainer:
 
                 if WANDB:
                     log(rand_log, rand_interaction, metric, epoch, "rand")
-                if self.val_loader_neg is not None:
-                    log(neg_log, neg_interaction, neg_metric, epoch, "neg")
+                    
+                    if self.val_loader_neg is not None:
+                        log(neg_log, neg_interaction, neg_metric, epoch, "neg")
                 
                 if SAVE_USING_NEG:
                     return neg_metric
@@ -479,7 +479,7 @@ class Trainer:
 
         #INIT VAL
         if inference or (INIT_VAL and self.distributed_context.is_leader):
-            metric = rand_neg_val(epoch = 0, inference = inference)
+            metric = rand_neg_val(0, WANDB, inference=inference)
                     
         if inference:                
             return
@@ -511,7 +511,7 @@ class Trainer:
                             "epoch" : epoch + 1}, step = STEP)
 
             if self.distributed_context.is_leader:
-                metric = rand_neg_val(epoch + 1)
+                metric = rand_neg_val(epoch + 1, WANDB)
             
                 # Saving model
                 if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch + 1 % opts.checkpoint_freq==0): 
