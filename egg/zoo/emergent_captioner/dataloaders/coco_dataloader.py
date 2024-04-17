@@ -122,10 +122,10 @@ class CocoNegDataset:
         self.max_len_token = max_len_token
         self.prefix_len = prefix_len
         self.captions_type = captions_type
-        if self.mle_train:
-            self.path2tokens = os.path.join(root, f"tokenized_caps/{self.captions_type}/{self.split}")
+        # if self.mle_train:
+        #     self.path2tokens = os.path.join(root, f"tokenized_caps/{self.captions_type}/{self.split}")
             # self.id2tokens = torch.load
-            pass
+            # pass
         self.caps_per_img = caps_per_img
         
         self.cocoid2samples_idx = cocoid2samples_idx[split]
@@ -133,7 +133,7 @@ class CocoNegDataset:
 
     def __len__(self):
         if self.debug:
-            return 30
+            return 400
         else:
             return len(self.bags)
 
@@ -203,27 +203,34 @@ class CocoWrapper:
         # self.split2samples['test'] = val_test_list
         
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        
 
-        self.split2bags = self.load_bags(jatayu, self.neg_mining["do"])
-
+        if self.neg_mining["do"]:
+            self.split2bags = self.load_bags(jatayu, self.neg_mining["do"])
         print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
 
     def load_bags(self, jatayu, neg_training):
         if jatayu:
-            path2bags = "/home/manugaur/EGG/hard_negs/bags/top_k_sim/"
+            # path2bags = "/home/manugaur/EGG/hard_negs/bags/top_k_sim/"  
+            path2bags = "/home/manugaur/EGG/hard_negs/bags/diff_levels/"  
         else:
             path2bags = "/ssd_scratch/cvit/manu/EGG/hard_negs/bags/top_k_sim/"
 
-        split2bags = {}
-
-        splits  = ["test", "val"]
+        split2bags = defaultdict(dict)
+        diff_levels = ['easy', 'hard', 'medium']
+        splits = []
+        # splits  = ["test", "val"]
         if neg_training :
             splits.append("train")
-        for split in splits:
-            with open(os.path.join(path2bags, split, f"cocoid_bag_size_{self.neg_mining['bag_size']}.json"), "r") as f:
-                bags = json.load(f)
-            split2bags[split] = bags
+        
+        for level in diff_levels:
+            for split in splits:
+                with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['bag_size']}.pkl"), "rb") as f:
+                    split2bags[level][split] = pickle.load(f)
+        
+        # for split in splits:
+        #     with open(os.path.join(path2bags, split, f"cocoid_bag_size_{self.neg_mining['bag_size']}.json"), "r") as f:
+        #         bags = json.load(f)
+        #     split2bags[split] = bags
         return split2bags
 
     def tokenize(self,split):
@@ -315,8 +322,8 @@ class CocoWrapper:
         assert samples, f"Wrong split {split}"
        
         if neg_mining:
-            bags = self.split2bags[split] # samples in bags are in clip_idx format. As bag created from dist matrix.
-            ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx )
+            bags = self.split2bags["easy"][split] # samples in bags are in cocoid format.
+            ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx)
         else :
             ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
         sampler = None

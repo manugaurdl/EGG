@@ -6,6 +6,7 @@
 import math
 from PIL import Image
 import random
+import os
 import torch
 from torchvision import transforms
 from torch.utils.data import Sampler
@@ -32,13 +33,18 @@ class ValSampler(Sampler):
             indices = list(range(self.ds_len))
             random.shuffle(indices)
         else:
-            if self.neg_bag_size is None:
-                with open("/home/manugaur/EGG/data/sampler_indices_val_and_test.json", "r") as f:
-                    indices = json.load(f)
-            else:
-                with open(f"/home/manugaur/EGG/data/neg_bsz_{self.neg_bag_size}.json", "r") as f:
-                    indices = json.load(f)                
-        
+            path = f"/home/manugaur/EGG/data/{self.ds_len}.json"
+            if not os.path.isfile(path):
+                
+                l = list(range(self.ds_len))
+                random.shuffle(l)
+                
+                with open(path, "w") as f:
+                    json.dump(l, f)
+            
+            with open(path, "r") as f:
+                indices = json.load(f)
+                
         return iter(indices)
     
     def __len__(self):

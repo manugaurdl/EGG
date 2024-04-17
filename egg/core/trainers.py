@@ -419,8 +419,6 @@ class Trainer:
 
                 val_log, metric = prepare_logs(summary, validation_loss, validation_interaction, val_reward, train_method, opts.loss_type, epoch)
 
-                torch.cuda.empty_cache()
-
                 return val_log, validation_interaction, metric
 
         def log(log, interaction, metric, epoch, name, inference=False):
@@ -472,15 +470,15 @@ class Trainer:
                     if self.val_loader_neg is not None:
                         log(neg_log, neg_interaction, neg_metric, epoch, "neg")
                 
-                if SAVE_USING_NEG:
+                if SAVE_USING_NEG and self.val_loader_neg is not None:
                     return neg_metric
-            
+
+            torch.cuda.empty_cache()
             return metric
 
         #INIT VAL
         if inference or (INIT_VAL and self.distributed_context.is_leader):
             metric = rand_neg_val(0, WANDB, inference=inference)
-                    
         if inference:                
             return
 
@@ -511,6 +509,7 @@ class Trainer:
                             "epoch" : epoch + 1}, step = STEP)
 
             if self.distributed_context.is_leader:
+                torch.cuda.empty_cache()
                 metric = rand_neg_val(epoch + 1, WANDB)
             
                 # Saving model

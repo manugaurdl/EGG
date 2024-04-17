@@ -73,7 +73,8 @@ def main(params, config):
     train_loader = wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = config["neg_mining"]["do"],  **data_kwargs)
 
     val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
-    val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True,  **data_kwargs)
+    # val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True,  **data_kwargs)
+    val_loader_neg = None
 
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
     data_kwargs["mle_train"] = False
