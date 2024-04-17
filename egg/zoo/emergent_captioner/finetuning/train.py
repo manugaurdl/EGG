@@ -36,6 +36,12 @@ np.random.seed(seed)
 # "MASTER_ADDR", "MASTER_PORT", "WORLD_SIZE", "RANK", "LOCAL_RANK"
 # os.environ["CUDA_VISIBLE_DEVICES"] = str((0))
 
+def get_loader(wrapper, level, data_kwargs):
+        if level == "rand":
+            return wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = False,  **data_kwargs)
+        else:
+            return wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = True, level = level,  **data_kwargs)
+    
 
 def main(params, config):
     start = time.time()
@@ -69,13 +75,15 @@ def main(params, config):
         prefix_len = config["prefix_len"],
         is_dist_leader = opts.distributed_context.is_leader,
     )
-
-    train_loader = wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = config["neg_mining"]["do"],  **data_kwargs)
-
+    
+    #train
+    train_loaders = {level : get_loader(wrapper, level, data_kwargs) for level in config["neg_mining"]["curricullum"].keys()}
+    #val
     val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
     # val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True,  **data_kwargs)
     val_loader_neg = None
 
+    #test
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
     data_kwargs["mle_train"] = False
     test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False, **data_kwargs)
@@ -97,7 +105,7 @@ def main(params, config):
         trainer = core.Trainer(
             game=game,
             optimizer=optimizer,
-            train_data=train_loader,
+            train_loaders = train_loaders,
             optimizer_scheduler = scheduler,
             validation_data_rand =val_loader_rand,
             validation_data_neg =val_loader_neg,
@@ -112,7 +120,7 @@ def main(params, config):
         trainer = core.Trainer(
         game=game,
         optimizer=optimizer,
-        train_data=train_loader,
+        train_loaders = train_loaders,
         validation_data_rand =val_loader_rand,
         validation_data_neg =val_loader_neg,
         inference_data = test_loader,

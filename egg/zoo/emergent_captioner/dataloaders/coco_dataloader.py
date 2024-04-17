@@ -133,7 +133,7 @@ class CocoNegDataset:
 
     def __len__(self):
         if self.debug:
-            return 400
+            return 200
         else:
             return len(self.bags)
 
@@ -203,12 +203,11 @@ class CocoWrapper:
         # self.split2samples['test'] = val_test_list
         
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-
-        if self.neg_mining["do"]:
-            self.split2bags = self.load_bags(jatayu, self.neg_mining["do"])
+        if any(key in self.neg_mining["curricullum"] for key in ['easy', "medium", "hard"]):
+            self.split2bags = self.load_bags(jatayu)
         print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
 
-    def load_bags(self, jatayu, neg_training):
+    def load_bags(self, jatayu):
         if jatayu:
             # path2bags = "/home/manugaur/EGG/hard_negs/bags/top_k_sim/"  
             path2bags = "/home/manugaur/EGG/hard_negs/bags/diff_levels/"  
@@ -219,8 +218,8 @@ class CocoWrapper:
         diff_levels = ['easy', 'hard', 'medium']
         splits = []
         # splits  = ["test", "val"]
-        if neg_training :
-            splits.append("train")
+        # if neg_training :
+        splits.append("train")
         
         for level in diff_levels:
             for split in splits:
@@ -314,6 +313,8 @@ class CocoWrapper:
         transform: Callable,
         num_workers: int = 8,
         seed: int = 111,
+        level : str = None,
+
     ):
         if mle_train and split != "test":
             self.tokenize(split)
@@ -322,7 +323,7 @@ class CocoWrapper:
         assert samples, f"Wrong split {split}"
        
         if neg_mining:
-            bags = self.split2bags["easy"][split] # samples in bags are in cocoid format.
+            bags = self.split2bags[level][split] # samples in bags are in cocoid format.
             ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx)
         else :
             ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)

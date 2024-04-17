@@ -155,110 +155,110 @@ def main(params, config):
 
 #------------------------------------------------------------------------------------------------------------------------------------------------
     """RETRIEVAL WITHIN HARD BAGS using GT"""
-    USE_GREEDY_CAP = True # use greedy GT not the sampled ones.
-    RECALL_PER_BAG = True
-    bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_coco"
-    bag_size = 3
-    threshold = 0
-    captioner = f"{config['captions_type']}_gt"
-
-    with open(os.path.join(bag_dir, f"bsz_{bag_size}_thresh_{threshold}.json"), "r") as f:
-        listofbags = json.load(f)
-    print(len(listofbags))
-
-    benchmark = []
-    for bag in listofbags:
-        benchmark.append([cocoid2idx[str(cocoid)] for cocoid in bag])
-   
-    for idx , bag in tqdm(enumerate(benchmark), total = len(benchmark)):
-        if not RECALL_PER_BAG and idx == num_bags:
-            break
-        
-        bag_img_feats = img_feats[bag]
-        bag_text_feats = text_feats[bag]
-        bag_img_feats = bag_img_feats / bag_img_feats.norm(dim=-1, keepdim = True)
-        bag_text_feats = bag_text_feats / bag_text_feats.norm(dim=-1, keepdim = True)
-        
-        if USE_GREEDY_CAP:
-            bag_text_feats = bag_text_feats[:, 0, :]
-            _, acc = loss(bag_text_feats,bag_img_feats, False, False, None)
-            if RECALL_PER_BAG:
-                recall_1.append([_.item() for _ in acc['acc']])
-            else:
-                recall_1.append(acc['acc'].mean().item())
-
-        else: 
-            for i in range(bag_text_feats.shape[1]):
-                _, acc = loss(bag_text_feats[:, i, :],bag_img_feats, False, False, None)
-                
-                if RECALL_PER_BAG:
-                    recall_1.append([_.item() for _ in acc['acc']])
-                else:
-                    recall_1.append(acc['acc'].mean().item())
-                # recall_5.append(acc['acc_5'].mean().item())
-                clip_s.append(acc['clip_s'].mean().item())
-
-#------------------------------------------------------------------------------------------------------------------------------------------------
-    """RETRIEVAL WITHIN HARD BAGS using MODEL PREDS"""
-    
-    # # 3,1,300 | 5,1,122 | 7,2,125 | 10,3,81| 20,7,10
+    # USE_GREEDY_CAP = True # use greedy GT not the sampled ones.
     # RECALL_PER_BAG = True
-    # bag_size, threshold, num_bags = 5,0,122
-    # captioner = "blip2mistral_sr_lora_rank32"
- 
-    # #CLIP 
-    # model_name = "ViT-L/14@336px"
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    # model, preprocess = clip.load(model_name, device=device)
-    # model.eval()
-
     # bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_coco"
-    # preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+    # bag_size = 3
+    # threshold = 0
+    # captioner = f"{config['captions_type']}_gt"
 
-    # with open(preds_path, "rb") as f:
-    #     preds = pickle.load(f)
-    
     # with open(os.path.join(bag_dir, f"bsz_{bag_size}_thresh_{threshold}.json"), "r") as f:
     #     listofbags = json.load(f)
-
-    # get_acc_5 = bag_size > 5
-
+    # print(len(listofbags))
 
     # benchmark = []
     # for bag in listofbags:
     #     benchmark.append([cocoid2idx[str(cocoid)] for cocoid in bag])
    
-    # for bag_idx , bag in tqdm(enumerate(benchmark), total =num_bags):
-    #     if not RECALL_PER_BAG and bag_idx == num_bags:
+    # for idx , bag in tqdm(enumerate(benchmark), total = len(benchmark)):
+    #     if not RECALL_PER_BAG and idx == num_bags:
     #         break
+        
     #     bag_img_feats = img_feats[bag]
+    #     bag_text_feats = text_feats[bag]
     #     bag_img_feats = bag_img_feats / bag_img_feats.norm(dim=-1, keepdim = True)
-    # #     batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim = True)
-    #     bag_caps =  [preds[int(idx2cocoid[clip_idx])] for clip_idx in bag]
-    #     with torch.no_grad():
-    #         bag_text_feats = model.encode_text(clip.tokenize(bag_caps, context_length=77, truncate=True).to(device))
-    #         bag_text_feats = bag_text_feats / bag_text_feats.norm(dim=-1, keepdim=True)
+    #     bag_text_feats = bag_text_feats / bag_text_feats.norm(dim=-1, keepdim = True)
         
-    #     _, acc = loss(bag_text_feats ,bag_img_feats,  False, get_acc_5, None)
-        
-    #     if RECALL_PER_BAG:
-    #         recall_1.append([_.item() for _ in acc['acc']])
-    #     else:
-    #         recall_1.append(acc['acc'].mean().item())
-    #     if get_acc_5:
-    #         recall_5.append(acc['acc_5'].mean().item())
-    #     clip_s.append(acc['clip_s'].mean().item())
-    #     mean_rank.append(acc['mean_rank'].item())
-    #     median_rank.append(acc['median_rank'].item())
+    #     if USE_GREEDY_CAP:
+    #         bag_text_feats = bag_text_feats[:, 0, :]
+    #         _, acc = loss(bag_text_feats,bag_img_feats, False, False, None)
+    #         if RECALL_PER_BAG:
+    #             recall_1.append([_.item() for _ in acc['acc']])
+    #         else:
+    #             recall_1.append(acc['acc'].mean().item())
 
-    #     del bag_img_feats
-    #     del bag_text_feats
-    #     torch.cuda.empty_cache()
-    # print("\n")
-    # print(f"bag size : {bag_size}")
-    # print(f"threshold : {threshold}")
-    # print(f"num bags : {num_bags}")
-    # print("\n")
+    #     else: 
+    #         for i in range(bag_text_feats.shape[1]):
+    #             _, acc = loss(bag_text_feats[:, i, :],bag_img_feats, False, False, None)
+                
+    #             if RECALL_PER_BAG:
+    #                 recall_1.append([_.item() for _ in acc['acc']])
+    #             else:
+    #                 recall_1.append(acc['acc'].mean().item())
+    #             # recall_5.append(acc['acc_5'].mean().item())
+    #             clip_s.append(acc['clip_s'].mean().item())
+
+#------------------------------------------------------------------------------------------------------------------------------------------------
+    """RETRIEVAL WITHIN HARD BAGS using MODEL PREDS"""
+    
+    # 3,1,300 | 5,1,122 | 7,2,125 | 10,3,81| 20,7,10
+    RECALL_PER_BAG = True
+    bag_size, threshold, num_bags = 3, 0, 300
+    captioner = "coco_sr_batch200_easy_neg_bsz2"
+ 
+    #CLIP 
+    model_name = "ViT-L/14@336px"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, preprocess = clip.load(model_name, device=device)
+    model.eval()
+
+    bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_coco"
+    preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+
+    with open(preds_path, "rb") as f:
+        preds = pickle.load(f)
+    
+    with open(os.path.join(bag_dir, f"bsz_{bag_size}_thresh_{threshold}.json"), "r") as f:
+        listofbags = json.load(f)
+
+    get_acc_5 = bag_size > 5
+
+
+    benchmark = []
+    for bag in listofbags:
+        benchmark.append([cocoid2idx[str(cocoid)] for cocoid in bag])
+   
+    for bag_idx , bag in tqdm(enumerate(benchmark), total =num_bags):
+        if not RECALL_PER_BAG and bag_idx == num_bags:
+            break
+        bag_img_feats = img_feats[bag]
+        bag_img_feats = bag_img_feats / bag_img_feats.norm(dim=-1, keepdim = True)
+    #     batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim = True)
+        bag_caps =  [preds[int(idx2cocoid[clip_idx])] for clip_idx in bag]
+        with torch.no_grad():
+            bag_text_feats = model.encode_text(clip.tokenize(bag_caps, context_length=77, truncate=True).to(device))
+            bag_text_feats = bag_text_feats / bag_text_feats.norm(dim=-1, keepdim=True)
+        
+        _, acc = loss(bag_text_feats ,bag_img_feats,  False, get_acc_5, None)
+        
+        if RECALL_PER_BAG:
+            recall_1.append([_.item() for _ in acc['acc']])
+        else:
+            recall_1.append(acc['acc'].mean().item())
+        if get_acc_5:
+            recall_5.append(acc['acc_5'].mean().item())
+        clip_s.append(acc['clip_s'].mean().item())
+        mean_rank.append(acc['mean_rank'].item())
+        median_rank.append(acc['median_rank'].item())
+
+        del bag_img_feats
+        del bag_text_feats
+        torch.cuda.empty_cache()
+    print("\n")
+    print(f"bag size : {bag_size}")
+    print(f"threshold : {threshold}")
+    print(f"num bags : {num_bags}")
+    print("\n")
 #------------------------------------------------------------------------------------------------------------------------------------------------
     if RECALL_PER_BAG:
         with open(f"/home/manugaur/nips_benchmark/recall_per_bag/bsz_{bag_size}_thresh_{threshold}_{captioner}.json", "w") as f:

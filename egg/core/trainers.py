@@ -1,8 +1,6 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
-
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
+# Global vars
 STEP = 0
+
 import os
 import wandb
 import pathlib
@@ -61,6 +59,16 @@ def trainable_params(model):
     return int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))
     # return sum(p.numel() for p in model.parameters() if p.requires_grad == True)
 
+def get_loader(epoch, ranges):
+    prev_end = 0
+    sorted_items = sorted(ranges.items(), key=lambda x: x[1])
+
+    for key, end in sorted_items:
+        if prev_end <= epoch <end:
+            return key
+        prev_end = end
+    raise Exception("epoch out of curricullum")
+
 
 class Trainer:
     """
@@ -72,7 +80,7 @@ class Trainer:
         self,
         game: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
-        train_data: DataLoader,
+        train_loaders: dict,
         optimizer_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
         validation_data_rand: Optional[DataLoader] = None,
         validation_data_neg: Optional[DataLoader] = None,
@@ -97,7 +105,7 @@ class Trainer:
         self.game = game
         self.optimizer = optimizer
         self.optimizer_scheduler = optimizer_scheduler
-        self.train_data = train_data
+        self.train_loaders =  train_loaders
         self.val_loader_rand = validation_data_rand
         self.val_loader_neg = validation_data_neg
         self.inference_loader = inference_data 
@@ -198,7 +206,7 @@ class Trainer:
             self.scaler = None
 
     def eval(self, loader, inference : bool, data=None, GREEDY_BASELINE = False, train_method = None):
-        
+
         global STEP
         mean_loss = 0.0
         interactions = []
@@ -268,7 +276,8 @@ class Trainer:
         
         return mean_loss.item(), full_interaction, reward, summary
 
-    def train_epoch(self, WANDB, GREEDY_BASELINE, train_method,  opts):
+    def train_epoch(self,loader, WANDB, GREEDY_BASELINE, train_method,  opts):
+
         global STEP
         mean_loss = 0
         n_batches = 0
@@ -278,7 +287,7 @@ class Trainer:
 
         self.optimizer.zero_grad()
 
-        for batch_id, batch in tqdm(enumerate(self.train_data), total = len(self.train_data)):
+        for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
             # batch.append(GREEDY_BASELINE)
             if self.debug and batch_id == 10:
                 break
@@ -359,6 +368,7 @@ class Trainer:
 
     def train(self,config, opts, inference = False):
 
+        global STEP        
         n_epochs = config['opts']['n_epochs']
         WANDB = config['WANDB']['logging']
         if self.distributed_context.is_distributed:
@@ -370,11 +380,6 @@ class Trainer:
         train_method = config["train_method"]
         SAVE_USING_NEG = config["neg_mining"]["save_using_neg"] and config["neg_mining"]["do"]  
         best_metric_score = 0
-        global STEP
-
-        inference_log_dir = os.path.join(config["inference"]["output_dir"].split("/inference")[0], "inference_log")
-        if not os.path.isdir(inference_log_dir):
-            os.makedirs(inference_log_dir)
 
         def prepare_logs(summary, loss, interaction, reward, train_method, loss_type, epoch):
 
@@ -421,7 +426,7 @@ class Trainer:
 
                 return val_log, validation_interaction, metric
 
-        def log(log, interaction, metric, epoch, name, inference=False):
+        def log(log, interaction, metric, epoch, name, config = None, inference=False):
                 """val log is plotted on wandb. Inference log is saved as json."""
 
                 if inference:
@@ -453,11 +458,11 @@ class Trainer:
 
 
 
-        def rand_neg_val(epoch : int, WANDB : bool,  inference : bool = False):
+        def rand_neg_val(epoch : int, WANDB : bool,  config : dict, inference : bool = False):
 
             if inference:
                 test_log, interaction, metric = run_validation(self.inference_loader, epoch, inference)
-                log(test_log, interaction, metric, None, None, inference)
+                log(test_log, interaction, metric, None, None, config = config, inference = inference)
             
             else:
                 rand_log, rand_interaction, metric = run_validation(self.val_loader_rand, epoch, inference)
@@ -465,10 +470,10 @@ class Trainer:
                     neg_log, neg_interaction, neg_metric = run_validation(self.val_loader_neg, epoch, inference)
 
                 if WANDB:
-                    log(rand_log, rand_interaction, metric, epoch, "rand")
+                    log(rand_log, rand_interaction, metric, epoch, "rand", config = config)
                     
                     if self.val_loader_neg is not None:
-                        log(neg_log, neg_interaction, neg_metric, epoch, "neg")
+                        log(neg_log, neg_interaction, neg_metric, epoch, "neg", config = config)
                 
                 if SAVE_USING_NEG and self.val_loader_neg is not None:
                     return neg_metric
@@ -476,9 +481,16 @@ class Trainer:
             torch.cuda.empty_cache()
             return metric
 
+
+
+
+        inference_log_dir = os.path.join(config["inference"]["output_dir"].split("/inference")[0], "inference_log")
+        if not os.path.isdir(inference_log_dir):
+            os.makedirs(inference_log_dir)
+
         #INIT VAL
         if inference or (INIT_VAL and self.distributed_context.is_leader):
-            metric = rand_neg_val(0, WANDB, inference=inference)
+            metric = rand_neg_val(0, WANDB, config = config,  inference=inference)
         if inference:                
             return
 
@@ -501,16 +513,19 @@ class Trainer:
             print(f"Training epoch {epoch + 1}")
 
             # for callback in self.callbacks:
-            #     callback.on_epoch_begin(epoch + 1)
+            #     callback.on_epoch_begin(epoch + 1)                 
+            loader = get_loader(epoch, config['neg_mining']['curricullum'])
+            print("******"*10)
+            print(f"{epoch} --> {loader}")
 
-            train_loss, train_interaction = self.train_epoch(WANDB, GREEDY_BASELINE, train_method, opts)
+            train_loss, train_interaction = self.train_epoch(self.train_loaders[loader], WANDB, GREEDY_BASELINE, train_method, opts)
             if WANDB:
                 wandb.log({"Avg Loss" : train_loss,
                             "epoch" : epoch + 1}, step = STEP)
 
             if self.distributed_context.is_leader:
                 torch.cuda.empty_cache()
-                metric = rand_neg_val(epoch + 1, WANDB)
+                metric = rand_neg_val(epoch + 1, WANDB, config = config)
             
                 # Saving model
                 if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch + 1 % opts.checkpoint_freq==0): 
@@ -570,3 +585,4 @@ class Trainer:
         # print(save_path)
         with open(save_path, "wb") as f:
             pickle.dump(val_preds, f)
+
