@@ -78,7 +78,10 @@ class ConsoleLogger(Callback):
                 v = v.float()
             if isinstance(v, dict):
                 continue
-            aggregated_metrics[k] = v.mean().item()
+            try: 
+                aggregated_metrics[k] = v.mean().item()
+            except:
+                print(True)
         dump.update(aggregated_metrics)
 
         if self.as_json:

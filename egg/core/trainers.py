@@ -208,7 +208,7 @@ class Trainer:
         else:
             self.scaler = None
 
-    def eval(self, loader, inference : bool, data=None, GREEDY_BASELINE = False, train_method = None):
+    def eval(self, loader, inference : bool, config : dict, data=None, GREEDY_BASELINE = False, train_method = None):
 
         global STEP
         mean_loss = 0.0
@@ -281,21 +281,26 @@ class Trainer:
 
 
         # MMVP eval
-        mmvp_results = mmvp_vlm_benchmark(self.game.receiver.clip,self.game.receiver.clip_preproc, "/home/manugaur/MMVP/mmvp_vlm")
-        full_interaction.aux["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
-        full_interaction.aux.update({"mmvp_all" : mmvp_results})
+        if config['finetune_model'] == "clip":
+            mmvp_results = mmvp_vlm_benchmark(self.game.receiver.clip,self.game.receiver.clip_preproc, "/home/manugaur/MMVP/mmvp_vlm")
+            full_interaction.aux["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
+            full_interaction.aux.update({"mmvp_all" : mmvp_results})
 
         return mean_loss.item(), full_interaction, reward, summary
 
-    def train_epoch(self,loader, WANDB, GREEDY_BASELINE, train_method,  opts):
+    def train_epoch(self,loader, WANDB, GREEDY_BASELINE, train_method, opts, config):
 
         global STEP
         mean_loss = 0
         n_batches = 0
         interactions = []
-
+        
         self.game.train()
-
+        if config["finetune_model"]=="gpt":
+            self.game.sender.clip.eval()
+        else:
+            self.game.sender.clip.train()
+        self.game.receiver.eval()
         self.optimizer.zero_grad()
 
         for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
@@ -358,6 +363,7 @@ class Trainer:
             print(f"Avg Loss : {(mean_loss.item())/n_batches:.5f}")
             train_log = { "Loss" :optimized_loss.item(),
                             "Reward" : reward,
+                            "train R@1" : interaction.aux['batch_acc1'].item(),
                             "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"]
                             }
             if train_method != "mle":
@@ -401,10 +407,12 @@ class Trainer:
                         "Bleu_4" : summary["Bleu_4"],
                         'METEOR': summary["METEOR"],
                         "ROUGE_L" : summary['ROUGE_L'],
-                        "mmvp_avg" : interaction.aux['mmvp_avg'],
                         }
-            if config["WANDB"]["log_mmvp_all"]:
-                val_log.update(interaction.aux['mmvp_all'])
+            if config["finetune_model"] == "clip":
+                val_log["mmvp_avg"] = interaction.aux['mmvp_avg']
+                
+                if config["WANDB"]["log_mmvp_all"]:
+                    val_log.update(interaction.aux['mmvp_all'])
             # if WANDB.log _mmvp_aspects:
             #     val_log.update(all mmvp aspects from interaction.aux)
 
@@ -436,7 +444,7 @@ class Trainer:
                 #     if idx in [0,1]:
                 #         continue
                 #     callback.on_validation_begin(epoch + 1) # pass
-                validation_loss, validation_interaction, val_reward, summary = self.eval(loader, inference = inference, GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
+                validation_loss, validation_interaction, val_reward, summary = self.eval(loader, inference = inference, config = config, GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
 
                 val_log, metric = prepare_logs(summary, validation_loss, validation_interaction, val_reward, train_method, opts.loss_type, epoch, config)
 
@@ -530,7 +538,7 @@ class Trainer:
             #     callback.on_epoch_begin(epoch + 1)                 
             loader = get_loader(epoch, config['neg_mining']['curricullum'])
 
-            train_loss, train_interaction = self.train_epoch(self.train_loaders[loader], WANDB, GREEDY_BASELINE, train_method, opts)
+            train_loss, train_interaction = self.train_epoch(self.train_loaders[loader], WANDB, GREEDY_BASELINE, train_method, opts, config)
             if WANDB:
                 wandb.log({"Avg Loss" : train_loss,
                             "epoch" : epoch + 1}, step = STEP)

@@ -117,7 +117,8 @@ class ReinforceCaptionGame(nn.Module):
             weighted_kl_div = self.kl_div_coeff * kl_div
             
             baseline = self.baseline.predict(loss.detach())
-
+            batch_acc1 = aux_info['acc'].mean()
+            
             reward = (loss.detach() - baseline)# + weighted_kl_div
             reinforce_loss = (reward * log_prob).mean()
             if self.training:
@@ -132,6 +133,7 @@ class ReinforceCaptionGame(nn.Module):
 
             aux_info["kl_div"] = kl_div
             aux_info["log_prob"] =  log_prob
+            aux_info["batch_acc1"] = batch_acc1
 
             logging_strategy = (
                 self.train_logging_strategy if self.training else self.test_logging_strategy
@@ -210,6 +212,7 @@ def build_game(opts, config):
             clipcap_path=opts.mle_model_path,
             official_clipcap_weights = config["official_clipcap_weights"],
             train_method= config["train_method"],
+            config=config,
             do_sample=opts.do_sample,
             beam_size=opts.beam_size,
             max_len=opts.max_len,
@@ -225,8 +228,9 @@ def build_game(opts, config):
         raise RuntimeError
 
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
-    if config['finetune_llm']:
-        receiver.clip.eval()
+    receiver.clip.eval()
+    for p in receiver.clip.parameters():
+        p.requires_grad = False
     # if loading clip lazy feats
     # receiver.clip.visual = None
     # torch.cuda.empty_cache()
@@ -243,15 +247,12 @@ def build_game(opts, config):
     # remember that with non-diff losses you should use a wrapper around recv
     if config["lora"]:
 
-        original_weights = {}
-        for name, param in sender.clipcap.gpt.named_parameters():
-            original_weights[name] = param.clone().detach()
+        # original_weights = {}
+        # for name, param in sender.clipcap.gpt.named_parameters():
+        #     original_weights[name] = param.clone().detach()
         
-        if config["finetune_llm"]:
-            LoRA(sender, receiver, config["lora_rank"], "gpt")
-        else:
-            LoRA(sender, receiver.clip, config["lora_rank"], "clip")
-
+        LoRA(sender, sender.clip, config["lora_rank"], config['finetune_model'])
+        
     game = ReinforceCaptionGame(
         sender=sender,
         receiver=receiver,

@@ -393,6 +393,7 @@ class ClipCapSender(nn.Module):
         clipcap_path: str,
         official_clipcap_weights : str,
         train_method : str,
+        config : dict,
         do_sample: bool = False,
         beam_size: int = 5,
         max_len: int = 20,
@@ -401,15 +402,17 @@ class ClipCapSender(nn.Module):
 
         assert max_len < 75  # clip maximum context size
 
-        self.clip_vit = clip.load(clip_model)[0].visual
-        convert_models_to_fp32(self.clip_vit)
-        self.clip_vit.eval()
+        # self.clip_vit = clip.load(clip_model)[0].visual
+        self.clip, self.clip_preproc = clip.load(clip_model)
+        convert_models_to_fp32(self.clip)
 
-        for p in self.clip_vit.parameters():
-            p.requires_grad = False
+        # self.clip.eval()
+        if config["finetune_model"]=="gpt":
+            for p in self.clip.parameters():
+                p.requires_grad = False
 
         self.clipcap = ClipCapModel(
-            clip_prefix_size=self.clip_vit.output_dim,
+            clip_prefix_size=self.clip.visual.output_dim,
             do_sample=do_sample,
             beam_size=beam_size,
             max_len=max_len,
@@ -446,7 +449,7 @@ class ClipCapSender(nn.Module):
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
         #if loading CLIP on GPU
-        image_feats = self.clip_vit(images)
+        image_feats = self.clip.visual(images)
 
         #if lazy loading clip_feats
         # image_feats = images.squeeze(1)
@@ -482,7 +485,6 @@ class ClipCapSender(nn.Module):
 
     def train(self, mode: bool = True):
         self.training = mode
-        self.clip_vit.eval()
         self.clipcap.train(mode)
         return self
 

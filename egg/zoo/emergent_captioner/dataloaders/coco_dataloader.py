@@ -45,7 +45,7 @@ class CocoDataset:
 
     def __len__(self):
         if self.debug:
-            return 300
+            return 400
         else:
             return len(self.samples)
     
@@ -133,7 +133,7 @@ class CocoNegDataset:
 
     def __len__(self):
         if self.debug:
-            return 200
+            return 400
         else:
             return len(self.bags)
 
