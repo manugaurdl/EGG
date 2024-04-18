@@ -217,14 +217,21 @@ class CocoWrapper:
         split2bags = defaultdict(dict)
         diff_levels = ['easy', 'hard', 'medium']
         splits = []
-        # splits  = ["test", "val"]
+        splits  = ["test", "val"]
         # if neg_training :
         splits.append("train")
         
         for level in diff_levels:
             for split in splits:
-                with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['bag_size']}.pkl"), "rb") as f:
-                    split2bags[level][split] = pickle.load(f)
+                if split in ['val', "test"]:
+                    if level =="medium":
+                        with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['val_bag_size']}.pkl"), "rb") as f:
+                            split2bags[level][split] = pickle.load(f)
+                    else:
+                        continue
+                else:
+                    with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['bag_size']}.pkl"), "rb") as f:
+                        split2bags[level][split] = pickle.load(f)
         
         # for split in splits:
         #     with open(os.path.join(path2bags, split, f"cocoid_bag_size_{self.neg_mining['bag_size']}.json"), "r") as f:
@@ -341,7 +348,7 @@ class CocoWrapper:
 
         if split in ["val", "test"]:
             if neg_mining:
-                sampler = ValSampler(ds, debug, self.neg_mining["bag_size"])
+                sampler = ValSampler(ds, debug, self.neg_mining["val_bag_size"])
             else:
                 sampler = ValSampler(ds, debug, None)
 
@@ -349,7 +356,8 @@ class CocoWrapper:
             shuffle=None
 
         if neg_mining:
-            bags_per_batch = int(batch_size/self.neg_mining["bag_size"])
+            bag_size = self.neg_mining["val_bag_size"] if split == "val" else self.neg_mining["bag_size"]
+            bags_per_batch = int(batch_size/bag_size)
 
             loader = torch.utils.data.DataLoader(
                 ds,

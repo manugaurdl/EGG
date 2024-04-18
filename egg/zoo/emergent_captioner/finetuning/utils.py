@@ -183,6 +183,7 @@ def process_config(config, use_ddp, sys_args):
     if config["DEBUG"]:
         config["SAVE_BEST_METRIC"] = False
         config["WANDB"]["logging"] = False
+        config["opts"]["checkpoint_freq"] = 0
     return config
 
 def get_cl_args(config):
@@ -201,7 +202,11 @@ def get_best_state_dict(config):
     print("| LOADED BEST MODEL FOR INFERENCE")
     
     desired_format_state_dict = torch.load(config["official_clipcap_weights"])
-    saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "best.pt"))[1]
+    if config["SAVE_BEST_METRIC"]:
+        saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "best.pt"))[1]
+    else:
+        saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "e_10.pt"))[1]
+
     state_dict = {}
     
     #LORA

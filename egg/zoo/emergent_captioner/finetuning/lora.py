@@ -35,30 +35,55 @@ def linear_layer_parameterization(layer, device, rank, lora_alpha=16):
         features_in, features_out, rank=rank, alpha=lora_alpha, device=device
     )
 
-def parameterize(layer, rank):
+def inproj_parameterization(layer, device, rank, lora_alpha):    
+    features_in, features_out = layer.in_proj_weight.shape
+    return LoRAParametrization(
+        features_in, features_out, rank=rank, alpha=lora_alpha, device=device
+    )
+
+def parameterize(layer,weight_name, rank):
     parametrize.register_parametrization(
-layer, "weight", linear_layer_parameterization(layer, layer.weight.device, rank)
+layer, weight_name, linear_layer_parameterization(layer, layer.weight.device, rank)
 )
 
-def LoRA(model, rank):
-    print(f"trainable params before LORA :{trainable_params(model)}")
-
-    for i in range(12):
-        parameterize(model.clipcap.gpt.transformer.h[i].attn.c_attn, rank)
-        parameterize(model.clipcap.gpt.transformer.h[i].attn.c_proj, rank)
-        parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc, rank)
-        parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, rank)
-
-    #freeze all_params
-
+def LoRA(model, clip,  rank, model_type):
     
-    for name, param in model.named_parameters():
-        condition = 'lora' in name or  "gpt.transformer.wte" in name or "clip_project" in name 
+    if model_type =="gpt":
+        print(f"trainable params before LORA :{trainable_params(model)}")
+        for i in range(12):
+            parameterize(model.clipcap.gpt.transformer.h[i].attn.c_attn, "weight", rank)
+            parameterize(model.clipcap.gpt.transformer.h[i].attn.c_proj, "weight", rank)
+            parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc, "weight", rank)
+            parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, "weight", rank)
+        #freeze all_params
+        for name, param in model.named_parameters():
+            condition = 'lora' in name or  "gpt.transformer.wte" in name or "clip_project" in name 
 
-        if condition:
-            continue
-        else:
-            param.requires_grad = False
+            if condition:
+                continue
+            else:
+                param.requires_grad = False
+        print(f"trainable params after LORA :{trainable_params(model)}")
+    
+    else:
+        print(f"CLIP trainable params before LORA :{trainable_params(clip)}")
+        for l_num in range(12):
+            parametrize.register_parametrization(
+                clip.visual.transformer.resblocks[l_num].attn,
+                "in_proj_weight", 
+                inproj_parameterization(clip.visual.transformer.resblocks[l_num].attn,
+                next(clip.visual.parameters()).device,
+                rank=rank,
+                lora_alpha=16)
+                        )
+        #freeze params
+        for name, param in clip.named_parameters():
+            condition = 'lora' in name
 
-    print(f"trainable params after LORA :{trainable_params(model)}")
+            if condition:
+                continue
+            else:
+                param.requires_grad = False
+    
+        print(f"CLIP trainable params before LORA :{trainable_params(clip)}")
 

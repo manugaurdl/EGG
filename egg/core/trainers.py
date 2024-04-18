@@ -6,6 +6,7 @@ import wandb
 import pathlib
 import pickle
 import json
+import numpy as np
 from typing import List, Optional
 from tqdm import tqdm
 import torch.distributed as dist
@@ -41,6 +42,8 @@ from egg.zoo.emergent_captioner.utils import (
 )
 from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metrics
 from egg.zoo.emergent_captioner.finetuning.losses import DiscriminativeLoss
+from egg.zoo.emergent_captioner.evaluation.mmvp_vlm import mmvp_vlm_benchmark
+
 
 try:
     from torch.cuda.amp import GradScaler, autocast
@@ -218,8 +221,10 @@ class Trainer:
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
-
+                
                 optimized_loss, interaction, reward = self.game(*batch, train_method = train_method, inference=inference)
+
+                
                 """
                 interaction : sender_input=None, receiver_input=None, labels = tensor, aux_input = {cocoid, captions, tokens, mask}, message, receiver_output=None, message_length=None, aux = {"kl_div" = torch.rand(1)}
                 """
@@ -273,7 +278,13 @@ class Trainer:
                 predictions[(i*bsz) + j] = [{"caption" :pred}]
         
         summary = compute_nlg_metrics(predictions, gold_standard) # score for each idx stored in summary except bleu
-        
+
+
+        # MMVP eval
+        mmvp_results = mmvp_vlm_benchmark(self.game.receiver.clip,self.game.receiver.clip_preproc, "/home/manugaur/MMVP/mmvp_vlm")
+        full_interaction.aux["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
+        full_interaction.aux.update({"mmvp_all" : mmvp_results})
+
         return mean_loss.item(), full_interaction, reward, summary
 
     def train_epoch(self,loader, WANDB, GREEDY_BASELINE, train_method,  opts):
@@ -381,7 +392,7 @@ class Trainer:
         SAVE_USING_NEG = config["neg_mining"]["save_using_neg"] and config["neg_mining"]["do"]  
         best_metric_score = 0
 
-        def prepare_logs(summary, loss, interaction, reward, train_method, loss_type, epoch):
+        def prepare_logs(summary, loss, interaction, reward, train_method, loss_type, epoch, config):
 
             val_log = { "Val Loss" : loss,
                         "Val Reward" : reward,
@@ -389,8 +400,13 @@ class Trainer:
                         "SPICE" : summary["SPICE"],
                         "Bleu_4" : summary["Bleu_4"],
                         'METEOR': summary["METEOR"],
-                        "ROUGE_L" : summary['ROUGE_L']
+                        "ROUGE_L" : summary['ROUGE_L'],
+                        "mmvp_avg" : interaction.aux['mmvp_avg'],
                         }
+            if config["WANDB"]["log_mmvp_all"]:
+                val_log.update(interaction.aux['mmvp_all'])
+            # if WANDB.log _mmvp_aspects:
+            #     val_log.update(all mmvp aspects from interaction.aux)
 
             if train_method == "mle":
                 del val_log["Val Loss"]
@@ -409,7 +425,7 @@ class Trainer:
 
             return val_log, metric
 
-        def run_validation(loader, epoch : int, inference : bool = False):
+        def run_validation(loader, epoch : int, config : dict,  inference : bool = False):
             validation_loss = validation_interaction = None
             if (
                 loader is not None
@@ -422,7 +438,7 @@ class Trainer:
                 #     callback.on_validation_begin(epoch + 1) # pass
                 validation_loss, validation_interaction, val_reward, summary = self.eval(loader, inference = inference, GREEDY_BASELINE = GREEDY_BASELINE, train_method = train_method)
 
-                val_log, metric = prepare_logs(summary, validation_loss, validation_interaction, val_reward, train_method, opts.loss_type, epoch)
+                val_log, metric = prepare_logs(summary, validation_loss, validation_interaction, val_reward, train_method, opts.loss_type, epoch, config)
 
                 return val_log, validation_interaction, metric
 
@@ -461,13 +477,13 @@ class Trainer:
         def rand_neg_val(epoch : int, WANDB : bool,  config : dict, inference : bool = False):
 
             if inference:
-                test_log, interaction, metric = run_validation(self.inference_loader, epoch, inference)
+                test_log, interaction, metric = run_validation(self.inference_loader, epoch, config, inference)
                 log(test_log, interaction, metric, None, None, config = config, inference = inference)
             
             else:
-                rand_log, rand_interaction, metric = run_validation(self.val_loader_rand, epoch, inference)
+                rand_log, rand_interaction, metric = run_validation(self.val_loader_rand, epoch, config, inference)
                 if self.val_loader_neg is not None:
-                    neg_log, neg_interaction, neg_metric = run_validation(self.val_loader_neg, epoch, inference)
+                    neg_log, neg_interaction, neg_metric = run_validation(self.val_loader_neg, epoch, config, inference)
 
                 if WANDB:
                     log(rand_log, rand_interaction, metric, epoch, "rand", config = config)
@@ -480,8 +496,6 @@ class Trainer:
 
             torch.cuda.empty_cache()
             return metric
-
-
 
 
         inference_log_dir = os.path.join(config["inference"]["output_dir"].split("/inference")[0], "inference_log")
@@ -515,8 +529,6 @@ class Trainer:
             # for callback in self.callbacks:
             #     callback.on_epoch_begin(epoch + 1)                 
             loader = get_loader(epoch, config['neg_mining']['curricullum'])
-            print("******"*10)
-            print(f"{epoch} --> {loader}")
 
             train_loss, train_interaction = self.train_epoch(self.train_loaders[loader], WANDB, GREEDY_BASELINE, train_method, opts)
             if WANDB:
@@ -528,7 +540,7 @@ class Trainer:
                 metric = rand_neg_val(epoch + 1, WANDB, config = config)
             
                 # Saving model
-                if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and epoch + 1 % opts.checkpoint_freq==0): 
+                if (SAVE_BEST_METRIC and metric > best_metric_score) or (opts.checkpoint_freq > 0 and (epoch + 1) % opts.checkpoint_freq==0): 
                     for idx, callback in enumerate(self.callbacks):
                         """
                         callbacks.ConsoleLogger: aggregated_print

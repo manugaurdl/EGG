@@ -203,8 +203,8 @@ def main(params, config):
     
     # 3,1,300 | 5,1,122 | 7,2,125 | 10,3,81| 20,7,10
     RECALL_PER_BAG = True
-    bag_size, threshold, num_bags = 3, 0, 300
-    captioner = "coco_sr_batch200_easy_neg_bsz2"
+    bag_size, threshold, num_bags = 3, 0, 30
+    captioner =  "coco_sr_neg_curricullum_bsz_5"#"coco_sr_bsz_200"
  
     #CLIP 
     model_name = "ViT-L/14@336px"
@@ -225,12 +225,13 @@ def main(params, config):
 
 
     benchmark = []
-    for bag in listofbags:
+    for bag_idx, bag in enumerate(listofbags):
+        if bag_idx ==num_bags:
+            break
         benchmark.append([cocoid2idx[str(cocoid)] for cocoid in bag])
    
     for bag_idx , bag in tqdm(enumerate(benchmark), total =num_bags):
-        if not RECALL_PER_BAG and bag_idx == num_bags:
-            break
+
         bag_img_feats = img_feats[bag]
         bag_img_feats = bag_img_feats / bag_img_feats.norm(dim=-1, keepdim = True)
     #     batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim = True)
@@ -292,6 +293,6 @@ if __name__ == "__main__":
     config = process_config(config, use_ddp, sys.argv[1:])
     params = get_cl_args(config)
     config["captions_type"] = "coco"
-    config["opts"]["batch_size"]= 100
+    config["opts"]["batch_size"]= 200
     print(f"Self Retrieval using {config['captions_type']} captions")
     main(params, config)

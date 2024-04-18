@@ -76,6 +76,8 @@ class ConsoleLogger(Callback):
         for idx, (k, v) in enumerate(logs.aux.items()):
             if idx==3:
                 v = v.float()
+            if isinstance(v, dict):
+                continue
             aggregated_metrics[k] = v.mean().item()
         dump.update(aggregated_metrics)
 

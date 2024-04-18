@@ -225,6 +225,8 @@ def build_game(opts, config):
         raise RuntimeError
 
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
+    if config['finetune_llm']:
+        receiver.clip.eval()
     # if loading clip lazy feats
     # receiver.clip.visual = None
     # torch.cuda.empty_cache()
@@ -245,8 +247,11 @@ def build_game(opts, config):
         for name, param in sender.clipcap.gpt.named_parameters():
             original_weights[name] = param.clone().detach()
         
-        LoRA(sender, config["lora_rank"])
-        
+        if config["finetune_llm"]:
+            LoRA(sender, receiver, config["lora_rank"], "gpt")
+        else:
+            LoRA(sender, receiver.clip, config["lora_rank"], "clip")
+
     game = ReinforceCaptionGame(
         sender=sender,
         receiver=receiver,
