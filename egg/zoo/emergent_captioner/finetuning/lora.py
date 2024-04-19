@@ -55,14 +55,15 @@ def LoRA(model, clip,  rank, model_type):
             parameterize(model.clipcap.gpt.transformer.h[i].attn.c_proj, "weight", rank)
             parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc, "weight", rank)
             parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, "weight", rank)
-        #freeze all_params
-        for name, param in model.named_parameters():
-            condition = 'lora' in name or  "gpt.transformer.wte" in name or "clip_project" in name 
-
-            if condition:
+        
+        # freeze GPT
+        for name, param in model.clipcap.gpt.named_parameters():
+            if 'lora' in name or "wte.weight" in name:
                 continue
             else:
                 param.requires_grad = False
+        
+        
         print(f"trainable params after LORA :{trainable_params(model)}")
     
     else:
@@ -76,17 +77,19 @@ def LoRA(model, clip,  rank, model_type):
                 rank=rank,
                 lora_alpha=16)
                         )
+        for i in range(12):
+            parameterize(clip.visual.transformer.resblocks[i].mlp.c_fc, "weight", rank)
+            parameterize(clip.visual.transformer.resblocks[i].mlp.c_proj, "weight", rank)
+
         #freeze params
         for name, param in clip.named_parameters():
-            condition = 'lora' in name
-
-            if condition:
+            if 'lora' in name:
                 continue
             else:
                 param.requires_grad = False
         
         for name, param in model.named_parameters():
-            if "clip_project" in name:
+            if "clip_project" in name: 
                 continue
             else:
                 param.requires_grad = False            

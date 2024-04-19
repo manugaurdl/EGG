@@ -80,8 +80,8 @@ def main(params, config):
     train_loaders = {level : get_loader(wrapper, level, data_kwargs) for level in config["neg_mining"]["curricullum"].keys()}
     #val
     val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
-    val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True, level = config['neg_mining']['val_level'],  **data_kwargs)
-    # val_loader_neg = None
+    # val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True, level = config['neg_mining']['val_level'],  **data_kwargs)
+    val_loader_neg = None
 
     #test
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
@@ -136,10 +136,17 @@ def main(params, config):
 
     if opts.captioner_model == "clipcap" : #and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
+
+    #patching wte unfreezes it. If finetuning CLIP with fully frozen GPT, run this :     
+    # for p in trainer.game.sender.clipcap.gpt.lm_head.parameters():
+    #     p.requires_grad = False
     
-    for p in trainer.game.sender.clipcap.gpt.parameters():
-        p.requires_grad = False
-    
+    # new_weights = {}
+    # for name, param in trainer.game.sender.clipcap.gpt.transformer.named_parameters():
+    #     new_weights[name] = param
+    # print(new_weights["h.0.attn.c_attn.parametrizations.weight.original"].requires_grad)
+    # print(new_weights["h.0.attn.c_proj.parametrizations.weight.0.lora_A"].requires_grad)
+
     #Training
     if not config["ONLY_INFERENCE"]:
         trainer.train(config, opts)

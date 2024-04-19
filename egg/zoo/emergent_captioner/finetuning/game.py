@@ -11,7 +11,7 @@ from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender
 from egg.zoo.emergent_captioner.finetuning.losses import get_loss, CiderReward, DiscriminativeLoss
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
 from egg.zoo.emergent_captioner.finetuning.lora import LoRA
-
+import pickle
 class ReinforceCaptionGame(nn.Module):
     def __init__(
         self,
@@ -244,14 +244,27 @@ def build_game(opts, config):
         dataset=opts.train_dataset,
         num_hard_negatives=opts.num_hard_negatives,
     )
+    print("BEFORE ****"*100)
+    print(f"LoRA param : {sum(p.mean() for p in sender.clipcap.gpt.transformer.h[0].attn.c_attn.parameters())}")
+    print(f"frozen param : {next(sender.clipcap.gpt.lm_head.parameters()).sum()}")
+    print("****"*100)
     # remember that with non-diff losses you should use a wrapper around recv
     if config["lora"]:
 
-        # original_weights = {}
-        # for name, param in sender.clipcap.gpt.named_parameters():
-        #     original_weights[name] = param.clone().detach()
-        
+        original_weights = {}
+        for name, param in sender.clipcap.gpt.transformer.named_parameters():
+            original_weights[name] = param.clone().detach()
+        with open("/home/manugaur/temp/gpt_transformer_og.pkl", "wb") as f:
+            pickle.dump(original_weights, f)
+
         LoRA(sender, sender.clip, config["lora_rank"], config['finetune_model'])
+        
+        new_weights = {}
+        for name, param in sender.clipcap.gpt.transformer.named_parameters():
+            new_weights[name] = param
+        # print(new_weights["h.0.attn.c_attn.parametrizations.weight.original"].requires_grad)
+        # print(f"og weight = {new_weights['h.0.attn.c_attn.parametrizations.weight.original'].mean()}")
+        # print(f"lora weight = {new_weights['h.0.attn.c_proj.parametrizations.weight.0.lora_A'].mean()}")
         
     game = ReinforceCaptionGame(
         sender=sender,

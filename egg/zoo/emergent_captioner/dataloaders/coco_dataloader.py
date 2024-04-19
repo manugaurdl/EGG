@@ -45,7 +45,7 @@ class CocoDataset:
 
     def __len__(self):
         if self.debug:
-            return 400
+            return 1600
         else:
             return len(self.samples)
     

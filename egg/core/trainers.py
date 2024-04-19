@@ -379,9 +379,39 @@ class Trainer:
             if self.optimizer_scheduler:
                 self.optimizer_scheduler.step()
 
+            # check if A.B in lora changing
+            # dummy = self.game.sender.clipcap.gpt.transformer.h[0].attn.c_attn.parametrizations.weight
+            # dummy = self.game.sender.clip.visual.transformer.resblocks[0].attn.parametrizations
+            # dummy = self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.parametrizations.weight
+            
+            # x = [(name, p) for name, p in dummy.named_parameters()]
+            # print("***"*30)
+            # print(f"grad A : {x[1][-1].grad.sum()}")
+            # print(f"grad B : {x[2][-1].grad.sum()}")
+            # print(f"A : {x[1][-1].mean()}")
+            # print(f"B : {x[2][-1].mean()}")
+            # print(f"lora (A.B).mean() : {torch.matmul(x[1][-1].t(),x[2][-1].t()).mean()}")
+            # print(f"og weights  :{x[0][-1].mean()}")
+            # print("***"*30)
+
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
 
+        # print("****"*30)
+        # # print(sum(p.mean() for p in self.game.sender.clip.visual.parameters()))
+    
+        # new_weights = {}
+        # for name, param in self.game.sender.clipcap.gpt.transformer.named_parameters():
+        #     new_weights[name] = param
+        # # print(new_weights["h.0.attn.c_attn.parametrizations.weight.original"].requires_grad)
+        # # print(f"og weight = {new_weights['h.0.attn.c_attn.parametrizations.weight.original'].mean()}")
+        # print(f"lora weight = {new_weights['h.0.attn.c_proj.parametrizations.weight.0.lora_A'].mean()}")
+
+        # print(f"LoRA param : {sum(p.mean() for p in self.game.sender.clipcap.gpt.transformer.h[0].attn.c_attn.parameters())}")
+        # print(f"frozen param : {next(self.game.sender.clipcap.gpt.lm_head.parameters()).sum()}")
+        # print(next(self.game.sender.clipcap.gpt.lm_head.parameters()).requires_grad)
+
+        # print("****"*30)
         return mean_loss.item(), full_interaction
 
     def train(self,config, opts, inference = False):
