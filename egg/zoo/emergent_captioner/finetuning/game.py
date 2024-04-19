@@ -244,10 +244,10 @@ def build_game(opts, config):
         dataset=opts.train_dataset,
         num_hard_negatives=opts.num_hard_negatives,
     )
-    print("BEFORE ****"*100)
-    print(f"LoRA param : {sum(p.mean() for p in sender.clipcap.gpt.transformer.h[0].attn.c_attn.parameters())}")
-    print(f"frozen param : {next(sender.clipcap.gpt.lm_head.parameters()).sum()}")
-    print("****"*100)
+    # print("BEFORE ****"*100)
+    # print(f"LoRA param : {sum(p.mean() for p in sender.clipcap.gpt.transformer.h[0].attn.c_attn.parameters())}")
+    # print(f"frozen param : {next(sender.clipcap.gpt.lm_head.parameters()).sum()}")
+    # print("****"*100)
     # remember that with non-diff losses you should use a wrapper around recv
     if config["lora"]:
 
