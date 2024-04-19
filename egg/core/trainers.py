@@ -282,7 +282,7 @@ class Trainer:
 
         # MMVP eval
         if config['finetune_model'] == "clip":
-            mmvp_results = mmvp_vlm_benchmark(self.game.receiver.clip,self.game.receiver.clip_preproc, "/home/manugaur/MMVP/mmvp_vlm")
+            mmvp_results = mmvp_vlm_benchmark(self.game.sender.clip, self.game.sender.clip_preproc, "/home/manugaur/MMVP/mmvp_vlm")
             full_interaction.aux["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
             full_interaction.aux.update({"mmvp_all" : mmvp_results})
 
@@ -300,6 +300,7 @@ class Trainer:
             self.game.sender.clip.eval()
         else:
             self.game.sender.clip.train()
+            self.game.sender.clipcap.gpt.eval()
         self.game.receiver.eval()
         self.optimizer.zero_grad()
 

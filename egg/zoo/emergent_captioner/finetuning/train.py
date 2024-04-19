@@ -136,7 +136,10 @@ def main(params, config):
 
     if opts.captioner_model == "clipcap" : #and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
-
+    
+    for p in trainer.game.sender.clipcap.gpt.parameters():
+        p.requires_grad = False
+    
     #Training
     if not config["ONLY_INFERENCE"]:
         trainer.train(config, opts)

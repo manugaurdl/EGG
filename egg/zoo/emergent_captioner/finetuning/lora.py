@@ -84,6 +84,12 @@ def LoRA(model, clip,  rank, model_type):
                 continue
             else:
                 param.requires_grad = False
+        
+        for name, param in model.named_parameters():
+            if "clip_project" in name:
+                continue
+            else:
+                param.requires_grad = False            
     
         print(f"CLIP trainable params before LORA :{trainable_params(clip)}")
 

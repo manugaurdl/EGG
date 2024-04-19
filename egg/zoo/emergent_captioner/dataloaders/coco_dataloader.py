@@ -203,11 +203,13 @@ class CocoWrapper:
         # self.split2samples['test'] = val_test_list
         
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        neg_train = False
         if any(key in self.neg_mining["curricullum"] for key in ['easy', "medium", "hard"]):
-            self.split2bags = self.load_bags(jatayu)
+            neg_train = True
+        self.split2bags = self.load_bags(jatayu, neg_train)
         print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
 
-    def load_bags(self, jatayu):
+    def load_bags(self, jatayu, neg_train):
         if jatayu:
             # path2bags = "/home/manugaur/EGG/hard_negs/bags/top_k_sim/"  
             path2bags = "/home/manugaur/EGG/hard_negs/bags/diff_levels/"  
@@ -218,8 +220,8 @@ class CocoWrapper:
         diff_levels = ['easy', 'hard', 'medium']
         splits = []
         splits  = ["test", "val"]
-        # if neg_training :
-        splits.append("train")
+        if neg_train :
+            splits.append("train")
         
         for level in diff_levels:
             for split in splits:

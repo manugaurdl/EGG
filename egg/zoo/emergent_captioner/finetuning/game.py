@@ -262,5 +262,4 @@ def build_game(opts, config):
         test_logging_strategy=test_logging_strategy,
         prefix_len = config['prefix_len'],
     )
-
     return game
