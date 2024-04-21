@@ -46,7 +46,7 @@ def parameterize(layer,weight_name, rank):
 layer, weight_name, linear_layer_parameterization(layer, layer.weight.device, rank)
 )
 
-def LoRA(model, clip,  rank, model_type):
+def LoRA(model, clip,  rank, model_type, config):
     
     if model_type =="gpt":
         print(f"trainable params before LORA :{trainable_params(model)}")
@@ -77,19 +77,15 @@ def LoRA(model, clip,  rank, model_type):
                 rank=rank,
                 lora_alpha=16)
                         )
-        for i in range(12):
-            parameterize(clip.visual.transformer.resblocks[i].mlp.c_fc, "weight", rank)
-            parameterize(clip.visual.transformer.resblocks[i].mlp.c_proj, "weight", rank)
+        if config['clip_mlp_ft']:
+            for i in range(12):
+                parameterize(clip.visual.transformer.resblocks[i].mlp.c_fc, "weight", rank)
+                parameterize(clip.visual.transformer.resblocks[i].mlp.c_proj, "weight", rank)
 
         #freeze params
-        for name, param in clip.named_parameters():
-            if 'lora' in name:
-                continue
-            else:
-                param.requires_grad = False
-        
+
         for name, param in model.named_parameters():
-            if "clip_project" in name: 
+            if "clip_project" in name or 'lora' in name or 'wte.weight' in name: 
                 continue
             else:
                 param.requires_grad = False            

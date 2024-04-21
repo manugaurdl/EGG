@@ -92,8 +92,13 @@ def main(params, config):
 
     game = build_game(opts, config)
     # print_grad_info(game)
+    # param_groups = [
+    # {'params': game.sender.clipcap.parameters(), 'lr': opts.lr},
+    # ]
+    # if config['finetune_model']== "clip":
+    #     param_groups.append({'params': game.sender.clip.visual.parameters(), 'lr': opts.lr})
     
-    optimizer = torch.optim.AdamW(game.sender.parameters(), lr=opts.lr)
+    optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
     # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
 
     # Create trainers object
@@ -137,15 +142,10 @@ def main(params, config):
     if opts.captioner_model == "clipcap" : #and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
-    #patching wte unfreezes it. If finetuning CLIP with fully frozen GPT, run this :     
-    # for p in trainer.game.sender.clipcap.gpt.lm_head.parameters():
-    #     p.requires_grad = False
-    
-    # new_weights = {}
-    # for name, param in trainer.game.sender.clipcap.gpt.transformer.named_parameters():
-    #     new_weights[name] = param
-    # print(new_weights["h.0.attn.c_attn.parametrizations.weight.original"].requires_grad)
-    # print(new_weights["h.0.attn.c_proj.parametrizations.weight.0.lora_A"].requires_grad)
+    #patching unfreezes wte. If finetuning CLIP with fully frozen GPT, run this :     
+    if config['freeze_wte']:
+        for p in trainer.game.sender.clipcap.gpt.lm_head.parameters():
+            p.requires_grad = False
 
     #Training
     if not config["ONLY_INFERENCE"]:

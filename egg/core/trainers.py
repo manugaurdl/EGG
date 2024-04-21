@@ -326,6 +326,25 @@ class Trainer:
                 self.scaler.scale(optimized_loss).backward()
             else:
                 optimized_loss.backward()
+            
+            #check if clip param changing 
+            # print(f"mlp :  {torch.norm(self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.weight)}")
+            # print(f"attn :  {torch.norm(self.game.sender.clip.visual.transformer.resblocks[0].attn.out_proj.weight)}")
+            
+            # check if A.B in lora changing
+            # dummy = self.game.sender.clipcap.gpt.transformer.h[0].attn.c_attn.parametrizations.weight
+            # dummy = self.game.sender.clip.visual.transformer.resblocks[0].attn.parametrizations
+            # dummy = self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.parametrizations.weight
+            
+            # x = [(name, p) for name, p in dummy.named_parameters()]
+            # print("***"*30)
+            # print(f"grad A : {torch.norm(x[1][-1])}")
+            # print(f"grad B : {torch.norm(x[2][-1])}")
+            # print(f"A : {torch.norm(x[1][-1])}")
+            # print(f"B : {torch.norm(x[2][-1])}")
+            # print(f"lora (A.B).norm() : {torch.norm(torch.matmul(x[1][-1].t(),x[2][-1].t()))}")
+            # print(f"og weights  :{torch.norm(x[0][-1])}")
+            # print("***"*30)
 
             if batch_id % self.update_freq == self.update_freq - 1:
                 if self.scaler:
@@ -379,21 +398,6 @@ class Trainer:
             if self.optimizer_scheduler:
                 self.optimizer_scheduler.step()
 
-            # check if A.B in lora changing
-            # dummy = self.game.sender.clipcap.gpt.transformer.h[0].attn.c_attn.parametrizations.weight
-            # dummy = self.game.sender.clip.visual.transformer.resblocks[0].attn.parametrizations
-            # dummy = self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.parametrizations.weight
-            
-            # x = [(name, p) for name, p in dummy.named_parameters()]
-            # print("***"*30)
-            # print(f"grad A : {x[1][-1].grad.sum()}")
-            # print(f"grad B : {x[2][-1].grad.sum()}")
-            # print(f"A : {x[1][-1].mean()}")
-            # print(f"B : {x[2][-1].mean()}")
-            # print(f"lora (A.B).mean() : {torch.matmul(x[1][-1].t(),x[2][-1].t()).mean()}")
-            # print(f"og weights  :{x[0][-1].mean()}")
-            # print("***"*30)
-
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
 
@@ -416,6 +420,7 @@ class Trainer:
 
     def train(self,config, opts, inference = False):
 
+        print(f"Total trainable params : {trainable_params(self.game.sender)}")
         global STEP        
         n_epochs = config['opts']['n_epochs']
         WANDB = config['WANDB']['logging']

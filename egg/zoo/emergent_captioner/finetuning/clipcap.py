@@ -403,11 +403,18 @@ class ClipCapSender(nn.Module):
         assert max_len < 75  # clip maximum context size
 
         # self.clip_vit = clip.load(clip_model)[0].visual
+        self.finetune_llm = config["finetune_model"]=="gpt"
         self.clip, self.clip_preproc = clip.load(clip_model)
         convert_models_to_fp32(self.clip)
 
         # self.clip.eval()
-        if config["finetune_model"]=="gpt":
+        """
+        if gpt finetuning :  freeze clip. 
+                             lora decides what to freeze in sender.clipcap
+        if clip finetuning : gpt.transformer frozen in LoRA only. 
+                             won't be finetuning CLIP w/o LoRA anyways.=
+        """
+        if self.finetune_llm:
             for p in self.clip.parameters():
                 p.requires_grad = False
 
@@ -477,11 +484,14 @@ class ClipCapSender(nn.Module):
             x = [repeat_tensors(n, _) for _ in x]
         return x
 
-    def named_parameters(self, prefix="", recurse: bool = True):
-        return self.clipcap.named_parameters()
+    # def named_parameters(self, prefix="", recurse: bool = True):
+    #     return self.clipcap.named_parameters()
 
-    def parameters(self, recurse: bool = True):
-        return self.clipcap.parameters()
+    # def parameters(self, recurse: bool = True):
+    #     if self.finetune_llm:
+    #         return self.clipcap.parameters()
+    #     else:
+    #         return self.parameters()
 
     def train(self, mode: bool = True):
         self.training = mode

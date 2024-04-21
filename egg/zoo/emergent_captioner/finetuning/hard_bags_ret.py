@@ -204,7 +204,7 @@ def main(params, config):
     # 3,1,300 | 5,1,122 | 7,2,125 | 10,3,81| 20,7,10
     RECALL_PER_BAG = True
     bag_size, threshold, num_bags = 3, 0, 30
-    captioner =  "coco_sr_neg_curricullum_bsz_5"#"coco_sr_bsz_200"
+    captioner =  "blip2mistral_sr_baseline"#"coco_sr_bsz_200"
  
     #CLIP 
     model_name = "ViT-L/14@336px"
