@@ -277,7 +277,7 @@ class ClipCapModel(nn.Module):
             input_ids = torch.arange(start, end).view(*prompts.shape[:2]).to(prompts.device)
             self.gpt.get_input_embeddings().weight.data[start:end] = prompts_flat #add prefix tokens for batch images to GPT lookup table
 
-            if CIDER_OPTIM and not greedy_baseline and self.training:
+            if not greedy_baseline and self.training:
                 self.do_sample = True
                 temp = 0.3
             else:
@@ -412,7 +412,7 @@ class ClipCapSender(nn.Module):
         if gpt finetuning :  freeze clip. 
                              lora decides what to freeze in sender.clipcap
         if clip finetuning : gpt.transformer frozen in LoRA only. 
-                             won't be finetuning CLIP w/o LoRA anyways.=
+                             won't be finetuning CLIP w/o LoRA anyways.
         """
         if self.finetune_llm:
             for p in self.clip.parameters():

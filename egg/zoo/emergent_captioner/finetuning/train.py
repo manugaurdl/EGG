@@ -92,12 +92,16 @@ def main(params, config):
 
     game = build_game(opts, config)
     # print_grad_info(game)
-    # param_groups = [
-    # {'params': game.sender.clipcap.parameters(), 'lr': opts.lr},
-    # ]
+
+    # param_groups = [{'params': game.sender.clipcap.parameters(), 'lr': opts.lr}]
     # if config['finetune_model']== "clip":
-    #     param_groups.append({'params': game.sender.clip.visual.parameters(), 'lr': opts.lr})
+    #     param_groups.append({'params ': game.sender.clip.visual.parameters(), 'lr': opts.lr})
     
+    # optimizer = torch.optim.AdamW(param_groups)
+    if config['freeze_wte']:
+        for p in game.sender.clipcap.gpt.lm_head.parameters():
+            p.requires_grad = False
+
     optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
     # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
 

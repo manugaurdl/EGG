@@ -326,7 +326,7 @@ class Trainer:
                 self.scaler.scale(optimized_loss).backward()
             else:
                 optimized_loss.backward()
-            
+            print(f" wte norm : {torch.norm(self.game.sender.clipcap.gpt.transformer.wte.weight)}")    
             #check if clip param changing 
             # print(f"mlp :  {torch.norm(self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.weight)}")
             # print(f"attn :  {torch.norm(self.game.sender.clip.visual.transformer.resblocks[0].attn.out_proj.weight)}")

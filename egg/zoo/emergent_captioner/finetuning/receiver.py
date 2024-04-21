@@ -18,20 +18,24 @@ class ClipReceiver(nn.Module):
         convert_models_to_fp32(self.clip)
         # self.clip.eval()
 
-    def forward(self, message, images, aux_input=None):
+    def forward(self, message, images, aux_input=None, img_feats = True):
         text = clip.tokenize(message, truncate=True).to(images.device)
 
         image_features = self.clip.encode_image(images)
+        
+        
         text_features = self.clip.encode_text(text)
-
+        text_features = text_features / text_features.norm(dim=1, keepdim=True)
+        text_features = text_features * self.clip.logit_scale.exp()
+        
+        if not img_feats:
+            return text_features
         # normalized features
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
-        text_features = text_features / text_features.norm(dim=1, keepdim=True)
 
         # image_features might be used for computing hard distractors
         # hence scaling text features now
         # this is the equivalent to computing cosine/dot product similarity and then scaling
-        text_features = text_features * self.clip.logit_scale.exp()
         return text_features, image_features
 
         # text = clip.tokenize(message, truncate=True).to(images.device)
