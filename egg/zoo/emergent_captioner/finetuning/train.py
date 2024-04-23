@@ -93,14 +93,24 @@ def main(params, config):
     game = build_game(opts, config)
     # print_grad_info(game)
 
+    if config['freeze_wte']:
+        for p in game.sender.clipcap.gpt.lm_head.parameters():
+            p.requires_grad = False
+        for p in game.sender.clipcap.gpt.transformer.wte.parameters():
+            p.requires_grad = False
+
+    # optimizer = torch.optim.AdamW(
+    #     [
+    #         # {"params": game.receiver.clip.visual.parameters()},
+    #         {"params": game.sender.clipcap.clip_project.parameters()},
+    #         # {"params": game.sender.clip.visual.parameters()},
+    #     ],
+    #     lr=opts.lr,
+    # )
     # param_groups = [{'params': game.sender.clipcap.parameters(), 'lr': opts.lr}]
     # if config['finetune_model']== "clip":
     #     param_groups.append({'params ': game.sender.clip.visual.parameters(), 'lr': opts.lr})
     
-    # optimizer = torch.optim.AdamW(param_groups)
-    if config['freeze_wte']:
-        for p in game.sender.clipcap.gpt.lm_head.parameters():
-            p.requires_grad = False
 
     optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
     # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
@@ -149,6 +159,8 @@ def main(params, config):
     #patching unfreezes wte. If finetuning CLIP with fully frozen GPT, run this :     
     if config['freeze_wte']:
         for p in trainer.game.sender.clipcap.gpt.lm_head.parameters():
+            p.requires_grad = False
+        for p in game.sender.clipcap.gpt.transformer.wte.parameters():
             p.requires_grad = False
 
     #Training

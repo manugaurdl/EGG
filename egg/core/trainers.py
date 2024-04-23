@@ -8,6 +8,7 @@ import pickle
 import json
 import numpy as np
 from typing import List, Optional
+from prettytable import PrettyTable
 from tqdm import tqdm
 import torch.distributed as dist
 
@@ -72,7 +73,30 @@ def get_loader(epoch, ranges):
         prev_end = end
     raise Exception("epoch out of curricullum")
 
+def count_trainable_parameters(model):
+    table = PrettyTable(["Modules", "Requires grad", "Trainable parameters"])
+    table.align["Modules"] = "l"
+    table.align["Requires grad"] = "c"
+    table.align["Trainable parameters"] = "r"
 
+    total_params = 0
+    for name, parameter in model.named_parameters():
+        
+        requires_grad = True
+        params = parameter.numel()
+        
+        if not parameter.requires_grad:
+            requires_grad = False
+            params = 0
+        
+        table.add_row([name, requires_grad, params])
+        total_params += params
+
+    print(table)
+    print(f"Total Trainable Params: {total_params:,}")
+    return total_params
+
+    
 class Trainer:
     """
     Implements the training logic. Some common configuration (checkpointing frequency, path, validation frequency)
@@ -322,29 +346,11 @@ class Trainer:
                     # hence, we need to account for that when aggregating grads
                     optimized_loss = optimized_loss / self.update_freq
 
+
             if self.scaler:
                 self.scaler.scale(optimized_loss).backward()
             else:
                 optimized_loss.backward()
-            print(f" wte norm : {torch.norm(self.game.sender.clipcap.gpt.transformer.wte.weight)}")    
-            #check if clip param changing 
-            # print(f"mlp :  {torch.norm(self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.weight)}")
-            # print(f"attn :  {torch.norm(self.game.sender.clip.visual.transformer.resblocks[0].attn.out_proj.weight)}")
-            
-            # check if A.B in lora changing
-            # dummy = self.game.sender.clipcap.gpt.transformer.h[0].attn.c_attn.parametrizations.weight
-            # dummy = self.game.sender.clip.visual.transformer.resblocks[0].attn.parametrizations
-            # dummy = self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.parametrizations.weight
-            
-            # x = [(name, p) for name, p in dummy.named_parameters()]
-            # print("***"*30)
-            # print(f"grad A : {torch.norm(x[1][-1])}")
-            # print(f"grad B : {torch.norm(x[2][-1])}")
-            # print(f"A : {torch.norm(x[1][-1])}")
-            # print(f"B : {torch.norm(x[2][-1])}")
-            # print(f"lora (A.B).norm() : {torch.norm(torch.matmul(x[1][-1].t(),x[2][-1].t()))}")
-            # print(f"og weights  :{torch.norm(x[0][-1])}")
-            # print("***"*30)
 
             if batch_id % self.update_freq == self.update_freq - 1:
                 if self.scaler:
@@ -420,7 +426,9 @@ class Trainer:
 
     def train(self,config, opts, inference = False):
 
+
         print(f"Total trainable params : {trainable_params(self.game.sender)}")
+        count_trainable_parameters(self.game.sender)
         global STEP        
         n_epochs = config['opts']['n_epochs']
         WANDB = config['WANDB']['logging']
@@ -642,3 +650,25 @@ class Trainer:
         with open(save_path, "wb") as f:
             pickle.dump(val_preds, f)
 
+# print(f" wte norm : {torch.norm(self.game.sender.clipcap.gpt.transformer.wte.weight)}")   
+# print(f" clip_proj norm : {torch.norm(self.game.sender.clipcap.clip_project.model[0].weight)}")   
+# print(f" wte grad : {torch.norm(self.game.sender.clipcap.gpt.transformer.wte.weight.grad)}")    
+
+#check if clip param changing 
+# print(f"mlp :  {torch.norm(self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.weight)}")
+# print(f"attn :  {torch.norm(self.game.sender.clip.visual.transformer.resblocks[0].attn.out_proj.weight)}")
+
+# check if A.B in lora changing
+# dummy = self.game.sender.clipcap.gpt.transformer.h[0].attn.c_attn.parametrizations.weight
+# dummy = self.game.sender.clip.visual.transformer.resblocks[0].attn.parametrizations
+# dummy = self.game.sender.clip.visual.transformer.resblocks[0].mlp.c_proj.parametrizations.weight
+
+# x = [(name, p) for name, p in dummy.named_parameters()]
+# print("***"*30)
+# print(f"grad A : {torch.norm(x[1][-1])}")
+# print(f"grad B : {torch.norm(x[2][-1])}")
+# print(f"A : {torch.norm(x[1][-1])}")
+# print(f"B : {torch.norm(x[2][-1])}")
+# print(f"lora (A.B).norm() : {torch.norm(torch.matmul(x[1][-1].t(),x[2][-1].t()))}")
+# # print(f"og weights  :{torch.norm(x[0][-1])}")
+# print("***"*30)
