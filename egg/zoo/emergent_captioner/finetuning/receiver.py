@@ -20,16 +20,14 @@ class ClipReceiver(nn.Module):
 
     def forward(self, message, images, aux_input=None, img_feats = True):
         text = clip.tokenize(message, truncate=True).to(images.device)
-
-        image_features = self.clip.encode_image(images)
-        
-        
+                
         text_features = self.clip.encode_text(text)
         text_features = text_features / text_features.norm(dim=1, keepdim=True)
         text_features = text_features * self.clip.logit_scale.exp()
         
         if not img_feats:
             return text_features
+        image_features = self.clip.encode_image(images)
         # normalized features
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
 

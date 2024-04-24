@@ -338,8 +338,8 @@ class Trainer:
 
             context = autocast() if self.scaler else nullcontext()
             with context:
-                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method)
-                
+                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method, contrastive = config['contrastive'])
+                    
                 #not accumulating gradients currently
                 if self.update_freq > 1:
                     # throughout EGG, we minimize _mean_ loss, not sum
@@ -392,6 +392,10 @@ class Trainer:
                             "train R@1" : interaction.aux['batch_acc1'].item(),
                             "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"]
                             }
+            if config['contrastive']:
+                train_log["contrastive"] = interaction.aux['contrastive'].item()
+                train_log["reinforce"] = interaction.aux['reinforce'].item()
+
             if train_method != "mle":
                 train_log["log_prob"] = interaction.aux['log_prob'].mean().item()
 

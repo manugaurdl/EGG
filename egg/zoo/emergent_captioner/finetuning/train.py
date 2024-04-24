@@ -98,21 +98,18 @@ def main(params, config):
             p.requires_grad = False
         for p in game.sender.clipcap.gpt.transformer.wte.parameters():
             p.requires_grad = False
-
-    # optimizer = torch.optim.AdamW(
-    #     [
-    #         # {"params": game.receiver.clip.visual.parameters()},
-    #         {"params": game.sender.clipcap.clip_project.parameters()},
-    #         # {"params": game.sender.clip.visual.parameters()},
-    #     ],
-    #     lr=opts.lr,
-    # )
-    # param_groups = [{'params': game.sender.clipcap.parameters(), 'lr': opts.lr}]
-    # if config['finetune_model']== "clip":
-    #     param_groups.append({'params ': game.sender.clip.visual.parameters(), 'lr': opts.lr})
     
-
-    optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
+    if config["diff_lr"]:
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": game.receiver.clip.parameters()},
+                {"params": game.sender.clipcap.clip_project.parameters(), "lr" : 5e-9},
+                {"params": game.sender.clipcap.gpt.parameters()},
+            ],
+            lr=opts.lr,
+        )
+    else:
+        optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
     # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
 
     # Create trainers object

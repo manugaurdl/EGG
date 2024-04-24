@@ -12,6 +12,8 @@ from egg.zoo.emergent_captioner.finetuning.losses import get_loss, CiderReward, 
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
 from egg.zoo.emergent_captioner.finetuning.lora import LoRA
 import pickle
+import clip
+
 class ReinforceCaptionGame(nn.Module):
     def __init__(
         self,
@@ -47,7 +49,7 @@ class ReinforceCaptionGame(nn.Module):
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.prefix_len = prefix_len
 
-    def forward(self, sender_input, cocoids ,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False):
+    def forward(self, sender_input, cocoids ,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False, contrastive = False):
         """
         receiver : clip
         sender : clip VIT + clipcap model
@@ -90,7 +92,7 @@ class ReinforceCaptionGame(nn.Module):
             if self.training and not GREEDY_BASELINE:
                 self.baseline.update(policy_cider)
 
-            aux_info = {'acc' : torch.randn(1,2), "kl_div" : kl_div, "log_prob" : log_prob}
+            aux_info = {'acc' : torch.randn(1,2), "kl_div" : kl_div, "log_prob" : log_prob.detach()}
             
             logging_strategy = self.test_logging_strategy
 
@@ -106,12 +108,29 @@ class ReinforceCaptionGame(nn.Module):
                 )
         
         elif isinstance(self.loss, DiscriminativeLoss) or inference:
+                
+            if contrastive:
+                sender_img_feats = self.sender.clip.encode_image(receiver_input)
+                sender_img_feats = sender_img_feats / sender_img_feats.norm(dim=1, keepdim=True)
+
+                gt_caps_tokens = clip.tokenize(aux_input['captions'][0], truncate=True).to(receiver_input.device)
+                sender_text_feats = self.sender.clip.encode_text(gt_caps_tokens)
+                sender_text_feats = sender_text_feats / sender_text_feats.norm(dim=1, keepdim=True)
+                
+                logits_per_image = self.sender.clip.logit_scale * sender_img_feats @ sender_text_feats.t()
+                logits_per_text = logits_per_image.t()
+
+                label_id = torch.arange(receiver_input.shape[0]).cuda(non_blocking=True)
+                loss_e2t = F.cross_entropy(logits_per_image, label_id)
+                loss_t2e = F.cross_entropy(logits_per_text, label_id)
+                contrastive_loss = loss_e2t + loss_t2e
+
             captions, log_prob, kl_div = self.sender(sender_input, aux_input) # logprob : (B) --> only one logprob per caption (averaged over all words)
             if inference:
                 self.loss = DiscriminativeLoss()
             with torch.no_grad():
                 text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
-                loss, aux_info = self.loss(text_feats, img_feats, self.training, True,  aux_input)
+                sr_loss, aux_info = self.loss(text_feats, img_feats, self.training, True,  aux_input)
 
                 #R@1 from GREEDY dist
                 if GREEDY_BASELINE:
@@ -127,27 +146,28 @@ class ReinforceCaptionGame(nn.Module):
             weighted_kl_div = self.kl_div_coeff * kl_div
             
             if not GREEDY_BASELINE:
-                baseline = self.baseline.predict(loss.detach())
+                baseline = self.baseline.predict(sr_loss.detach())
                 if self.training:
-                    self.baseline.update(loss)
+                    self.baseline.update(sr_loss)
 
             batch_acc1 = aux_info['acc'].mean()
             
-            reward = (loss.detach() - baseline)# + weighted_kl_div
+            reward = (sr_loss.detach() - baseline)# + weighted_kl_div
             reinforce_loss = (reward * log_prob).mean()
             
-            
-            # if reinforce_loss.isnan().any() : 
-            #     print("reinforce")
-            # if log_prob.isnan().any():
-            #     print("log_prob")
-            # if reward.isnan().any():
-            #     print("reward")
+            if contrastive:
+                loss = reinforce_loss * 100 + contrastive_loss
+                aux_info["reinforce"] = reinforce_loss.detach()
+                aux_info["contrastive"] = contrastive_loss.detach()
+
+            else:
+                loss = reinforce_loss
 
             aux_info["kl_div"] = kl_div
-            aux_info["log_prob"] =  log_prob
+            aux_info["log_prob"] =  log_prob.detach()
             aux_info["batch_acc1"] = batch_acc1
 
+            
             logging_strategy = (
                 self.train_logging_strategy if self.training else self.test_logging_strategy
             )
@@ -177,7 +197,7 @@ class ReinforceCaptionGame(nn.Module):
             else:
                 val_captions, log_prob, kl_div = outputs
                 aux_info = {"kl_div" :kl_div}
-                aux_info["log_prob"] =  log_prob
+                aux_info["log_prob"] =  log_prob.detach()
 
                 logging_strategy = (
                     self.train_logging_strategy if self.training else self.test_logging_strategy
@@ -215,7 +235,7 @@ class ReinforceCaptionGame(nn.Module):
             
             return loss, interaction, loss.item()
 
-        return reinforce_loss.mean(), interaction, reward.mean().item()
+        return loss, interaction, reward.mean().item()
 
 
 def build_game(opts, config):

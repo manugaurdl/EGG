@@ -21,6 +21,8 @@ class Loss(nn.Module):
     ):
         super().__init__()
 
+
+
         self.train_emb = None
         self.train_nns = None
         train_emb_path = None
