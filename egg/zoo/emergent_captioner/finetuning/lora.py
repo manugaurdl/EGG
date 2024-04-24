@@ -78,11 +78,23 @@ def LoRA(model, clip,  rank, model_type, config):
                 lora_alpha=16)
                         )
         if config['clip_mlp_ft']:
-            for i in range(12):
-                parameterize(clip.visual.transformer.resblocks[i].mlp.c_fc, "weight", rank)
-                parameterize(clip.visual.transformer.resblocks[i].mlp.c_proj, "weight", rank)
+            for l_num in range(12):
+                parameterize(clip.visual.transformer.resblocks[l_num].mlp.c_fc, "weight", rank)
+                parameterize(clip.visual.transformer.resblocks[l_num].mlp.c_proj, "weight", rank)
 
-        #freeze params
+        if config["clip_text"]:
+            for l_num in range(12):
+                parametrize.register_parametrization(
+                        clip.transformer.resblocks[l_num].attn,
+                        "in_proj_weight",
+                        inproj_parameterization(clip.text_encoder.transformer.resblocks[l_num].attn,
+                        next(clip.text_encoder.parameters()),
+                        rank=rank,
+                        lora_alpha=16)
+                )
+
+                parameterize(clip.transformer.resblocks[l_num].attn.out_proj, "weight", rank=rank)
+            #freeze params
 
         for name, param in model.named_parameters():
             if "clip_project" in name or 'lora' in name or 'wte.weight' in name: 
