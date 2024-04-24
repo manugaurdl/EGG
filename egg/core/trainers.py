@@ -338,7 +338,7 @@ class Trainer:
 
             context = autocast() if self.scaler else nullcontext()
             with context:
-                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method, contrastive = config['contrastive'])
+                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method, contrastive = config['contrastive'], reinforce = config["reinforce"])
                     
                 #not accumulating gradients currently
                 if self.update_freq > 1:
@@ -387,21 +387,23 @@ class Trainer:
             interactions.append(interaction)
             print(f"Loss : {optimized_loss.item():.5f}")
             print(f"Avg Loss : {(mean_loss.item())/n_batches:.5f}")
-            train_log = { "Loss" :optimized_loss.item(),
-                            "Reward" : reward,
-                            "train R@1" : interaction.aux['batch_acc1'].item(),
-                            "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"]
-                            }
+            
+
+            train_log = {"Loss" :optimized_loss.item(),
+                        "lr" : self.optimizer.state_dict()["param_groups"][0]["lr"]
+                         }
             if config['contrastive']:
                 train_log["contrastive"] = interaction.aux['contrastive'].item()
-                train_log["reinforce"] = interaction.aux['reinforce'].item()
 
-            if train_method != "mle":
-                train_log["log_prob"] = interaction.aux['log_prob'].mean().item()
-
-            if opts.loss_type != 'cider':
+            if opts.loss_type != 'cider' and not config['reinforce']:
                 train_log["acc@1"] : interaction.aux['acc'].mean().item()
-
+            
+            if config['reinforce']:
+                train_log.update({"Reward" : reward,
+                "train R@1" : interaction.aux['batch_acc1'].item(),
+                "reinforce" : interaction.aux['reinforce'].item(),
+                "log_prob" : interaction.aux['log_prob'].mean().item()
+            })
             if WANDB:
                 wandb.log(train_log, step = STEP)
             STEP+=1

@@ -87,8 +87,8 @@ def LoRA(model, clip,  rank, model_type, config):
                 parametrize.register_parametrization(
                         clip.transformer.resblocks[l_num].attn,
                         "in_proj_weight",
-                        inproj_parameterization(clip.text_encoder.transformer.resblocks[l_num].attn,
-                        next(clip.text_encoder.parameters()),
+                        inproj_parameterization(clip.transformer.resblocks[l_num].attn,
+                        next(clip.transformer.parameters()),
                         rank=rank,
                         lora_alpha=16)
                 )
