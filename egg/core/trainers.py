@@ -471,7 +471,10 @@ class Trainer:
                 del val_log["Val Reward"]
 
             if loss_type == 'discriminative':
-                metric =  interaction.aux['acc'].mean().item()
+                if config['finetune_model'] == "gpt":
+                    metric =  interaction.aux['acc'].mean().item()
+                elif config['finetune_model']=="clip":
+                    metric = interaction.aux['mmvp_avg']
                 val_log["VAL_R@1"] = metric
             
             else:
