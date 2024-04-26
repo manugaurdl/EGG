@@ -78,6 +78,7 @@ class DiscriminativeLoss(Loss):
         labels = torch.zeros(sims.shape[0]).long().to(img_feats.device)
         # dist over bsz classes. Even though tensor of shape (bsz + 1), -inf values won't count due to softmax. 
         # logprob for target class in the 0th column. For each sample(row),logprob of target class : row[0]
+
         loss = F.cross_entropy(sims, labels, reduction="none")
         # For each row, highest value should be the first colum i.e argmax for each row in sims should be == 0.
         

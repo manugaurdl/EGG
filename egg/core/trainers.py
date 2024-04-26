@@ -247,7 +247,6 @@ class Trainer:
                 batch = batch.to(self.device)
                 
                 optimized_loss, interaction, reward = self.game(*batch, train_method = train_method, inference=inference)
-
                 
                 """
                 interaction : sender_input=None, receiver_input=None, labels = tensor, aux_input = {cocoid, captions, tokens, mask}, message, receiver_output=None, message_length=None, aux = {"kl_div" = torch.rand(1)}
@@ -460,7 +459,9 @@ class Trainer:
                         }
             if config["finetune_model"] == "clip":
                 val_log["mmvp_avg"] = interaction.aux['mmvp_avg']
-                
+                val_log["recall_5_clip_zs"] = interaction.aux['recall_5_clip_zs'].mean()
+                val_log["recall_1_clip_zs"] = interaction.aux["recall_1_clip_zs"].mean()
+
                 if config["WANDB"]["log_mmvp_all"]:
                     val_log.update(interaction.aux['mmvp_all'])
             # if WANDB.log _mmvp_aspects:
@@ -470,12 +471,15 @@ class Trainer:
                 del val_log["Val Loss"]
                 del val_log["Val Reward"]
 
+            """
+            metric decides how you save model. If clip_ft : save model with highest mmvp.
+            """
             if loss_type == 'discriminative':
                 if config['finetune_model'] == "gpt":
                     metric =  interaction.aux['acc'].mean().item()
                 elif config['finetune_model']=="clip":
                     metric = interaction.aux['mmvp_avg']
-                val_log["VAL_R@1"] = metric
+                val_log["VAL_R@1"] = interaction.aux['acc'].mean().item()
             
             else:
                 metric = summary["CIDEr"]            

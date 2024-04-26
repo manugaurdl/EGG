@@ -110,15 +110,21 @@ class ReinforceCaptionGame(nn.Module):
         elif isinstance(self.loss, DiscriminativeLoss) or inference:
             
             aux_info = {}
- 
-            if contrastive:
-                sender_img_feats = self.sender.clip.encode_image(receiver_input)
-                sender_img_feats = sender_img_feats / sender_img_feats.norm(dim=1, keepdim=True)
+            if inference:
+                self.loss = DiscriminativeLoss()
 
-                gt_caps_tokens = clip.tokenize(aux_input['captions'][0], truncate=True).to(receiver_input.device)
-                sender_text_feats = self.sender.clip.encode_text(gt_caps_tokens)
-                sender_text_feats = sender_text_feats / sender_text_feats.norm(dim=1, keepdim=True)
-                
+            #CLIP zero shot baseline
+            sender_img_feats = self.sender.clip.encode_image(receiver_input)
+            sender_img_feats = sender_img_feats / sender_img_feats.norm(dim=1, keepdim=True)
+
+            gt_caps_tokens = clip.tokenize(aux_input['captions'][0], truncate=True).to(receiver_input.device)
+            sender_text_feats = self.sender.clip.encode_text(gt_caps_tokens)
+            sender_text_feats = sender_text_feats / sender_text_feats.norm(dim=1, keepdim=True)
+            
+            if not self.training:
+                _ , clip_zero_shot = self.loss(sender_text_feats, sender_img_feats, self.training, True,  aux_input)
+
+            if contrastive:
                 logits_per_image = self.sender.clip.logit_scale * sender_img_feats @ sender_text_feats.t()
                 logits_per_text = logits_per_image.t()
 
@@ -130,10 +136,8 @@ class ReinforceCaptionGame(nn.Module):
             
             captions = None
             reward = None
-            if reinforce :
+            if reinforce or not self.training :
                 captions, log_prob, kl_div = self.sender(sender_input, aux_input) # logprob : (B) --> only one logprob per caption (averaged over all words)
-                if inference:
-                    self.loss = DiscriminativeLoss()
                 with torch.no_grad():
                     text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
                     sr_loss, aux_info_disc_loss = self.loss(text_feats, img_feats, self.training, True,  aux_input)
@@ -166,6 +170,10 @@ class ReinforceCaptionGame(nn.Module):
                 aux_info["batch_acc1"] = batch_acc1
                 reward = reward.mean().item()
             
+            if not self.training:
+                aux_info["recall_5_clip_zs"] = clip_zero_shot['acc_5'].mean()
+                aux_info["recall_1_clip_zs"] = clip_zero_shot['acc'].mean()
+
             if contrastive and reinforce:
                 loss = reinforce_loss * 100 + contrastive_loss
             elif not contrastive:
