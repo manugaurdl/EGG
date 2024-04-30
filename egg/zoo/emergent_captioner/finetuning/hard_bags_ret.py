@@ -1,7 +1,5 @@
 import clip
 import pickle
-
-
 import sys
 import time
 import os
@@ -52,37 +50,39 @@ def main(params, config):
 
     print(get_sha())
     
-    name2wrapper = {
-        "conceptual": ConceptualCaptionsWrapper,
-        "coco": CocoWrapper,
-        "flickr": FlickrWrapper,
-    }
-    # args
-    config["neg_mining"]["do"] = False
-    wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"])
+    # name2wrapper = {
+    #     "conceptual": ConceptualCaptionsWrapper,
+    #     "coco": CocoWrapper,
+    #     "flickr": FlickrWrapper,
+    # }
+    # # args
+    # config["neg_mining"]["do"] = False
+    # wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"])
     
-    data_kwargs = dict(
-        batch_size=config["opts"]["batch_size"],
-        transform=get_transform(opts.sender_image_size, opts.recv_image_size),
-        num_workers=config["num_workers"],
-        seed=opts.random_seed,
-        debug = False,
-        mle_train = config["train_method"] =="mle",
-        max_len_token = opts.max_len,
-        prefix_len = config["prefix_len"],
-        is_dist_leader = opts.distributed_context.is_leader,
-    )
+    # data_kwargs = dict(
+    #     batch_size=config["opts"]["batch_size"],
+    #     transform=get_transform(opts.sender_image_size, opts.recv_image_size),
+    #     num_workers=config["num_workers"],
+    #     seed=opts.random_seed,
+    #     debug = False,
+    #     mle_train = config["train_method"] =="mle",
+    #     max_len_token = opts.max_len,
+    #     prefix_len = config["prefix_len"],
+    #     is_dist_leader = opts.distributed_context.is_leader,
+    # )
 
-    test_loader = wrapper.get_split(split="test", caps_per_img = 5, neg_mining = False, **data_kwargs)
+    # test_loader = wrapper.get_split(split="test", caps_per_img = 5, neg_mining = False, **data_kwargs)
     
     data_dir = "/home/manugaur/nips_benchmark/"
 
-    with open(os.path.join(data_dir, "misc_data", f"{config['captions_type']}_test_cocoid2idx.json"), "r") as f:
+    with open(os.path.join(data_dir, "misc_data", f"{config['captions_type']}_test_val_cocoid2idx.json"), "r") as f:
         cocoid2idx = json.load(f)
     idx2cocoid = {v : k for k, v in cocoid2idx.items()}
     # GT image and caption CLIP feats
-    img_feats = torch.load(os.path.join(data_dir, "img_feats", f"coco_test_vitl14.pt"))
-    text_feats = torch.load(os.path.join(data_dir, "text_feats", f"{config['captions_type']}_test_vitl14.pt"))
+    # img_feats = torch.load(os.path.join(data_dir, "img_feats", f"coco_test_vitl14.pt"))
+    # text_feats = torch.load(os.path.join(data_dir, "text_feats", f"{config['captions_type']}_test_vitl14.pt"))
+    text_feats = torch.load(os.path.join(data_dir, "text_feats", "holistic_test_val_vitl14_avg.pt"))
+    img_feats = torch.load(os.path.join(data_dir, "img_feats", "holistic_test_val_vitl14.pt"))
     # sender_input, aux : cocoid, captions
     recall_1 = []
     recall_5 = []
@@ -156,12 +156,13 @@ def main(params, config):
 #------------------------------------------------------------------------------------------------------------------------------------------------
     """RETRIEVAL WITHIN HARD BAGS using GT"""
     USE_GREEDY_CAP = True # use greedy GT not the sampled ones.
-    RECALL_PER_BAG = False
+    RECALL_PER_BAG = True
     # bag_dir = "/home/manugaur/nips_benchmark/bags/dinov2_vitg14_reg_coco/test"
-    bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_coco" 
-    bag_size, threshold, num_bags = 3, 0, 200
+    bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_holistic" 
+    bag_size, threshold, num_bags = 10, 0, 150
 
-    captioner = f"{config['captions_type']}_gt"
+    # captioner = f"{config['captions_type']}_gt"
+    captioner = "holistic_gt"
 
     with open(os.path.join(bag_dir, f"bsz_{bag_size}_thresh_{threshold}.json"), "r") as f:
         listofbags = json.load(f)
@@ -181,7 +182,8 @@ def main(params, config):
         bag_text_feats = bag_text_feats / bag_text_feats.norm(dim=-1, keepdim = True)
         
         if USE_GREEDY_CAP:
-            bag_text_feats = bag_text_feats[:, 0, :]
+            if len(bag_text_feats.shape)!=2:
+                bag_text_feats = bag_text_feats[:, 0, :]
             _, acc = loss(bag_text_feats,bag_img_feats, False, False, None)
             if RECALL_PER_BAG:
                 recall_1.append([_.item() for _ in acc['acc']])
@@ -262,7 +264,7 @@ def main(params, config):
     # print(f"num bags : {num_bags}")
     # print("\n")
 #------------------------------------------------------------------------------------------------------------------------------------------------
-    if RECALL_PER_BAG:
+    if  RECALL_PER_BAG:
         with open(f"/home/manugaur/nips_benchmark/recall_per_bag/bsz_{bag_size}_thresh_{threshold}_{captioner}.json", "w") as f:
             json.dump(recall_1, f)
     # print(f"{round(np.array(recall_1).mean()*100,2)}/ {np.array(mean_rank).mean():.2f}/ {np.array(median_rank).mean():.2f}")
@@ -293,7 +295,7 @@ if __name__ == "__main__":
     config = get_config(config_filename)
     config = process_config(config, use_ddp, sys.argv[1:])
     params = get_cl_args(config)
-    config["captions_type"] = "blip2mistral"
+    config["captions_type"] = "holistic"
     config["opts"]["batch_size"]= 200
     print(f"Self Retrieval using {config['captions_type']} captions")
     main(params, config)
