@@ -67,6 +67,7 @@ def main(params, config):
     data_kwargs = dict(
         batch_size=opts.batch_size,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
+        mllm = config['mllm'],
         num_workers=config["num_workers"],
         seed=opts.random_seed,
         debug = config['DEBUG'],
@@ -150,7 +151,7 @@ def main(params, config):
     if opts.distributed_context.is_distributed:
         trainer.game = trainer.game.module
 
-    if opts.captioner_model == "clipcap" : #and config["train_method"] != "mle":   
+    if config['mllm'] == "clipcap" : #and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
     #patching unfreezes wte. If finetuning CLIP with fully frozen GPT, run this :     

@@ -7,7 +7,7 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from egg.core.baselines import MeanBaseline, NoBaseline
 from egg.core.interaction import LoggingStrategy
 from egg.zoo.emergent_captioner.finetuning.blip import BlipSender
-from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender
+from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender, LLavaSender, LLavaPhi
 from egg.zoo.emergent_captioner.finetuning.losses import get_loss, CiderReward, DiscriminativeLoss
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
 from egg.zoo.emergent_captioner.finetuning.lora import LoRA
@@ -24,7 +24,7 @@ class ReinforceCaptionGame(nn.Module):
         baseline: str = "no",
         train_logging_strategy: LoggingStrategy = None,
         test_logging_strategy: LoggingStrategy = None,
-        prefix_len : int =10,
+        config : dict = None,
     ):
         super(ReinforceCaptionGame, self).__init__()
         self.sender = sender
@@ -47,7 +47,8 @@ class ReinforceCaptionGame(nn.Module):
             else test_logging_strategy
         )
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        self.prefix_len = prefix_len
+        self.prefix_len = config['prefix_len']
+        self.mllm = config['mllm']
 
     def forward(self, sender_input, cocoids ,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False, contrastive = False, reinforce = True):
         """
@@ -113,26 +114,29 @@ class ReinforceCaptionGame(nn.Module):
             if inference:
                 self.loss = DiscriminativeLoss()
 
+            #llava clip -> self.sender.model.model.vision_tower.vision_tower.vision_model
             #CLIP zero shot baseline
-            sender_img_feats = self.sender.clip.encode_image(receiver_input)
-            sender_img_feats = sender_img_feats / sender_img_feats.norm(dim=1, keepdim=True)
 
-            gt_caps_tokens = clip.tokenize(aux_input['captions'][0], truncate=True).to(receiver_input.device)
-            sender_text_feats = self.sender.clip.encode_text(gt_caps_tokens)
-            sender_text_feats = sender_text_feats / sender_text_feats.norm(dim=1, keepdim=True)
-            
-            if not self.training:
-                _ , clip_zero_shot = self.loss(sender_text_feats, sender_img_feats, self.training, True,  aux_input)
+            if self.mllm == "clipcap":    
+                sender_img_feats = self.sender.clip.encode_image(receiver_input)
+                sender_img_feats = sender_img_feats / sender_img_feats.norm(dim=1, keepdim=True)
 
-            if contrastive:
-                logits_per_image = self.sender.clip.logit_scale * sender_img_feats @ sender_text_feats.t()
-                logits_per_text = logits_per_image.t()
+                gt_caps_tokens = clip.tokenize(aux_input['captions'][0], truncate=True).to(receiver_input.device)
+                sender_text_feats = self.sender.clip.encode_text(gt_caps_tokens)
+                sender_text_feats = sender_text_feats / sender_text_feats.norm(dim=1, keepdim=True)
+                
+                if not self.training:
+                    _ , clip_zero_shot = self.loss(sender_text_feats, sender_img_feats, self.training, True,  aux_input)
 
-                label_id = torch.arange(receiver_input.shape[0]).cuda(non_blocking=True)
-                loss_e2t = F.cross_entropy(logits_per_image, label_id)
-                loss_t2e = F.cross_entropy(logits_per_text, label_id)
-                contrastive_loss = loss_e2t + loss_t2e
-                aux_info["contrastive"] = contrastive_loss.detach()
+                if contrastive:
+                    logits_per_image = self.sender.clip.logit_scale * sender_img_feats @ sender_text_feats.t()
+                    logits_per_text = logits_per_image.t()
+
+                    label_id = torch.arange(receiver_input.shape[0]).cuda(non_blocking=True)
+                    loss_e2t = F.cross_entropy(logits_per_image, label_id)
+                    loss_t2e = F.cross_entropy(logits_per_text, label_id)
+                    contrastive_loss = loss_e2t + loss_t2e
+                    aux_info["contrastive"] = contrastive_loss.detach()
             
             captions = None
             reward = None
@@ -170,7 +174,7 @@ class ReinforceCaptionGame(nn.Module):
                 aux_info["batch_acc1"] = batch_acc1
                 reward = reward.mean().item()
             
-            if not self.training:
+            if not self.training and contrastive:
                 aux_info["recall_5_clip_zs"] = clip_zero_shot['acc_5'].mean()
                 aux_info["recall_1_clip_zs"] = clip_zero_shot['acc'].mean()
 
@@ -252,7 +256,7 @@ class ReinforceCaptionGame(nn.Module):
 
 
 def build_game(opts, config):
-    if opts.captioner_model.lower() == "clipcap":
+    if config['mllm'] == "clipcap":
         sender = ClipCapSender(
             clip_model=opts.sender_clip_model,
             clipcap_path=opts.mle_model_path,
@@ -263,15 +267,27 @@ def build_game(opts, config):
             beam_size=opts.beam_size,
             max_len=opts.max_len,
         )
-    elif opts.captioner_model.lower() == "blip":
-        sender = BlipSender(
-            blip_model=opts.blip_model,
+    elif config['mllm'] == "llava":
+        sender = LLavaSender(
+            # clip_model=opts.sender_clip_model,
+            # clipcap_path=opts.mle_model_path,
+            # official_clipcap_weights = config["official_clipcap_weights"],
+            train_method= config["train_method"],
+            config=config,
+            do_sample=opts.do_sample,
             beam_size=opts.beam_size,
             max_len=opts.max_len,
-            freeze_visual_encoder=opts.freeze_blip_visual_encoder,
+        )
+    elif config['mllm'] == "llava-phi":
+        sender = LLavaPhi(
+            train_method= config["train_method"],
+            config=config,
+            do_sample=opts.do_sample,
+            beam_size=opts.beam_size,
+            max_len=opts.max_len,
         )
     else:
-        raise RuntimeError
+        raise RuntimeError("selected unsupported MLLM in config")
 
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
     receiver.clip.eval()
@@ -291,7 +307,7 @@ def build_game(opts, config):
         num_hard_negatives=opts.num_hard_negatives,
     )
 
-    if config["lora"]:
+    if config["lora"] and config['mllm'] == "clipcap":
 
         original_weights = {}
         for name, param in sender.clipcap.gpt.transformer.named_parameters():
@@ -301,11 +317,24 @@ def build_game(opts, config):
 
         LoRA(sender, sender.clip, config["lora_rank"], config['finetune_model'], config)
     
-    if config['freeze_adapter']:
-        for name, p in sender.clipcap.clip_project.named_parameters():
-            p.requires_grad = False    
-    
+    # if config['freeze_adapter']:
+    #     for name, p in sender.clipcap.clip_project.named_parameters():
+    #         p.requires_grad = False    
+
+    elif config['mllm']=="llava":
+        for p in sender.model.model.parameters():
+            p.requires_grad = False
         
+    elif config['mllm']=="llava-phi":
+        
+        for p in sender.model.parameters():
+            p.requires_grad = False
+
+        for p in sender.model.language_model.lm_head.parameters():
+            p.requires_grad = True
+
+
+
     game = ReinforceCaptionGame(
         sender=sender,
         receiver=receiver,
@@ -313,6 +342,6 @@ def build_game(opts, config):
         baseline=opts.baseline,
         kl_div_coeff=opts.kl_div_coeff,
         test_logging_strategy=test_logging_strategy,
-        prefix_len = config['prefix_len'],
+        config = config,
     )
     return game

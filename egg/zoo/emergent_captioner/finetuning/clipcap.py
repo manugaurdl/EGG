@@ -18,7 +18,27 @@ from egg.zoo.emergent_captioner.finetuning.utils import (
 from egg.zoo.emergent_captioner.utils import convert_models_to_fp32
 from egg.zoo.emergent_captioner.finetuning.utils import int2mil, trainable_params
 
+### LLaVa
+from llava.constants import (
+    IMAGE_TOKEN_INDEX,
+    DEFAULT_IMAGE_TOKEN,
+    DEFAULT_IM_START_TOKEN,
+    DEFAULT_IM_END_TOKEN,
+    IMAGE_PLACEHOLDER,
+)
+from llava.conversation import conv_templates, SeparatorStyle
+from llava.model.builder import load_pretrained_model
+from llava.utils import disable_torch_init
+from llava.mm_utils import (
+    process_images,
+    tokenizer_image_token,
+    get_model_name_from_path,
+)
+from transformers import AutoProcessor, LlavaForConditionalGeneration
+from transformers import (AutoTokenizer, BitsAndBytesConfig, StoppingCriteria,
+                          StoppingCriteriaList, TextStreamer)
 
+import time
 class MLP(nn.Module):
     def __init__(self, sizes: Tuple[int, ...], bias=True, act=nn.Tanh):
         super(MLP, self).__init__()
@@ -503,3 +523,304 @@ class ClipCapSender(nn.Module):
 
     def unpatch_model(self):
         self.clipcap.maybe_unpatch_gpt()
+################################################################################################################################################################
+
+class LLavaSender(nn.Module):
+    def __init__(
+        self,
+        # clip_model: str,
+        # official_clipcap_weights : str,
+        train_method : str,
+        config : dict,
+        do_sample: bool = False,
+        beam_size: int = 5,
+        max_len: int = 20,
+    ):
+        super(LLavaSender, self).__init__()
+
+        assert max_len < 75  # clip maximum context size
+
+        #Llava args -----------------
+        model_path = "liuhaotian/llava-v1.6-mistral-7b"
+        model_base = None
+        conv_mode = None
+        sep = ","
+        self.temperature = 0.2
+        self.top_p=None
+        self.num_beams=1
+        self.max_new_tokens= 2
+        qs = 'Describe the given image'
+        #--------------------
+        disable_torch_init()
+
+        model_name = get_model_name_from_path(model_path)
+        self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(
+            model_path, model_base, model_name
+        )
+        
+        image_token_se = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
+        if IMAGE_PLACEHOLDER in qs:
+            if self.model.config.mm_use_im_start_end:
+                qs = re.sub(IMAGE_PLACEHOLDER, image_token_se, qs)
+            else:
+                qs = re.sub(IMAGE_PLACEHOLDER, DEFAULT_IMAGE_TOKEN, qs)
+        else:
+            if self.model.config.mm_use_im_start_end:
+                qs = image_token_se + "\n" + qs
+            else:
+                qs = DEFAULT_IMAGE_TOKEN + "\n" + qs # <--
+
+        if "llama-2" in model_name.lower():
+            conv_mode = "llava_llama_2"
+        elif "mistral" in model_name.lower():
+            conv_mode = "mistral_instruct"
+        elif "v1.6-34b" in model_name.lower():
+            conv_mode = "chatml_direct"
+        elif "v1" in model_name.lower():
+            conv_mode = "llava_v1"
+        elif "mpt" in model_name.lower():
+            conv_mode = "mpt"
+        else:
+            conv_mode = "llava_v0"
+
+        if conv_mode is not None and conv_mode != conv_mode:
+            print(
+                "[WARNING] the auto inferred conversation mode is {}, while `--conv-mode` is {}, using {}".format(
+                    conv_mode, conv_mode, conv_mode
+                )
+            )
+        else:
+            conv_mode = conv_mode # <--
+
+        ## Conversation templates
+        conv = conv_templates[conv_mode].copy()
+        conv.append_message(conv.roles[0], qs)
+        conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
+        # #####delete this bs
+        # from PIL import Image
+
+        # import requests
+        # from PIL import Image
+        # from io import BytesIO
+        # import re
+
+
+        # def image_parser(args,sep):
+        #     out = image_file.split(sep)
+        #     return out
+
+
+        # def load_image(image_file):
+        #     if image_file.startswith("http") or image_file.startswith("https"):
+        #         response = requests.get(image_file)
+        #         image = Image.open(BytesIO(response.content)).convert("RGB")
+        #     else:
+        #         image = Image.open(image_file).convert("RGB")
+        #     return image
+
+
+        # def load_images(image_files):
+        #     out = []
+        #     for image_file in image_files:
+        #         image = load_image(image_file)
+        #         out.append(image)
+        #     return out
+
+        # ###### delete this bs
+        # # image_files = image_parser(args)
+        # image_files = ["http://images.cocodataset.org/val2017/000000039769.jpg"]
+        # images = load_images(image_files)
+
+
+        self.input_ids = (
+        tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
+        .unsqueeze(0)
+        .cuda()
+        )
+
+
+
+#---------------------------------------------------------------------------------------------------------------------------
+
+
+    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
+
+        s = time.time()
+        with torch.inference_mode():
+            gen_dict = self.model.generate(
+                torch.cat([self.input_ids]*images.shape[0]),
+                # images=images_tensor,
+                images = images,
+                image_sizes=[(640, 480)]*images.shape[0],
+                do_sample=True if self.temperature > 0 else False,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                output_scores=True, 
+                return_dict_in_generate=True,
+                num_beams=self.num_beams,
+                max_new_tokens=self.max_new_tokens,
+                use_cache=True,
+            )
+        print(f"time elapsed generating : {time.time() - s}")
+        gen_tokens = gen_dict.sequences
+        scores = gen_dict.scores # {max_len of gen_tokens} tensors : each B X vocab_size
+                            #get logprobs for each token
+
+        B, max_len_batch = gen_tokens.shape
+        end_of_caption = gen_tokens == self.tokenizer.eos_token_id #50256 padding tokens
+
+        # compute_mask and msg_lengths
+        max_k = max_len_batch #len of longest generation in batch i.e 10
+        extra_tokens = end_of_caption.cumsum(dim=1) > 0
+        msg_lengths = max_k - (extra_tokens).sum(dim=1)
+        # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
+
+        mask = (extra_tokens == 0).float()
+        
+        scores = torch.stack(scores)[:,:, : len(self.tokenizer)].permute(1,0,2) #(B*max_batch_len)   # i1 i2 i1 i2 i1 i2 ..... 12 times
+        logprobs = torch.nn.functional.log_softmax(scores, dim=-1)
+        sampled_logprobs = torch.gather(logprobs, dim =-1, index = gen_tokens[:,:-1].unsqueeze(-1)).squeeze(-1)
+        sampled_logprobs *= mask[:, :-1]
+        sampled_logprobs = sampled_logprobs.sum(1) / msg_lengths
+
+
+        decoded_captions = self.tokenizer.batch_decode(
+            gen_tokens,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=True,
+        )
+        decoded_captions = [_.strip() for _ in decoded_captions]
+
+        return decoded_captions, sampled_logprobs, torch.randn(1)
+
+    def repeat_tensors(self, n, x):
+        """
+        For a tensor of size Bx..., we repeat it n times, and make it Bnx...
+        For collections, do nested repeat
+        """
+        if torch.is_tensor(x):
+            x = x.unsqueeze(1) # Bx1x...
+            x = x.expand(-1, n, *([-1]*len(x.shape[2:]))) # Bxnx...
+            x = x.reshape(x.shape[0]*n, *x.shape[2:]) # Bnx...
+        elif type(x) is list or type(x) is tuple:
+            x = [repeat_tensors(n, _) for _ in x]
+        return x
+
+    # def named_parameters(self, prefix="", recurse: bool = True):
+    #     return self.clipcap.named_parameters()
+
+    # def parameters(self, recurse: bool = True):
+    #     if self.finetune_llm:
+    #         return self.clipcap.parameters()
+    #     else:
+    #         return self.parameters()
+
+    # def train(self, mode: bool = True):
+    #     self.training = mode
+    #     self.clipcap.train(mode)
+    #     return self
+
+
+    ####################################################################################################################################################################################
+
+
+class LLavaPhi(nn.Module):
+    def __init__(
+        self,
+        train_method : str,
+        config : dict,
+        do_sample: bool = False,
+        beam_size: int = 5,
+        max_len: int = 20,
+    ):
+        super(LLavaPhi, self).__init__()
+
+        assert max_len < 75  # clip maximum context size
+
+        #Llava-phi args -----------------
+        model_id = "xtuner/llava-phi-3-mini-hf"
+        self.temperature = 0.2
+        self.top_p=None
+        self.num_beams=1
+        self.max_new_tokens= 64
+
+        #--------------------
+        disable_torch_init()
+        
+        self.model = LlavaForConditionalGeneration.from_pretrained(
+                model_id, 
+                torch_dtype=torch.float16, 
+                low_cpu_mem_usage=True, 
+            ).to("cuda")
+
+        self.processor = AutoProcessor.from_pretrained(model_id)
+        self.prompt = "<|user|>\n<image>\nDescribe the image<|end|>\n<|assistant|>\n"
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+
+#---------------------------------------------------------------------------------------------------------------------------
+
+
+    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
+
+
+        inputs = self.processor([self.prompt]*images.shape[0], images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
+        s = time.time()
+        with torch.inference_mode():
+            gen_dict = self.model.generate(
+                **inputs,
+                do_sample=True if self.temperature > 0 else False,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                output_scores=True, 
+                return_dict_in_generate=True,
+                num_beams=self.num_beams,
+                max_new_tokens=self.max_new_tokens,
+                use_cache=True,
+            )
+        print(f"time elapsed generating : {time.time() - s}")
+        gen_tokens = gen_dict.sequences[: , -self.max_new_tokens:]
+        scores = gen_dict.scores #num tokens generated = max_new_tokens = len(scores)
+        self.max_new_tokens
+
+        B, max_len_batch = gen_tokens.shape
+        end_of_caption = gen_tokens == self.tokenizer.eos_token_id #50256 padding tokens
+
+        # compute_mask and msg_lengths
+        max_k = max_len_batch #len of longest generation in batch i.e 10
+        extra_tokens = end_of_caption.cumsum(dim=1) > 0
+        msg_lengths = max_k - (extra_tokens).sum(dim=1)
+        # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
+
+        mask = (extra_tokens == 0).float()
+        
+        scores = torch.stack(scores)[:,:, : len(self.tokenizer)].permute(1,0,2) #(B*max_batch_len)   # i1 i2 i1 i2 i1 i2 ..... 12 times
+        logprobs = torch.nn.functional.log_softmax(scores, dim=-1)
+        sampled_logprobs = torch.gather(logprobs, dim =-1, index = gen_tokens[:,:-1].unsqueeze(-1)).squeeze(-1)
+        sampled_logprobs *= mask[:, :-1]
+        sampled_logprobs = sampled_logprobs.sum(1) / msg_lengths
+
+
+        decoded_captions = self.tokenizer.batch_decode(
+            gen_tokens,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=True,
+        )
+        decoded_captions = [_.strip() for _ in decoded_captions]
+
+        return decoded_captions, sampled_logprobs, torch.randn(1)
+
+    def repeat_tensors(self, n, x):
+        """
+        For a tensor of size Bx..., we repeat it n times, and make it Bnx...
+        For collections, do nested repeat
+        """
+        if torch.is_tensor(x):
+            x = x.unsqueeze(1) # Bx1x...
+            x = x.expand(-1, n, *([-1]*len(x.shape[2:]))) # Bxnx...
+            x = x.reshape(x.shape[0]*n, *x.shape[2:]) # Bnx...
+        elif type(x) is list or type(x) is tuple:
+            x = [repeat_tensors(n, _) for _ in x]
+        return x
+

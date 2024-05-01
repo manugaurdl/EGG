@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+
 import json
 import os
 from collections import defaultdict
@@ -18,7 +19,13 @@ from transformers import GPT2Tokenizer
 from tqdm import tqdm
 from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler, ValSampler
 from torch.utils.data.distributed import DistributedSampler
+from llava.mm_utils import process_images
+from transformers import CLIPImageProcessor
+from torchvision import transforms
 
+TRANSFORM = transforms.Compose([
+    transforms.ToTensor()
+])
 
 def open_pickle(path: str):
     with open(path, "rb") as f:
@@ -26,7 +33,7 @@ def open_pickle(path: str):
     return file 
 
 class CocoDataset:
-    def __init__(self, root, samples, mle_train, split, caps_per_img, captions_type, max_len_token, prefix_len, transform, debug):
+    def __init__(self, root, samples, mle_train, split, caps_per_img, captions_type, max_len_token, prefix_len, transform, debug, mllm):
         self.root = root
         self.samples = samples
         self.transform = transform
@@ -36,6 +43,8 @@ class CocoDataset:
         self.max_len_token = max_len_token
         self.prefix_len = prefix_len
         self.captions_type = captions_type
+        self.mllm = mllm
+
         if self.mle_train:
             self.path2tokens = os.path.join(root, f"tokenized_caps/{self.captions_type}/{self.split}")
             # self.id2tokens = torch.load
@@ -92,8 +101,26 @@ class CocoDataset:
 
         # # If load CLIP to GPU
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
-        sender_input, recv_input = self.transform(image) # they are same
         
+        if self.mllm == "clipcap":
+            sender_input, recv_input = self.transform(image) # they are same
+        elif self.mllm=="llava":
+            _ , recv_input = self.transform(image)
+            image_processor = CLIPImageProcessor.from_pretrained('openai/clip-vit-large-patch14-336')
+            llava_mistral_config = pickle.load(open("/home/manugaur/EGG/llava_mistral_config.pkl", "rb"))
+
+            image_sizes = image.size
+            image = image.resize((640,480))
+            sender_input = process_images(
+                [image],
+                image_processor,
+                llava_mistral_config).squeeze(0).to(dtype=torch.float16)
+
+        elif self.mllm=="llava-phi":
+            _ , recv_input = self.transform(image)
+            image = image.resize((640,480))
+            sender_input = TRANSFORM(image)
+
         ## Lazy loading
         # sender_input = torch.load(os.path.join(self.lazy_feat_dir, f"{image_id}.pt"), map_location="cpu")#.float()
 
@@ -108,8 +135,9 @@ class CocoDataset:
             aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:self.caps_per_img], "tokens": padded_tokens, "mask" : mask}
         else:
             aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:self.caps_per_img]}
-
-        return sender_input, torch.tensor(image_id), sender_input, aux
+ 
+    
+        return sender_input, torch.tensor(image_id), recv_input, aux
 
 class CocoNegDataset:
     def __init__(self, root, samples, mle_train, split, caps_per_img, captions_type, max_len_token, prefix_len, transform, debug, bags, cocoid2samples_idx):
@@ -320,6 +348,7 @@ class CocoWrapper:
         prefix_len : int,
         is_dist_leader : bool,
         transform: Callable,
+        mllm : str,
         num_workers: int = 8,
         seed: int = 111,
         level : str = None,
@@ -335,7 +364,7 @@ class CocoWrapper:
             bags = self.split2bags[level][split] # samples in bags are in cocoid format.
             ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx)
         else :
-            ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug)
+            ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug, mllm = mllm)
         sampler = None
 
         if dist.is_initialized() and split =="train":

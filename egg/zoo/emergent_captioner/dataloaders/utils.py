@@ -97,7 +97,6 @@ class MaybeDoubleTransform:
     def _get_transform(self, image_size: int):
         def _convert_image_to_rgb(image: Image.Image):
             return image.convert("RGB")
-
         t = [
             transforms.Resize(image_size, interpolation=BICUBIC),
             transforms.CenterCrop(image_size),
