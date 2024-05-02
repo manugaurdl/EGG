@@ -43,27 +43,48 @@ def inproj_parameterization(layer, device, rank, lora_alpha):
 
 def parameterize(layer,weight_name, rank):
     parametrize.register_parametrization(
-layer, weight_name, linear_layer_parameterization(layer, layer.weight.device, rank)
-)
+layer, weight_name, linear_layer_parameterization(layer, layer.weight.device, rank), unsafe =True)
 
-def LoRA(model, clip,  rank, model_type, config):
+def LoRA(model,  rank, model_type, config):
     
-    if model_type =="gpt":
+    if model_type =="llm":
+        
         print(f"trainable params before LORA :{trainable_params(model)}")
-        for i in range(12):
-            parameterize(model.clipcap.gpt.transformer.h[i].attn.c_attn, "weight", rank)
-            parameterize(model.clipcap.gpt.transformer.h[i].attn.c_proj, "weight", rank)
-            parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc, "weight", rank)
-            parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, "weight", rank)
         
-        # freeze GPT
-        for name, param in model.clipcap.gpt.named_parameters():
-            if 'lora' in name or "wte.weight" in name:
-                continue
-            else:
-                param.requires_grad = False
+        if config['mllm']=="clipcap":
         
+            for i in range(12):
+                parameterize(model.clipcap.gpt.transformer.h[i].attn.c_attn, "weight", rank)
+                parameterize(model.clipcap.gpt.transformer.h[i].attn.c_proj, "weight", rank)
+                parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc, "weight", rank)
+                parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, "weight", rank)
+            
+            # freeze GPT
+            for name, param in model.clipcap.gpt.named_parameters():
+                if 'lora' in name or "wte.weight" in name:
+                    continue
+                else:
+                    param.requires_grad = False
         
+        elif config['mllm']=="llava-phi":
+            for i in range(32):
+                
+                parameterize(model.model.language_model.model.layers[i].self_attn.q_proj, "weight", rank)
+                parameterize(model.model.language_model.model.layers[i].self_attn.k_proj, "weight", rank)
+                parameterize(model.model.language_model.model.layers[i].self_attn.v_proj, "weight", rank)
+                parameterize(model.model.language_model.model.layers[i].self_attn.o_proj, "weight", rank)
+                parameterize(model.model.language_model.model.layers[i].mlp.gate_proj, "weight", rank)
+                parameterize(model.model.language_model.model.layers[i].mlp.up_proj, "weight", rank)
+                parameterize(model.model.language_model.model.layers[i].mlp.down_proj, "weight", rank)
+                parameterize(model.model.language_model.lm_head, "weight", rank)
+
+
+            for name, param in model.named_parameters():
+                if 'lora' in name: 
+                    continue
+                else:
+                    param.requires_grad = False
+
         print(f"trainable params after LORA :{trainable_params(model)}")
     
     else:

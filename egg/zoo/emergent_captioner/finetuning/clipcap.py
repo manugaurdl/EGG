@@ -768,7 +768,7 @@ class LLavaPhi(nn.Module):
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None, use_fp16 = False):
 
-        context = autocast(enabled=True) if use_fp16 else nullcontext()
+        context = autocast(enabled=True, dtype=torch.bfloat16) if use_fp16 else nullcontext()
 
         with context:
             inputs = self.processor([self.prompt]*images.shape[0], images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
@@ -832,7 +832,7 @@ class LLavaPhi(nn.Module):
 
         """
         
-        context = autocast(enabled=True) if use_fp16 else nullcontext()
+        context = autocast(enabled=True, dtype=torch.bfloat16) if use_fp16 else nullcontext()
         with context:
             inputs_embeds = self.model.get_input_embeddings()(inputs['input_ids'])#.half() # B, 11, 3072 ("Describe the image" has 11 tokens)
             
@@ -853,7 +853,7 @@ class LLavaPhi(nn.Module):
 
             # get embeds of generated tokens 
             prompt_len = inputs['input_ids'].shape[-1]
-            indices = generated[:, prompt_len:] # generated (B, max_batch_len) tokens. After "."/13 padded with "<eos>/50256
+            indices = generated[:, prompt_len:].clone() # generated (B, max_batch_len) tokens. After "."/13 padded with "<eos>/50256
             suffix = self.model.get_input_embeddings()(indices) # B, 10, 768 embd. 
             
             #get prompt + gen embeds
@@ -875,7 +875,7 @@ class LLavaPhi(nn.Module):
 
             # get logprob for each sampled token for all captions
             try:
-                log_probs = torch.gather(logits, dim=2, index=indices.clone().unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
+                log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
                 log_probs *= mask # everything after "." is zeroed
                 log_probs = log_probs.sum(1) / msg_lengths #averaged
             except:

@@ -308,26 +308,26 @@ def build_game(opts, config):
         num_hard_negatives=opts.num_hard_negatives,
     )
 
-    if config["lora"] and config['mllm'] == "clipcap":
+    if config["lora"]:
 
-        original_weights = {}
-        for name, param in sender.clipcap.gpt.transformer.named_parameters():
-            original_weights[name] = param.clone().detach()
-        with open("/home/manugaur/temp/gpt_transformer_og.pkl", "wb") as f:
-            pickle.dump(original_weights, f)
+        # original_weights = {}
+        # for name, param in sender.clipcap.gpt.transformer.named_parameters():
+        #     original_weights[name] = param.clone().detach()
+        # with open("/home/manugaur/temp/gpt_transformer_og.pkl", "wb") as f:
+        #     pickle.dump(original_weights, f)
 
-        LoRA(sender, sender.clip, config["lora_rank"], config['finetune_model'], config)
+        LoRA(sender,config["lora_rank"], config['finetune_model'], config)
     
     # if config['freeze_adapter']:
     #     for name, p in sender.clipcap.clip_project.named_parameters():
     #         p.requires_grad = False    
 
-    elif config['mllm']=="llava":
-        for p in sender.model.model.parameters():
-            p.requires_grad = False
+    # elif config['mllm']=="llava":
+    #     for p in sender.model.model.parameters():
+    #         p.requires_grad = False
         
-        for p in sender.model.lm_head.parameters():
-            p.requires_grad = True
+    #     for p in sender.model.lm_head.parameters():
+    #         p.requires_grad = True
         
     elif config['mllm']=="llava-phi":
         

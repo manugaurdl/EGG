@@ -1,5 +1,4 @@
 # Global vars
-
 import os
 import wandb
 import pathlib
@@ -425,7 +424,7 @@ class Trainer:
 
         return mean_loss.item(), full_interaction, reward, summary
 
-    def train_epoch(self,loader, WANDB, GREEDY_BASELINE, train_method, opts, config):
+    def train_epoch(self,loader, WANDB, GREEDY_BASELINE, train_method, opts, config, epoch):
 
         mean_loss = 0
         n_batches = 0
@@ -531,11 +530,27 @@ class Trainer:
                 "reinforce" : interaction.aux['reinforce'].item(),
                 "log_prob" : interaction.aux['log_prob'].mean().item()
             })
+
             if WANDB:
                 wandb.log(train_log, step = self.STEP)
             self.STEP+=1
             if self.optimizer_scheduler:
                 self.optimizer_scheduler.step()
+
+            if batch_id == 10: 
+                metric = self.rand_neg_val(epoch + 1, WANDB, config = config,  inference=False)
+            # Saving model
+            # if (self.SAVE_BEST_METRIC and metric > self.best_metric_score) or (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0): 
+            #     for idx, callback in enumerate(self.callbacks):
+            #         """
+            #         callbacks.ConsoleLogger: aggregated_print
+            #         finetuning.utils.ModelSaver: save_clipcap_model > {run_name}_e/final/best.pt                   
+            #         callbacks.CheckpointSaver: pass
+            #         """
+            #         callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], self.SAVE_BEST_METRIC)
+                    
+            #     if SAVE_BEST_METRIC:
+            #         self.best_metric_score = metric
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
@@ -561,7 +576,7 @@ class Trainer:
 
 
         print(f"Total trainable params : {trainable_params(self.game.sender)}")
-        count_trainable_parameters(self.game.sender)
+        # count_trainable_parameters(self.game.sender)
         n_epochs = config['opts']['n_epochs']
         WANDB = config['WANDB']['logging']
         if self.distributed_context.is_distributed:
@@ -608,7 +623,7 @@ class Trainer:
             #     callback.on_epoch_begin(epoch + 1)                 
             loader = get_loader(epoch, config['neg_mining']['curricullum'])
 
-            train_loss, train_interaction = self.train_epoch(self.train_loaders[loader], WANDB, self.GREEDY_BASELINE, self.train_method, self.opts, config)
+            train_loss, train_interaction = self.train_epoch(self.train_loaders[loader], WANDB, self.GREEDY_BASELINE, self.train_method, self.opts, config, epoch)
             if WANDB:
                 wandb.log({"Avg Loss" : train_loss,
                             "epoch" : epoch + 1}, step = self.STEP)

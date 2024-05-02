@@ -56,6 +56,8 @@ class CocoDataset:
         if self.debug:
             return 40
         else:
+            if self.split=="val":
+                return 500
             return len(self.samples)
     
     def pad(self,tokens):
