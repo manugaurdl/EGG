@@ -325,14 +325,19 @@ def build_game(opts, config):
         for p in sender.model.model.parameters():
             p.requires_grad = False
         
+        for p in sender.model.lm_head.parameters():
+            p.requires_grad = True
+        
     elif config['mllm']=="llava-phi":
         
         for p in sender.model.parameters():
             p.requires_grad = False
 
-        for p in sender.model.language_model.lm_head.parameters():
+        for p in sender.model.multi_modal_projector.parameters():
             p.requires_grad = True
 
+        # for p in sender.model.language_model.lm_head.parameters():
+        #     p.requires_grad = True
 
 
     game = ReinforceCaptionGame(

@@ -101,7 +101,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
             return_dict=return_dict
         )
 
-    @torch.no_grad()
+    # @torch.no_grad()
     def generate(
         self,
         inputs: Optional[torch.Tensor] = None,

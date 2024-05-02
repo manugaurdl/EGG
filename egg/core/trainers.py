@@ -319,11 +319,21 @@ class Trainer:
         interactions = []
         
         self.game.train()
-        if config["finetune_model"]=="gpt":
-            self.game.sender.clip.eval()
-        else:
-            self.game.sender.clip.train()
-            self.game.sender.clipcap.gpt.eval()
+        if config['mllm']=="clipcap":
+            if config["finetune_model"]=="gpt":
+                self.game.sender.clip.eval()
+            else:
+                self.game.sender.clip.train()
+                self.game.sender.clipcap.gpt.eval()
+        
+        elif config['mllm']=="llava-phi":
+            #temp : to make llava phi work
+            self.game.sender.model.vision_tower.eval()
+            self.game.sender.model.language_model.eval()
+            ########
+        elif config['mllm']=="llava":
+            pass
+
         self.game.receiver.eval()
         self.optimizer.zero_grad()
 
@@ -335,21 +345,23 @@ class Trainer:
                 batch = Batch(*batch)
             batch = batch.to(self.device)
 
-            context = autocast() if self.scaler else nullcontext()
-            with context:
-                optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method, contrastive = config['contrastive'], reinforce = config["reinforce"])
+            # context = autocast() if self.scaler else nullcontext()
+            # with context:
+            optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method, contrastive = config['contrastive'], reinforce = config["reinforce"])
                     
-                #not accumulating gradients currently
-                if self.update_freq > 1:
-                    # throughout EGG, we minimize _mean_ loss, not sum
-                    # hence, we need to account for that when aggregating grads
-                    optimized_loss = optimized_loss / self.update_freq
+            #not accumulating gradients currently
+            if self.update_freq > 1:
+                # throughout EGG, we minimize _mean_ loss, not sum
+                # hence, we need to account for that when aggregating grads
+                optimized_loss = optimized_loss / self.update_freq
 
 
             if self.scaler:
                 self.scaler.scale(optimized_loss).backward()
             else:
                 optimized_loss.backward()
+                # print(f'----> {torch.norm(self.game.sender.model.language_model.lm_head.weight.grad)}')
+                print(f'----> {torch.norm(self.game.sender.model.multi_modal_projector.linear_1.weight.grad)}')
 
             if batch_id % self.update_freq == self.update_freq - 1:
                 if self.scaler:

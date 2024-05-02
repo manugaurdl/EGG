@@ -39,6 +39,10 @@ from transformers import (AutoTokenizer, BitsAndBytesConfig, StoppingCriteria,
                           StoppingCriteriaList, TextStreamer)
 
 import time
+from torch.cuda.amp import autocast
+
+
+
 class MLP(nn.Module):
     def __init__(self, sizes: Tuple[int, ...], bias=True, act=nn.Tanh):
         super(MLP, self).__init__()
@@ -548,7 +552,7 @@ class LLavaSender(nn.Module):
         self.temperature = 0.2
         self.top_p=None
         self.num_beams=1
-        self.max_new_tokens= 2
+        self.max_new_tokens= 64
         qs = 'Describe the given image'
         #--------------------
         disable_torch_init()
@@ -647,21 +651,21 @@ class LLavaSender(nn.Module):
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
 
         s = time.time()
-        with torch.inference_mode():
-            gen_dict = self.model.generate(
-                torch.cat([self.input_ids]*images.shape[0]),
-                # images=images_tensor,
-                images = images,
-                image_sizes=[(640, 480)]*images.shape[0],
-                do_sample=True if self.temperature > 0 else False,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                output_scores=True, 
-                return_dict_in_generate=True,
-                num_beams=self.num_beams,
-                max_new_tokens=self.max_new_tokens,
-                use_cache=True,
-            )
+        # with torch.inference_mode():
+        gen_dict = self.model.generate(
+            torch.cat([self.input_ids]*images.shape[0]),
+            # images=images_tensor,
+            images = images,
+            image_sizes=[(640, 480)]*images.shape[0],
+            do_sample=False if self.temperature > 0 else False,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            output_scores=True, 
+            return_dict_in_generate=True,
+            num_beams=self.num_beams,
+            max_new_tokens=self.max_new_tokens,
+            use_cache=True,
+        )
         print(f"time elapsed generating : {time.time() - s}")
         gen_tokens = gen_dict.sequences
         scores = gen_dict.scores # {max_len of gen_tokens} tensors : each B X vocab_size
@@ -680,9 +684,9 @@ class LLavaSender(nn.Module):
         
         scores = torch.stack(scores)[:,:, : len(self.tokenizer)].permute(1,0,2) #(B*max_batch_len)   # i1 i2 i1 i2 i1 i2 ..... 12 times
         logprobs = torch.nn.functional.log_softmax(scores, dim=-1)
-        sampled_logprobs = torch.gather(logprobs, dim =-1, index = gen_tokens[:,:-1].unsqueeze(-1)).squeeze(-1)
-        sampled_logprobs *= mask[:, :-1]
-        sampled_logprobs = sampled_logprobs.sum(1) / msg_lengths
+        logprobs = torch.gather(logprobs, dim =-1, index = gen_tokens[:,:-1].unsqueeze(-1)).squeeze(-1)
+        logprobs *= mask[:, :-1]
+        logprobs = logprobs.sum(1) / msg_lengths
 
 
         decoded_captions = self.tokenizer.batch_decode(
@@ -692,7 +696,7 @@ class LLavaSender(nn.Module):
         )
         decoded_captions = [_.strip() for _ in decoded_captions]
 
-        return decoded_captions, sampled_logprobs, torch.randn(1)
+        return decoded_captions, logprobs, torch.randn(1)
 
     def repeat_tensors(self, n, x):
         """
@@ -740,7 +744,7 @@ class LLavaPhi(nn.Module):
 
         #Llava-phi args -----------------
         model_id = "xtuner/llava-phi-3-mini-hf"
-        self.temperature = 0.2
+        self.temperature = 0.3
         self.top_p=None
         self.num_beams=1
         self.max_new_tokens= 64
@@ -750,7 +754,7 @@ class LLavaPhi(nn.Module):
         
         self.model = LlavaForConditionalGeneration.from_pretrained(
                 model_id, 
-                torch_dtype=torch.float16, 
+                # torch_dtype=torch.float16, 
                 low_cpu_mem_usage=True, 
             ).to("cuda")
 
@@ -764,52 +768,128 @@ class LLavaPhi(nn.Module):
 
     def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
 
+        context = autocast()
+        with context:
 
-        inputs = self.processor([self.prompt]*images.shape[0], images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
-        s = time.time()
-        with torch.inference_mode():
-            gen_dict = self.model.generate(
-                **inputs,
-                do_sample=True if self.temperature > 0 else False,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                output_scores=True, 
-                return_dict_in_generate=True,
-                num_beams=self.num_beams,
-                max_new_tokens=self.max_new_tokens,
-                use_cache=True,
-            )
-        print(f"time elapsed generating : {time.time() - s}")
-        gen_tokens = gen_dict.sequences[: , -self.max_new_tokens:]
-        scores = gen_dict.scores #num tokens generated = max_new_tokens = len(scores)
-        self.max_new_tokens
 
-        B, max_len_batch = gen_tokens.shape
-        end_of_caption = gen_tokens == self.tokenizer.eos_token_id #50256 padding tokens
+            inputs = self.processor([self.prompt]*images.shape[0], images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
+            s = time.time()
+            # with torch.inference_mode():
+            #     gen_dict = self.model.generate(
+            #         **inputs,
+            #         do_sample=True if self.temperature > 0 else False,
+            #         # do_sample=False,
+            #         temperature=self.temperature,
+            #         top_p=self.top_p,
+            #         output_scores=True, 
+            #         return_dict_in_generate=True,
+            #         # num_beams=self.num_beams,
+            #         max_new_tokens=self.max_new_tokens,
+            #         use_cache=True,
+            #     )
 
-        # compute_mask and msg_lengths
-        max_k = max_len_batch #len of longest generation in batch i.e 10
-        extra_tokens = end_of_caption.cumsum(dim=1) > 0
-        msg_lengths = max_k - (extra_tokens).sum(dim=1)
-        # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
+            with torch.inference_mode():
+                generated = self.model.generate(
+                    **inputs,
+                    do_sample=True if self.temperature > 0 else False,
+                    # do_sample=False,
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    # num_beams=self.num_beams,
+                    max_new_tokens=self.max_new_tokens,
+                    use_cache=True,
+                )
+            print(f"time elapsed generating : {time.time() - s}")
 
-        mask = (extra_tokens == 0).float()
+
+    ##########################################################################################################################################################
+            # GENERATING WITH GRADIENTS
+
+            # gen_tokens = gen_dict.sequences[: , -self.max_new_tokens:]
+            # scores = gen_dict.scores #num tokens generated = max_new_tokens = len(scores)
+
+            # B, max_len_batch = gen_tokens.shape
+            # end_of_caption = gen_tokens == self.tokenizer.eos_token_id #50256 padding tokens
+
+            # # compute_mask and msg_lengths
+            # max_k = max_len_batch #len of longest generation in batch i.e 10
+            # extra_tokens = end_of_caption.cumsum(dim=1) > 0
+            # msg_lengths = max_k - (extra_tokens).sum(dim=1)
+            # # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
+
+            # mask = (extra_tokens == 0).float()
+            
+            # scores = torch.stack(scores)[:,:, : len(self.tokenizer)].permute(1,0,2) #(B*max_batch_len)   # i1 i2 i1 i2 i1 i2 ..... 12 times
+            # logprobs = torch.nn.functional.log_softmax(scores, dim=-1)
+            # logprobs = torch.gather(logprobs, dim =-1, index = gen_tokens.unsqueeze(-1)).squeeze(-1)
+            # logprobs *= mask
+            # logprobs = logprobs.sum(1) / msg_lengths
+
+##########################################################################################################################################################
+        # TRYING WITH NO GRADIENTS
+        """
+        input_ids = prompt tokens 
         
-        scores = torch.stack(scores)[:,:, : len(self.tokenizer)].permute(1,0,2) #(B*max_batch_len)   # i1 i2 i1 i2 i1 i2 ..... 12 times
-        logprobs = torch.nn.functional.log_softmax(scores, dim=-1)
-        sampled_logprobs = torch.gather(logprobs, dim =-1, index = gen_tokens[:,:-1].unsqueeze(-1)).squeeze(-1)
-        sampled_logprobs *= mask[:, :-1]
-        sampled_logprobs = sampled_logprobs.sum(1) / msg_lengths
+        class 'transformers.models.llava.modeling_llava.LlavaForConditionalGeneration
 
+        """
+        
+        context = autocast(enabled = True) #bug with autocast and torch.no_grad due to caching
+        with context:
+            inputs_embeds = self.model.get_input_embeddings()(inputs['input_ids']).half() # B, 11, 3072 ("Describe the image" has 11 tokens)
+            
+            image_outputs = self.model.vision_tower(inputs['pixel_values'], output_hidden_states=True) # ['last_hidden_state', 'pooler_output', 'hidden_states']
+            selected_image_feature = image_outputs.hidden_states[-2]   # select -2 layer from 25 layers
+            selected_image_feature = selected_image_feature[:, 1:] # B, N, D_clip --> skip first token (B, N-1, D_clip)
+            image_features = self.model.multi_modal_projector(selected_image_feature) # B, N, D_lm
+            labels = None
+            attention_mask = torch.ones(inputs['input_ids'].shape)
+            #image_feats : (B, 576,D)
+            #prompt feats : (B,11,D)
+            #cat feats : (B, 586, D)
+            
+            inputs_embeds, attention_mask, labels, position_ids = self.model._merge_input_ids_with_image_features(
+                image_features, inputs_embeds, inputs['input_ids'], attention_mask, labels
+            )
+            prefix_len = inputs_embeds.shape[1] # text + img promp
 
-        decoded_captions = self.tokenizer.batch_decode(
-            gen_tokens,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=True,
-        )
-        decoded_captions = [_.strip() for _ in decoded_captions]
+            # get embeds of generated tokens 
+            prompt_len = inputs['input_ids'].shape[-1]
+            indices = generated[:, prompt_len:] # generated (B, max_batch_len) tokens. After "."/13 padded with "<eos>/50256
+            suffix = self.model.get_input_embeddings()(indices) # B, 10, 768 embd. 
+            
+            #get prompt + gen embeds
+            inputs_embeds = torch.cat([inputs_embeds, suffix], dim=1) # B, 20,768 emb
 
-        return decoded_captions, sampled_logprobs, torch.randn(1)
+            logits = self.model.language_model(inputs_embeds=inputs_embeds) ### self.language_model
+            logits = logits[0][:, prefix_len - 1 : -1, : len(self.tokenizer)] # extract last logit from --> logits[0] : (B, max_batch_len, 55257) 
+            logits = logits/(self.temperature if self.temperature > 0 else 1.0)
+            logits = logits.log_softmax(-1)
+
+            # compute_mask and msg_lengths
+            max_k = indices.size(1) #len of longest generation in batch i.e 10
+            end_of_caption = indices == self.tokenizer.eos_token_id #50256 padding tokens
+            extra_tokens = end_of_caption.cumsum(dim=1) > 0
+            msg_lengths = max_k - (extra_tokens).sum(dim=1)
+            # msg_lengths.add_(1).clamp_(max=max_k) #lengths increased by 1?
+
+            mask = (extra_tokens == 0).float()
+
+            # get logprob for each sampled token for all captions
+            try:
+                log_probs = torch.gather(logits, dim=2, index=indices.clone().unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
+                log_probs *= mask # everything after "." is zeroed
+                log_probs = log_probs.sum(1) / msg_lengths #averaged
+            except:
+                breakpoint()
+            decoded_captions = self.tokenizer.batch_decode(
+                indices,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True,
+            )
+            decoded_captions = [_.strip() for _ in decoded_captions]
+
+        return decoded_captions, log_probs, torch.randn(1)
 
     def repeat_tensors(self, n, x):
         """
