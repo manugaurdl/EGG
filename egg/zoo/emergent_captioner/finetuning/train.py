@@ -171,11 +171,13 @@ def main(params, config):
 
     # getting MLE preds : comment this and path to inference_preds and inference_log
 
-    if opts.captioner_model == "clipcap":   
+    if config['mllm'] == "clipcap":   
         trainer.game.sender.unpatch_model()
         trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
         trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
-    
+    else:
+        trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
+
     config["WANDB"]["logging"] = False
 
     if config["train_method"] != "mle":
