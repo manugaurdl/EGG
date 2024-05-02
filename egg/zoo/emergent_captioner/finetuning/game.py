@@ -49,6 +49,7 @@ class ReinforceCaptionGame(nn.Module):
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.prefix_len = config['prefix_len']
         self.mllm = config['mllm']
+        self.config = config
 
     def forward(self, sender_input, cocoids ,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False, contrastive = False, reinforce = True):
         """
@@ -141,7 +142,7 @@ class ReinforceCaptionGame(nn.Module):
             captions = None
             reward = None
             if reinforce or not self.training :
-                captions, log_prob, kl_div = self.sender(sender_input, aux_input) # logprob : (B) --> only one logprob per caption (averaged over all words)
+                captions, log_prob, kl_div = self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
                 with torch.no_grad():
                     text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
                     sr_loss, aux_info_disc_loss = self.loss(text_feats, img_feats, self.training, True,  aux_input)
@@ -333,11 +334,11 @@ def build_game(opts, config):
         for p in sender.model.parameters():
             p.requires_grad = False
 
-        for p in sender.model.multi_modal_projector.parameters():
-            p.requires_grad = True
-
-        # for p in sender.model.language_model.lm_head.parameters():
+        # for p in sender.model.multi_modal_projector.parameters():
         #     p.requires_grad = True
+
+        for p in sender.model.language_model.lm_head.parameters():
+            p.requires_grad = True
 
 
     game = ReinforceCaptionGame(

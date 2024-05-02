@@ -40,7 +40,7 @@ from transformers import (AutoTokenizer, BitsAndBytesConfig, StoppingCriteria,
 
 import time
 from torch.cuda.amp import autocast
-
+from contextlib import nullcontext
 
 
 class MLP(nn.Module):
@@ -754,7 +754,7 @@ class LLavaPhi(nn.Module):
         
         self.model = LlavaForConditionalGeneration.from_pretrained(
                 model_id, 
-                # torch_dtype=torch.float16, 
+                torch_dtype=torch.bfloat16, 
                 low_cpu_mem_usage=True, 
             ).to("cuda")
 
@@ -766,12 +766,11 @@ class LLavaPhi(nn.Module):
 #---------------------------------------------------------------------------------------------------------------------------
 
 
-    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
+    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None, use_fp16 = False):
 
-        context = autocast()
+        context = autocast(enabled=True) if use_fp16 else nullcontext()
+
         with context:
-
-
             inputs = self.processor([self.prompt]*images.shape[0], images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
             s = time.time()
             # with torch.inference_mode():
@@ -799,7 +798,6 @@ class LLavaPhi(nn.Module):
                     max_new_tokens=self.max_new_tokens,
                     use_cache=True,
                 )
-            print(f"time elapsed generating : {time.time() - s}")
 
 
     ##########################################################################################################################################################
@@ -834,9 +832,9 @@ class LLavaPhi(nn.Module):
 
         """
         
-        context = autocast(enabled = True) #bug with autocast and torch.no_grad due to caching
+        context = autocast(enabled=True) if use_fp16 else nullcontext()
         with context:
-            inputs_embeds = self.model.get_input_embeddings()(inputs['input_ids']).half() # B, 11, 3072 ("Describe the image" has 11 tokens)
+            inputs_embeds = self.model.get_input_embeddings()(inputs['input_ids'])#.half() # B, 11, 3072 ("Describe the image" has 11 tokens)
             
             image_outputs = self.model.vision_tower(inputs['pixel_values'], output_hidden_states=True) # ['last_hidden_state', 'pooler_output', 'hidden_states']
             selected_image_feature = image_outputs.hidden_states[-2]   # select -2 layer from 25 layers
@@ -888,6 +886,7 @@ class LLavaPhi(nn.Module):
                 clean_up_tokenization_spaces=True,
             )
             decoded_captions = [_.strip() for _ in decoded_captions]
+            print(f"time elapsed generating : {time.time() - s}")
 
         return decoded_captions, log_probs, torch.randn(1)
 

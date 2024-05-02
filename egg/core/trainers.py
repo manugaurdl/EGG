@@ -20,6 +20,7 @@ except ImportError:
     from contextlib import suppress as nullcontext
 
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from .batch import Batch
@@ -360,8 +361,11 @@ class Trainer:
                 self.scaler.scale(optimized_loss).backward()
             else:
                 optimized_loss.backward()
-                # print(f'----> {torch.norm(self.game.sender.model.language_model.lm_head.weight.grad)}')
-                print(f'----> {torch.norm(self.game.sender.model.multi_modal_projector.linear_1.weight.grad)}')
+                # nn.utils.clip_grad_norm_(self.game.sender.model.multi_modal_projector.parameters(), 1.0)
+                print(f'----> {torch.norm(self.game.sender.model.language_model.lm_head.weight.grad)}')
+                # print(f'----> {torch.norm(self.game.sender.model.multi_modal_projector.linear_1.weight.grad)}')
+                # print(f'----> {self.game.sender.model.multi_modal_projector.linear_1.weight.grad}')
+                # print(f'----> {self.game.sender.model.multi_modal_projector.linear_2.weight.grad}')
 
             if batch_id % self.update_freq == self.update_freq - 1:
                 if self.scaler:
