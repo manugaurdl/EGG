@@ -17,23 +17,24 @@ from egg.zoo.emergent_captioner.finetuning.utils import (
 )
 from egg.zoo.emergent_captioner.utils import convert_models_to_fp32
 from egg.zoo.emergent_captioner.finetuning.utils import int2mil, trainable_params
+# from LLaVA_pp.LLaVA.llava.model import *
 
 ### LLaVa
-from llava.constants import (
-    IMAGE_TOKEN_INDEX,
-    DEFAULT_IMAGE_TOKEN,
-    DEFAULT_IM_START_TOKEN,
-    DEFAULT_IM_END_TOKEN,
-    IMAGE_PLACEHOLDER,
-)
-from llava.conversation import conv_templates, SeparatorStyle
-from llava.model.builder import load_pretrained_model
-from llava.utils import disable_torch_init
-from llava.mm_utils import (
-    process_images,
-    tokenizer_image_token,
-    get_model_name_from_path,
-)
+# from llava.constants import (
+#     IMAGE_TOKEN_INDEX,
+#     DEFAULT_IMAGE_TOKEN,
+#     DEFAULT_IM_START_TOKEN,
+#     DEFAULT_IM_END_TOKEN,
+#     IMAGE_PLACEHOLDER,
+# )
+# from llava.conversation import conv_templates, SeparatorStyle
+# from llava.model.builder import load_pretrained_model
+# from llava.utils import disable_torch_init
+# from llava.mm_utils import (
+#     process_images,
+#     tokenizer_image_token,
+#     get_model_name_from_path,
+# )
 from transformers import AutoProcessor, LlavaForConditionalGeneration
 from transformers import (AutoTokenizer, BitsAndBytesConfig, StoppingCriteria,
                           StoppingCriteriaList, TextStreamer)
@@ -777,26 +778,37 @@ class LLavaPhi(nn.Module):
 
         #Llava-phi args -----------------
         model_id = "xtuner/llava-phi-3-mini-hf"
-        self.temperature = 0.5
+        self.temperature = 0.3
         self.top_p=None
         self.num_beams=1
         self.max_new_tokens= 64
 
         #--------------------
-        disable_torch_init()
+        # disable_torch_init()
         
         self.model = LlavaForConditionalGeneration.from_pretrained(
                 model_id, 
                 torch_dtype=torch.bfloat16, 
-                low_cpu_mem_usage=True, 
+                low_cpu_mem_usage=True,
+                use_flash_attention_2=True,
             ).to("cuda")
+
+        # self.model = LlavaPhiForCausalLM.from_pretrained(
+        #         "microsoft/Phi-3-mini-4k-instruct",
+        #         attn_implementation="flash_attention_2",
+        #         torch_dtype=torch.bfloat16, 
+        #         low_cpu_mem_usage=True,
+        #     )
+
+
 
         self.processor = AutoProcessor.from_pretrained(model_id)
         self.prompt = "<|user|>\n<image>\nDescribe the image briefly in 1 sentence.<|end|>\n<|assistant|>\n"
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-#       #HF lora :c
-        lin_layers = self.find_all_linear_names(self.model)
+#       #PEFT lora
+        
+        lin_layers = self.find_all_linear_names(self.model) #got all LLM layers
         
         last_llm_layers = []
         for l in lin_layers:
@@ -825,7 +837,7 @@ class LLavaPhi(nn.Module):
         with context:
             images = [Image.open(cocoid2img(cocoid)).convert("RGB") for cocoid in aux_input['cocoid']]
             inputs = self.processor([self.prompt]*len(images), images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
-            s = time.time()
+            # s = time.time()
             # with torch.inference_mode():
             #     gen_dict = self.model.generate(
             #         **inputs,
@@ -939,10 +951,10 @@ class LLavaPhi(nn.Module):
                 clean_up_tokenization_spaces=True,
             )
             decoded_captions = [_.strip() for _ in decoded_captions]
-            print(decoded_captions[10:20])
-            print(f"time elapsed generating : {time.time() - s}")
+            # print(decoded_captions[10:20])
+            # print(f"time elapsed generating : {time.time() - s}")
 
-        return decoded_captions, log_probs, torch.randn(1)
+        return decoded_captions, log_probs, torch.randn(1), inputs['pixel_values']
 
     def repeat_tensors(self, n, x):
         """

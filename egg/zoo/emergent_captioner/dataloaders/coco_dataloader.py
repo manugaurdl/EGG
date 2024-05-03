@@ -19,7 +19,7 @@ from transformers import GPT2Tokenizer
 from tqdm import tqdm
 from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler, ValSampler
 from torch.utils.data.distributed import DistributedSampler
-from llava.mm_utils import process_images
+# from llava.mm_utils import process_images
 from transformers import CLIPImageProcessor
 from torchvision import transforms
 
@@ -144,7 +144,7 @@ class CocoDataset:
         return sender_input, torch.tensor(image_id), recv_input, aux
 
 class CocoNegDataset:
-    def __init__(self, root, samples, mle_train, split, caps_per_img, captions_type, max_len_token, prefix_len, transform, debug, bags, cocoid2samples_idx):
+    def __init__(self, root, samples, mle_train, split, caps_per_img, captions_type, max_len_token, prefix_len, transform, debug, bags, cocoid2samples_idx, mllm):
         self.root = root
         self.samples = samples
         self.transform = transform
@@ -162,11 +162,14 @@ class CocoNegDataset:
         
         self.cocoid2samples_idx = cocoid2samples_idx[split]
         self.bags = bags
+        self.mllm = mllm
 
     def __len__(self):
         if self.debug:
             return 400
         else:
+            if self.split=='val':
+                return 50
             return len(self.bags)
 
 
@@ -177,19 +180,29 @@ class CocoNegDataset:
         aux_list = []
         cocoids =[]
         bag_of_caps = []
+        if self.mllm =="clipcap":
+            for cocoid in bag:
+                sample_idx = self.cocoid2samples_idx[cocoid]
+                file_path, captions, image_id = self.samples[sample_idx]
+                assert image_id == cocoid
 
-        for cocoid in bag:
-            sample_idx = self.cocoid2samples_idx[cocoid]
-            file_path, captions, image_id = self.samples[sample_idx]
-            assert image_id == cocoid
+                sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/{self.split}", f"{cocoid}.pt")))
 
-            sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/{self.split}", f"{cocoid}.pt")))
+                # aux_list.append({"cocoid": torch.tensor([image_id]), "captions": captions[:5]}) 
+                # aux_list.append({"captions": captions[:5]}) 
+                cocoids.append(cocoid)
+                bag_of_caps.append(captions[:self.caps_per_img])
+            # sender_input = torch.stack(sender_inputs)
+        
+        elif self.mllm =="llava-phi":
+            for cocoid in bag:
+                sample_idx = self.cocoid2samples_idx[cocoid]
+                file_path, captions, image_id = self.samples[sample_idx]
+                assert image_id == cocoid
+                sender_inputs = None
+                cocoids.append(cocoid)
+                bag_of_caps.append(captions[:self.caps_per_img])
 
-            # aux_list.append({"cocoid": torch.tensor([image_id]), "captions": captions[:5]}) 
-            # aux_list.append({"captions": captions[:5]}) 
-            cocoids.append(cocoid)
-            bag_of_caps.append(captions[:self.caps_per_img])
-        # sender_input = torch.stack(sender_inputs)
 
         return sender_inputs, cocoids, bag_of_caps
 
@@ -199,11 +212,12 @@ def hard_neg_collate(og_batch):
     all_bags_caps = [] 
 
     for i in og_batch:
-        sender_input.extend(i[0]) 
+        if i[0] is not None:
+            sender_input.extend(i[0]) 
         cocoids.extend(i[1])
         all_bags_caps.extend(i[-1])
-
-    sender_input = torch.stack(sender_input)
+    if len(sender_input)>0:
+        sender_input = torch.stack(sender_input)
     cocoids = torch.tensor(cocoids)
 
     # caps zipped and changed from 5 X 100 --> 100 X 5
@@ -258,7 +272,7 @@ class CocoWrapper:
         for level in diff_levels:
             for split in splits:
                 if split in ['val', "test"]:
-                    if level =="medium":
+                    if level in ["medium", "hard"]:
                         with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['val_bag_size']}.pkl"), "rb") as f:
                             split2bags[level][split] = pickle.load(f)
                     else:
@@ -366,7 +380,7 @@ class CocoWrapper:
        
         if neg_mining:
             bags = self.split2bags[level][split] # samples in bags are in cocoid format.
-            ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx)
+            ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx, mllm = mllm)
         else :
             ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug, mllm = mllm)
         sampler = None

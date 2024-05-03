@@ -142,7 +142,11 @@ class ReinforceCaptionGame(nn.Module):
             captions = None
             reward = None
             if reinforce or not self.training :
-                captions, log_prob, kl_div = self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
+                if self.mllm=="clipcap":
+                    captions, log_prob, kl_div= self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
+                elif self.mllm=="llava-phi":
+                    captions, log_prob, kl_div, receiver_input = self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
+
                 with torch.no_grad():
                     text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
                     sr_loss, aux_info_disc_loss = self.loss(text_feats, img_feats, self.training, True,  aux_input)
@@ -290,6 +294,7 @@ def build_game(opts, config):
     else:
         raise RuntimeError("selected unsupported MLLM in config")
 
+    assert opts.recv_clip_model =="ViT-L/14@336px"
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
     receiver.clip.eval()
     for p in receiver.clip.parameters():
@@ -308,7 +313,7 @@ def build_game(opts, config):
         num_hard_negatives=opts.num_hard_negatives,
     )
 
-    if config["lora"]:
+    if config['mllm']=="clipcap" and config["lora"]:
 
         # original_weights = {}
         # for name, param in sender.clipcap.gpt.transformer.named_parameters():

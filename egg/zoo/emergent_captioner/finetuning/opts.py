@@ -81,7 +81,7 @@ def get_game_opts(parser):
     )
     group.add_argument(
         "--recv_clip_model",
-        choices=["ViT-B/16", "ViT-B/32"],
+        choices=["ViT-B/16", "ViT-B/32","ViT-L/14@336px"],
         default="ViT-B/32",
     )
     group.add_argument(

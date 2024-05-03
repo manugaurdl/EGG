@@ -80,9 +80,10 @@ def main(params, config):
     #train
     train_loaders = {level : get_loader(wrapper, level, data_kwargs) for level in config["neg_mining"]["curricullum"].keys()}
     #val
-    val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
-    # val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True, level = config['neg_mining']['val_level'],  **data_kwargs)
-    val_loader_neg = None
+    # val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
+    val_loader_rand = None
+    val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True, level = config['neg_mining']['val_level'],  **data_kwargs)
+    # val_loader_neg = None
 
     #test
     data_kwargs["batch_size"] = config["inference"]["batch_size"]

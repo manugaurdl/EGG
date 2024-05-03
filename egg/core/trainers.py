@@ -330,18 +330,19 @@ class Trainer:
             self.log(test_log, interaction, metric, None, None, config = config, inference = inference)
         
         else:
-            rand_log, rand_interaction, metric = self.run_validation(self.val_loader_rand, epoch, config, inference)
+            if self.val_loader_rand is not None:
+                rand_log, rand_interaction, metric = self.run_validation(self.val_loader_rand, epoch, config, inference)
             if self.val_loader_neg is not None:
-                neg_log, neg_interaction, neg_metric = self.run_validation(self.val_loader_neg, epoch, config, inference)
+                neg_log, neg_interaction, metric = self.run_validation(self.val_loader_neg, epoch, config, inference)
 
             if WANDB:
                 self.log(rand_log, rand_interaction, metric, epoch, "rand", config = config)
                 
                 if self.val_loader_neg is not None:
-                    self.log(neg_log, neg_interaction, neg_metric, epoch, "neg", config = config)
+                    self.log(neg_log, neg_interaction, metric, epoch, "neg", config = config)
             
             if self.SAVE_USING_NEG and self.val_loader_neg is not None:
-                return neg_metric
+                return metric
 
         torch.cuda.empty_cache()
         return metric
