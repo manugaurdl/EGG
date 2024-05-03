@@ -15,6 +15,7 @@ from egg.zoo.emergent_captioner.dataloaders import (
     FlickrWrapper,
     get_transform,
 )
+
 from egg.zoo.emergent_captioner.finetuning.game import build_game
 from egg.zoo.emergent_captioner.finetuning.opts import get_common_opts
 from egg.zoo.emergent_captioner.finetuning.utils import ModelSaver

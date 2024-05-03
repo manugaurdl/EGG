@@ -111,11 +111,12 @@ class MaybeDoubleTransform:
 
     def __call__(self, x):
         sender_image = self.sender_transform(x)
-        recv_image = sender_image
-        if self.recv_transform:
-            recv_image = self.recv_transform(x)
+        # recv_image = sender_image
+        # if self.recv_transform:
+        #     recv_image = self.recv_transform(x)
 
-        return [sender_image, recv_image]
+        # return [sender_image, recv_image]
+        return sender_image
 
 
 def get_transform(sender_image_size: int, recv_image_size: int = None):

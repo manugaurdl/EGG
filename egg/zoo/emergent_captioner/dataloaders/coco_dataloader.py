@@ -21,11 +21,11 @@ from egg.zoo.emergent_captioner.dataloaders.utils import MyDistributedSampler, V
 from torch.utils.data.distributed import DistributedSampler
 # from llava.mm_utils import process_images
 from transformers import CLIPImageProcessor
-from torchvision import transforms
 
-TRANSFORM = transforms.Compose([
-    transforms.ToTensor()
-])
+# from torchvision import transforms
+# TRANSFORM = transforms.Compose([
+#     transforms.ToTensor()
+# ])
 
 def open_pickle(path: str):
     with open(path, "rb") as f:
@@ -194,12 +194,16 @@ class CocoNegDataset:
                 bag_of_caps.append(captions[:self.caps_per_img])
             # sender_input = torch.stack(sender_inputs)
         
+
+        #if scorer = CLIP ViT-L : Just pass cocoid. Llava will preproc image. Feed that preproc_img to receiver.
+        #if scorer = CLIP ViT-B : PIL image fed to LLAVA_preproc and CLIP_ViTB_transform separately.
+        
         elif self.mllm =="llava-phi":
             for cocoid in bag:
                 sample_idx = self.cocoid2samples_idx[cocoid]
                 file_path, captions, image_id = self.samples[sample_idx]
                 assert image_id == cocoid
-                sender_inputs = None
+                sender_inputs = None  
                 cocoids.append(cocoid)
                 bag_of_caps.append(captions[:self.caps_per_img])
 

@@ -1,3 +1,4 @@
+import time
 from typing import Callable
 import wandb
 import torch
@@ -13,6 +14,9 @@ from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
 from egg.zoo.emergent_captioner.finetuning.lora import LoRA
 import pickle
 import clip
+from egg.zoo.emergent_captioner.dataloaders import get_transform
+
+transform = get_transform(224, None)
 
 class ReinforceCaptionGame(nn.Module):
     def __init__(
@@ -148,6 +152,10 @@ class ReinforceCaptionGame(nn.Module):
                     captions, log_prob, kl_div, receiver_input = self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
 
                 with torch.no_grad():
+
+                    if not isinstance(receiver_input, torch.Tensor):
+                        receiver_input = torch.stack([transform(recv_inp) for recv_inp in receiver_input]).to(next(iter(self.receiver.parameters())))
+
                     text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
                     sr_loss, aux_info_disc_loss = self.loss(text_feats, img_feats, self.training, True,  aux_input)
                     aux_info.update(aux_info_disc_loss)
@@ -294,7 +302,7 @@ def build_game(opts, config):
     else:
         raise RuntimeError("selected unsupported MLLM in config")
 
-    assert opts.recv_clip_model =="ViT-L/14@336px"
+    # assert opts.recv_clip_model =="ViT-L/14@336px"
     receiver = ClipReceiver(clip_model=opts.recv_clip_model)
     receiver.clip.eval()
     for p in receiver.clip.parameters():

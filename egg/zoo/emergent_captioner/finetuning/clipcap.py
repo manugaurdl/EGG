@@ -776,6 +776,7 @@ class LLavaPhi(nn.Module):
 
         assert max_len < 75  # clip maximum context size
 
+        self.recv_clip_model = config['opts']['recv_clip_model']
         #Llava-phi args -----------------
         model_id = "xtuner/llava-phi-3-mini-hf"
         self.temperature = 0.3
@@ -835,6 +836,8 @@ class LLavaPhi(nn.Module):
         context = autocast(enabled=True, dtype=torch.bfloat16) if use_fp16 else nullcontext()
 
         with context:
+
+
             images = [Image.open(cocoid2img(cocoid)).convert("RGB") for cocoid in aux_input['cocoid']]
             inputs = self.processor([self.prompt]*len(images), images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
             # s = time.time()
@@ -939,12 +942,11 @@ class LLavaPhi(nn.Module):
             mask = (extra_tokens == 0).float()
 
             # get logprob for each sampled token for all captions
-            try:
-                log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
-                log_probs *= mask # everything after "." is zeroed
-                log_probs = log_probs.sum(1) / msg_lengths #averaged
-            except:
-                breakpoint()
+
+
+            log_probs = torch.gather(logits, dim=2, index=indices.unsqueeze(2)).squeeze(-1) # (B, 10) : log prob for each sampled policy word
+            log_probs *= mask # everything after "." is zeroed
+            log_probs = log_probs.sum(1) / msg_lengths #averaged
             decoded_captions = self.tokenizer.batch_decode(
                 indices,
                 skip_special_tokens=True,
@@ -953,8 +955,13 @@ class LLavaPhi(nn.Module):
             decoded_captions = [_.strip() for _ in decoded_captions]
             # print(decoded_captions[10:20])
             # print(f"time elapsed generating : {time.time() - s}")
-
-        return decoded_captions, log_probs, torch.randn(1), inputs['pixel_values']
+        
+        if self.recv_clip_model=="ViT-L/14@336px":
+            receiver_input = inputs['pixel_values']
+        else:
+            receiver_input = images
+        
+        return decoded_captions, log_probs, torch.randn(1), receiver_input
 
     def repeat_tensors(self, n, x):
         """
@@ -968,4 +975,5 @@ class LLavaPhi(nn.Module):
         elif type(x) is list or type(x) is tuple:
             x = [repeat_tensors(n, _) for _ in x]
         return x
+
 

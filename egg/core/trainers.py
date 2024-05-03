@@ -1,4 +1,5 @@
 # Global vars
+import time
 import os
 import wandb
 import pathlib
@@ -324,7 +325,7 @@ class Trainer:
 
 
     def rand_neg_val(self, epoch : int, WANDB : bool,  config : dict, inference : bool = False):
-
+        
         if inference:
             test_log, interaction, metric = self.run_validation(self.inference_loader, epoch, config, inference)
             self.log(test_log, interaction, metric, None, None, config = config, inference = inference)
@@ -451,6 +452,7 @@ class Trainer:
         self.optimizer.zero_grad()
 
         for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
+
             # batch.append(GREEDY_BASELINE)
             if self.debug and batch_id == 10:
                 break
@@ -461,7 +463,6 @@ class Trainer:
             # context = autocast() if self.scaler else nullcontext()
             # with context:
             optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method, contrastive = config['contrastive'], reinforce = config["reinforce"])
-                    
             #not accumulating gradients currently
             if self.update_freq > 1:
                 # throughout EGG, we minimize _mean_ loss, not sum
@@ -552,6 +553,7 @@ class Trainer:
                     
             #     if SAVE_BEST_METRIC:
             #         self.best_metric_score = metric
+
 
         mean_loss /= n_batches
         full_interaction = Interaction.from_iterable(interactions)
