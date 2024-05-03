@@ -57,7 +57,7 @@ class CocoDataset:
             return 40
         else:
             if self.split=="val":
-                return 500
+                return 250
             return len(self.samples)
     
     def pad(self,tokens):
@@ -120,8 +120,8 @@ class CocoDataset:
 
         elif self.mllm=="llava-phi":
             _ , recv_input = self.transform(image)
-            image = image.resize((640,480))
-            sender_input = TRANSFORM(image)
+            # image = image.resize((640,480))
+            # sender_input = TRANSFORM(image)
 
         ## Lazy loading
         # sender_input = torch.load(os.path.join(self.lazy_feat_dir, f"{image_id}.pt"), map_location="cpu")#.float()
@@ -137,8 +137,10 @@ class CocoDataset:
             aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:self.caps_per_img], "tokens": padded_tokens, "mask" : mask}
         else:
             aux = {"cocoid": torch.tensor([image_id]), "captions": captions[:self.caps_per_img]}
- 
-    
+
+        if self.mllm=='llava-phi':
+            sender_input = recv_input
+
         return sender_input, torch.tensor(image_id), recv_input, aux
 
 class CocoNegDataset:

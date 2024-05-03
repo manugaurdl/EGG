@@ -76,11 +76,11 @@ def LoRA(model,  rank, model_type, config):
                 parameterize(model.model.language_model.model.layers[i].mlp.gate_proj, "weight", rank)
                 parameterize(model.model.language_model.model.layers[i].mlp.up_proj, "weight", rank)
                 parameterize(model.model.language_model.model.layers[i].mlp.down_proj, "weight", rank)
-                parameterize(model.model.language_model.lm_head, "weight", rank)
+                # parameterize(model.model.language_model.lm_head, "weight", rank)
 
 
             for name, param in model.named_parameters():
-                if 'lora' in name: 
+                if 'lora' in name:
                     continue
                 else:
                     param.requires_grad = False

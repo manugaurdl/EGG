@@ -259,7 +259,7 @@ class Trainer:
         metric decides how you save model. If clip_ft : save model with highest mmvp.
         """
         if loss_type == 'discriminative':
-            if config['finetune_model'] == "gpt":
+            if config['finetune_model'] == "llm":
                 metric =  interaction.aux['acc'].mean().item()
             elif config['finetune_model']=="clip":
                 metric = interaction.aux['mmvp_avg']
@@ -432,7 +432,7 @@ class Trainer:
         
         self.game.train()
         if config['mllm']=="clipcap":
-            if config["finetune_model"]=="gpt":
+            if config["finetune_model"]=="llm":
                 self.game.sender.clip.eval()
             else:
                 self.game.sender.clip.train()
@@ -441,7 +441,7 @@ class Trainer:
         elif config['mllm']=="llava-phi":
             #temp : to make llava phi work
             self.game.sender.model.vision_tower.eval()
-            self.game.sender.model.language_model.eval()
+            # self.game.sender.model.language_model.eval()
             ########
         elif config['mllm']=="llava":
             pass
@@ -473,7 +473,7 @@ class Trainer:
             else:
                 optimized_loss.backward()
                 # nn.utils.clip_grad_norm_(self.game.sender.model.multi_modal_projector.parameters(), 1.0)
-                print(f'----> {torch.norm(self.game.sender.model.language_model.lm_head.weight.grad)}')
+                # print(f'----> {torch.norm(self.game.sender.model.language_model.lm_head.weight.grad)}')
                 # print(f'----> {torch.norm(self.game.sender.model.multi_modal_projector.linear_1.weight.grad)}')
                 # print(f'----> {self.game.sender.model.multi_modal_projector.linear_1.weight.grad}')
                 # print(f'----> {self.game.sender.model.multi_modal_projector.linear_2.weight.grad}')
@@ -537,7 +537,7 @@ class Trainer:
             if self.optimizer_scheduler:
                 self.optimizer_scheduler.step()
 
-            if batch_id == 10: 
+            if batch_id == 360: 
                 metric = self.rand_neg_val(epoch + 1, WANDB, config = config,  inference=False)
             # Saving model
             # if (self.SAVE_BEST_METRIC and metric > self.best_metric_score) or (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0): 
@@ -576,7 +576,7 @@ class Trainer:
 
 
         print(f"Total trainable params : {trainable_params(self.game.sender)}")
-        # count_trainable_parameters(self.game.sender)
+        count_trainable_parameters(self.game.sender)
         n_epochs = config['opts']['n_epochs']
         WANDB = config['WANDB']['logging']
         if self.distributed_context.is_distributed:

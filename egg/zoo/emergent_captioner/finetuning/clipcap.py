@@ -41,7 +41,18 @@ from transformers import (AutoTokenizer, BitsAndBytesConfig, StoppingCriteria,
 import time
 from torch.cuda.amp import autocast
 from contextlib import nullcontext
+from peft import (
+        get_peft_model, 
+        prepare_model_for_kbit_training, 
+        LoraConfig
+    )
+from PIL import Image
 
+def cocoid2img(cocoid):
+    img_path = f"/home/manugaur/coco/train2014/COCO_train2014_{int(cocoid):012d}.jpg"
+    if not os.path.isfile(img_path):
+        img_path = f"/home/manugaur/coco/val2014/COCO_val2014_{int(cocoid):012d}.jpg"
+    return img_path
 
 class MLP(nn.Module):
     def __init__(self, sizes: Tuple[int, ...], bias=True, act=nn.Tanh):
@@ -730,6 +741,28 @@ class LLavaSender(nn.Module):
 
 
 class LLavaPhi(nn.Module):
+
+
+    def find_all_linear_names(self, model):
+        cls = torch.nn.Linear
+        lora_module_names = set()
+        multimodal_keywords = ["vision_tower"]# "multi_modal_projector", "language_model"
+        for name, module in model.named_modules():
+            if any(mm_keyword in name for mm_keyword in multimodal_keywords):
+                continue
+            if isinstance(module, cls):
+                # names = name.split('.')
+                # lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+                lora_module_names.add(name)
+
+
+        if 'lm_head' in lora_module_names: # needed for 16-bit
+            lora_module_names.remove('lm_head')
+        # for name, module in model.named_modules():
+        #     if "lm_head" in name:
+        #         lora_module_names.add(name)
+        return list(lora_module_names)
+
     def __init__(
         self,
         train_method : str,
@@ -744,7 +777,7 @@ class LLavaPhi(nn.Module):
 
         #Llava-phi args -----------------
         model_id = "xtuner/llava-phi-3-mini-hf"
-        self.temperature = 0.3
+        self.temperature = 0.5
         self.top_p=None
         self.num_beams=1
         self.max_new_tokens= 64
@@ -759,8 +792,27 @@ class LLavaPhi(nn.Module):
             ).to("cuda")
 
         self.processor = AutoProcessor.from_pretrained(model_id)
-        self.prompt = "<|user|>\n<image>\nDescribe the image<|end|>\n<|assistant|>\n"
+        self.prompt = "<|user|>\n<image>\nDescribe the image briefly in 1 sentence.<|end|>\n<|assistant|>\n"
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+#       #HF lora :c
+        lin_layers = self.find_all_linear_names(self.model)
+        
+        last_llm_layers = []
+        for l in lin_layers:
+            if ("language_model.model.layers.27" in l) or ("language_model.model.layers.28" in l) or ("language_model.model.layers.29" in l) or ("language_model.model.layers.30" in l) or ("language_model.model.layers.31" in l):
+                last_llm_layers.append(l)
+        
+        lora_config = LoraConfig(
+        r=8,
+        lora_alpha=16,
+        # lora_dropout=0.1,
+        target_modules= last_llm_layers,
+        bias="none",
+        # task_type="CAUSAL_LM",
+    )
+        self.model = get_peft_model(self.model, lora_config)
+        # self.model = self.model.merge_and_unload()
 
 
 #---------------------------------------------------------------------------------------------------------------------------
@@ -771,7 +823,8 @@ class LLavaPhi(nn.Module):
         context = autocast(enabled=True, dtype=torch.bfloat16) if use_fp16 else nullcontext()
 
         with context:
-            inputs = self.processor([self.prompt]*images.shape[0], images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
+            images = [Image.open(cocoid2img(cocoid)).convert("RGB") for cocoid in aux_input['cocoid']]
+            inputs = self.processor([self.prompt]*len(images), images=images, return_tensors="pt", padding=True).to("cuda", dtype=torch.float16)
             s = time.time()
             # with torch.inference_mode():
             #     gen_dict = self.model.generate(
@@ -886,6 +939,7 @@ class LLavaPhi(nn.Module):
                 clean_up_tokenization_spaces=True,
             )
             decoded_captions = [_.strip() for _ in decoded_captions]
+            print(decoded_captions[10:20])
             print(f"time elapsed generating : {time.time() - s}")
 
         return decoded_captions, log_probs, torch.randn(1)
