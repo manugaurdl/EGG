@@ -779,11 +779,11 @@ class LLavaPhi(nn.Module):
         self.recv_clip_model = config['opts']['recv_clip_model']
         #Llava-phi args -----------------
         model_id = "xtuner/llava-phi-3-mini-hf"
-        self.temperature = 0.3
+        self.temperature = config['temp']
         self.top_p=None
         self.num_beams=1
-        self.max_new_tokens= 64
-
+        self.max_new_tokens= config['max_new_tokens']
+        self.lora_rank= config["lora_rank"]
         #--------------------
         # disable_torch_init()
         
@@ -817,7 +817,7 @@ class LLavaPhi(nn.Module):
                 last_llm_layers.append(l)
         
         lora_config = LoraConfig(
-        r=8,
+        r=self.lora_rank,
         lora_alpha=16,
         # lora_dropout=0.1,
         target_modules= last_llm_layers,

@@ -169,7 +169,7 @@ class CocoNegDataset:
             return 400
         else:
             if self.split=='val':
-                return 50
+                return 100
             return len(self.bags)
 
 

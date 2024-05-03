@@ -334,13 +334,13 @@ class Trainer:
             if self.val_loader_rand is not None:
                 rand_log, rand_interaction, metric = self.run_validation(self.val_loader_rand, epoch, config, inference)
             if self.val_loader_neg is not None:
-                neg_log, neg_interaction, metric = self.run_validation(self.val_loader_neg, epoch, config, inference)
+                rand_log, rand_interaction, metric = self.run_validation(self.val_loader_neg, epoch, config, inference)
 
             if WANDB:
                 self.log(rand_log, rand_interaction, metric, epoch, "rand", config = config)
                 
                 if self.val_loader_neg is not None:
-                    self.log(neg_log, neg_interaction, metric, epoch, "neg", config = config)
+                    self.log(rand_log, rand_interaction, metric, epoch, "neg", config = config)
             
             if self.SAVE_USING_NEG and self.val_loader_neg is not None:
                 return metric
@@ -539,7 +539,7 @@ class Trainer:
             if self.optimizer_scheduler:
                 self.optimizer_scheduler.step()
 
-            if batch_id == 360: 
+            if batch_id == config["iters_per_eval"]: 
                 metric = self.rand_neg_val(epoch + 1, WANDB, config = config,  inference=False)
             # Saving model
             # if (self.SAVE_BEST_METRIC and metric > self.best_metric_score) or (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0): 
