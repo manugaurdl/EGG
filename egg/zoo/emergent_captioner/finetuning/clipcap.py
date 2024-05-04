@@ -50,9 +50,16 @@ from peft import (
 from PIL import Image
 
 def cocoid2img(cocoid):
-    img_path = f"/home/manugaur/coco/train2014/COCO_train2014_{int(cocoid):012d}.jpg"
-    if not os.path.isfile(img_path):
-        img_path = f"/home/manugaur/coco/val2014/COCO_val2014_{int(cocoid):012d}.jpg"
+
+    if os.path.isdir("/home/manugaur"):
+        img_path = f"/home/manugaur/coco/train2014/COCO_train2014_{int(cocoid):012d}.jpg"
+        if not os.path.isfile(img_path):
+            img_path = f"/home/manugaur/coco/val2014/COCO_val2014_{int(cocoid):012d}.jpg"
+    else:
+        img_path = f"/home/ubuntu/pranav/pick_edit/coco/train2014/COCO_train2014_{int(cocoid):012d}.jpg"
+        if not os.path.isfile(img_path):
+            img_path = f"/home/ubuntu/pranav/pick_edit/coco//val2014/COCO_val2014_{int(cocoid):012d}.jpg"
+        
     return img_path
 
 class MLP(nn.Module):
@@ -756,9 +763,11 @@ class LLavaPhi(nn.Module):
                 # lora_module_names.add(names[0] if len(names) == 1 else names[-1])
                 lora_module_names.add(name)
 
-
-        if 'lm_head' in lora_module_names: # needed for 16-bit
-            lora_module_names.remove('lm_head')
+        # if lm_head:
+        #     continue
+        # else:
+        #     if 'lm_head' in lora_module_names: # needed for 16-bit
+        #         lora_module_names.remove('lm_head')
         # for name, module in model.named_modules():
         #     if "lm_head" in name:
         #         lora_module_names.add(name)
@@ -784,6 +793,8 @@ class LLavaPhi(nn.Module):
         self.num_beams=1
         self.max_new_tokens= config['max_new_tokens']
         self.lora_rank= config["lora_rank"]
+        self.n_layers = config['n_layers']
+        self.lm_head = config['lm_head']
         #--------------------
         # disable_torch_init()
         
@@ -809,12 +820,19 @@ class LLavaPhi(nn.Module):
 
 #       #PEFT lora
         
-        lin_layers = self.find_all_linear_names(self.model) #got all LLM layers
+        lin_layers = self.find_all_linear_names(self.model, self.lm_head) #got all LLM layers
         
         last_llm_layers = []
         for l in lin_layers:
-            if ("language_model.model.layers.27" in l) or ("language_model.model.layers.28" in l) or ("language_model.model.layers.29" in l) or ("language_model.model.layers.30" in l) or ("language_model.model.layers.31" in l):
-                last_llm_layers.append(l)
+            if self.n_layers == 9 and not self.lm_head::
+                if ("language_model.model.layers.27" in l) or ("language_model.model.layers.28" in l) or ("language_model.model.layers.29" in l) or ("language_model.model.layers.30" in l) or ("language_model.model.layers.31" in l):
+                    last_llm_layers.append(l)
+            elif self.lm_head:
+                if ("language_model.model.layers.27" in l) or ("language_model.model.layers.28" in l) or ("language_model.model.layers.29" in l) or ("language_model.model.layers.30" in l) or ("language_model.model.layers.31" in l) or ("lm_head" in l):
+                    last_llm_layers.append(l)
+            else:
+                if ("language_model.model.layers.27" in l) or ("language_model.model.layers.28" in l) or ("language_model.model.layers.29" in l) or ("language_model.model.layers.30" in l) or ("language_model.model.layers.31" in l):
+                    last_llm_layers.append(l)
         
         lora_config = LoraConfig(
         r=self.lora_rank,
@@ -913,10 +931,10 @@ class LLavaPhi(nn.Module):
             #image_feats : (B, 576,D)
             #prompt feats : (B,11,D)
             #cat feats : (B, 586, D)
-            
             inputs_embeds, attention_mask, labels, position_ids = self.model._merge_input_ids_with_image_features(
                 image_features, inputs_embeds, inputs['input_ids'], attention_mask, labels
             )
+
             prefix_len = inputs_embeds.shape[1] # text + img promp
 
             # get embeds of generated tokens 

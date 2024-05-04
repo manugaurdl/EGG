@@ -158,15 +158,26 @@ def process_config(config, use_ddp, sys_args):
     /home/manugaur —> /ssd_scratch/cvit/manu
     """
     ssd_scratch = "/ssd_scratch/cvit/manu"
-    jatayu  = os.path.isdir("/home/manugaur")
-    if not jatayu:
+    # jatayu  = os.path.isdir("/home/manugaur")
+    is_ada = os.path.isdir(ssd_scratch)
+    a100_dir = "/home/ubuntu/pranav/pick_edit"
+    # import ipdb;ipdb.set_trace()
+    if is_ada:
         config['opts']['dataset_dir'] = os.path.join(ssd_scratch, config['opts']['dataset_dir'].split("manugaur/")[-1])
         config['opts']['mle_model_path'] = os.path.join(ssd_scratch, config['opts']['mle_model_path'].split("manugaur/")[-1])
         config['opts']['checkpoint_dir'] = os.path.join(ssd_scratch,config['opts']['checkpoint_dir'].split("manugaur/")[-1])
         config["official_clipcap_weights"] = os.path.join(ssd_scratch, config["official_clipcap_weights"].split("manugaur/")[-1])
         config["inference"]["output_dir"] = os.path.join(ssd_scratch, config["inference"]["output_dir"].split("manugaur/")[-1])
-        config['opts']['jatayu'] = jatayu
-
+        config['opts']['jatayu'] = not is_ada
+    elif os.path.isdir(a100_dir):
+        config['opts']['dataset_dir'] = os.path.join(a100_dir, config['opts']['dataset_dir'].split("manugaur/")[-1])
+        try:
+            config['opts']['mle_model_path'] = os.path.join(a100_dir, config['opts']['mle_model_path'].split("manugaur/")[-1])
+        except:
+            pass    
+        config['opts']['checkpoint_dir'] = os.path.join(a100_dir,config['opts']['checkpoint_dir'].split("manugaur/")[-1])
+        config["official_clipcap_weights"] = os.path.join(a100_dir, config["official_clipcap_weights"].split("manugaur/")[-1])
+        config["inference"]["output_dir"] = os.path.join(a100_dir, config["inference"]["output_dir"].split("manugaur/")[-1])
     if use_ddp:
         config["num_workers"] = 0
 

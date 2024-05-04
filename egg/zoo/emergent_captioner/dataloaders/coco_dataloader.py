@@ -262,7 +262,9 @@ class CocoWrapper:
     def load_bags(self, jatayu, neg_train):
         if jatayu:
             # path2bags = "/home/manugaur/EGG/hard_negs/bags/top_k_sim/"  
-            path2bags = "/home/manugaur/EGG/hard_negs/bags/diff_levels/"  
+            path2bags = "/home/manugaur/EGG/hard_negs/bags/diff_levels/"
+        elif os.path.isdir("/home/ubuntu/pranav/pick_edit"):
+            path2bags = "/home/ubuntu/pranav/pick_edit/EGG/hard_negs/bags/diff_levels/"
         else:
             path2bags = "/ssd_scratch/cvit/manu/EGG/hard_negs/bags/top_k_sim/"
 
@@ -320,6 +322,8 @@ class CocoWrapper:
     def _load_splits(self, jatayu):
         if jatayu:
             path2ann = "/home/manugaur/img_cap_self_retrieval/data/annotations/dataset_coco.json"
+        elif os.path.isdir("/home/ubuntu/pranav/pick_edit"):
+            path2ann = "/home/ubuntu/pranav/pick_edit/img_cap_self_retrieval/annotations/dataset_coco.json"
         else:
             path2ann = "/ssd_scratch/cvit/manu/img_cap_self_retrieval_clip/annotations/dataset_coco.json"
 

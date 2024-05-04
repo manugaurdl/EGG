@@ -33,7 +33,11 @@ class ValSampler(Sampler):
             indices = list(range(self.ds_len))
             random.shuffle(indices)
         else:
-            path = f"/home/manugaur/EGG/data/{self.ds_len}.json"
+            if os.path.isdir("/home/ubuntu/pranav"):
+                path = f"/home/ubuntu/pranav/pick_edit/EGG/data/{self.ds_len}.json" 
+            else:
+                path  = f"/home/manugaur/EGG/data/{self.ds_len}.json"
+
             if not os.path.isfile(path):
                 
                 l = list(range(self.ds_len))
@@ -41,7 +45,6 @@ class ValSampler(Sampler):
                 
                 with open(path, "w") as f:
                     json.dump(l, f)
-            
             with open(path, "r") as f:
                 indices = json.load(f)
                 
