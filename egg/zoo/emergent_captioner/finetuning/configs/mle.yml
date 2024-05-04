@@ -1,0 +1,50 @@
+DEBUG : False
+INIT_VAL : True
+GREEDY_BASELINE : True
+SAVE_BEST_METRIC : False # to save nothing : = False and checkpoint_freq = 0
+ONLY_INFERENCE : False
+ONLY_VAL : False
+
+captions_type : "mistral_4" #coco, (mistral, mistral_4), blip_holistic
+train_method : "mle" # (discriminative, cider, mle)
+prefix_len : 10
+warmup_ratio : 0.034
+official_clipcap_weights : /home/manugaur/official_clipcap/coco_weights.pt
+num_workers : 16
+CAPS_PER_IMG_train: 1  # tokenisation
+CAPS_PER_IMG_val: 4  # NLG eval
+fp16: False
+
+lora : False
+lora_rank : 32
+
+neg_mining:
+  do : False
+  bag_size : 10
+  val : False
+
+opts: 
+  baseline : mean
+  n_epochs : 10
+  batch_size : 40 #10 for ada
+  lr :  2e-5
+  max_len : 50
+  checkpoint_freq : 0
+  num_workers : 16
+  dataset_dir : /home/manugaur/coco
+  checkpoint_dir : /home/manugaur/EGG/checkpoints/mistral_4/mle_1cap
+    
+WANDB :
+  logging : False
+  sweep : False
+  sweep_id: ""
+  sweep_run_count : 100
+  entity : "manugaur"
+  project : "emergent_captioner"
+  run_name : "1_train_cap" #suffix to "sr_{data}_"
+ 
+inference : 
+  batch_size : 40
+  output_dir : /home/manugaur/EGG/inference_preds/
+
+#DEBUG,INIT_VAL, logging, batch_size

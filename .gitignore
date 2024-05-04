@@ -1,5 +1,5 @@
 # Byte-compiled / optimized / DLL file
-egg/zoo/emergent_captioner/finetuning/configs/
+#egg/zoo/emergent_captioner/finetuning/configs/
 hard_negs/
 inference_log/
 sender_inputs/
