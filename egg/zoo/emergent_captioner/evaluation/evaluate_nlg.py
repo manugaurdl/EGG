@@ -20,7 +20,7 @@ def read_plaintext_file(file):
     return data
 
 
-def compute_nlg_metrics(predictions, gold_standard, only_cider = False):
+def compute_nlg_metrics(predictions, gold_standard, only_cider = False, spice = True):
     tokenizer = PTBTokenizer()
 
     predictions = tokenizer.tokenize(predictions)
@@ -37,8 +37,9 @@ def compute_nlg_metrics(predictions, gold_standard, only_cider = False):
             (Meteor(), "METEOR"),
             (Rouge(), "ROUGE_L"),
             (Cider(), "CIDEr"),
-            (Spice(), "SPICE"),
         ]
+        if spice:
+            scorers.append((Spice(), "SPICE"))
 
     summary = {}
     for scorer, method in scorers:

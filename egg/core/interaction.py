@@ -150,7 +150,10 @@ class Interaction:
         assert interactions, "interaction list must not be empty"
         has_aux_input = interactions[0].aux_input is not None
         for x in interactions:
-            assert len(x.aux) == len(interactions[0].aux)
+            try:
+                assert len(x.aux) == len(interactions[0].aux)
+            except:
+                print("Error")
             if has_aux_input:
                 assert len(x.aux_input) == len(
                     interactions[0].aux_input

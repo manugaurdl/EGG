@@ -415,7 +415,7 @@ class Trainer:
             for j, pred in enumerate(batch):
                 predictions[(i*bsz) + j] = [{"caption" :pred}]
         
-        summary = compute_nlg_metrics(predictions, gold_standard) # score for each idx stored in summary except bleu
+        summary = compute_nlg_metrics(predictions, gold_standard, spice = config["log_spice"] ) # score for each idx stored in summary except bleu
 
 
         # MMVP eval
@@ -539,7 +539,7 @@ class Trainer:
             if self.optimizer_scheduler:
                 self.optimizer_scheduler.step()
 
-            if batch_id == config["iters_per_eval"]: 
+            if batch_id % config["iters_per_eval"] == 0 and batch_id != 0: 
                 metric = self.rand_neg_val(epoch + 1, WANDB, config = config,  inference=False)
             # Saving model
             # if (self.SAVE_BEST_METRIC and metric > self.best_metric_score) or (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0): 
