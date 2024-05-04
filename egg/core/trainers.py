@@ -237,11 +237,14 @@ class Trainer:
         val_log = { "Val Loss" : loss,
                     "Val Reward" : reward,
                     "CIDEr" : summary["CIDEr"],
-                    "SPICE" : summary["SPICE"],
                     "Bleu_4" : summary["Bleu_4"],
                     'METEOR': summary["METEOR"],
                     "ROUGE_L" : summary['ROUGE_L'],
                     }
+
+        if config['log_spice']:
+            val_log["SPICE"] = summary["SPICE"]
+
         if config["finetune_model"] == "clip":
             val_log["mmvp_avg"] = interaction.aux['mmvp_avg']
             val_log["recall_5_clip_zs"] = interaction.aux['recall_5_clip_zs'].mean()

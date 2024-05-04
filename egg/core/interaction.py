@@ -153,7 +153,12 @@ class Interaction:
             try:
                 assert len(x.aux) == len(interactions[0].aux)
             except:
-                print("Error")
+                print("$$$$$"*100)
+                print("Error : aux has diff lenghts")
+                print(f'len x.aux ---> {len(x.aux)}')
+                print(f'len interactions[0].aux ---> {len(interactions[0].aux)}')
+                print(f"x.aux : \n \n  {x.aux}")
+                print(f"interactions[0].aux : \n \n  {interactions[0].aux}")
             if has_aux_input:
                 assert len(x.aux_input) == len(
                     interactions[0].aux_input
