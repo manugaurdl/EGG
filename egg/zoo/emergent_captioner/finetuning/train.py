@@ -36,6 +36,7 @@ np.random.seed(seed)
 
 # "MASTER_ADDR", "MASTER_PORT", "WORLD_SIZE", "RANK", "LOCAL_RANK"
 # os.environ["CUDA_VISIBLE_DEVICES"] = str((0))
+os.environ["WANDB_API_KEY"] = "b389b1a0f740ce1efcfd09b332fd3a83ef6130fe"
 
 def get_loader(wrapper, level, data_kwargs):
         if level == "rand":

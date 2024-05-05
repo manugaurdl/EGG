@@ -40,7 +40,7 @@ freeze_adapter : False
 
 neg_mining:
   curricullum : {"medium" : 2, "hard" : 4} # "easy" : 3, "medium": 7, "hard" : 20} #indexed from 1 {"medium" : 3, "hard" : 10}
-  bag_size : 4 
+  bag_size : 5
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
   val_level : "hard"
@@ -48,7 +48,7 @@ neg_mining:
 opts: 
   baseline : mean
   n_epochs : 4
-  batch_size : 32
+  batch_size : 25
   lr : 5e-8 #2e-5
   max_len : 50
   checkpoint_freq : 0
@@ -58,13 +58,13 @@ opts:
   checkpoint_dir : /home/manugaur/EGG/checkpoints/blip2mistral/sr
   recv_clip_model : ViT-L/14@336px #ViT-B/32
 WANDB:
-  logging : False
+  logging : True
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  llava_lora_5_layers_r8_temp0.3_M2H4_bsz4 #suffix to "sr_{data}_"
+  run_name :  llava_lora_5_layers_r8_temp0.3_M2H4_bsz5 #suffix to "sr_{data}_"
   log_mmvp_all : True
 
 inference : 

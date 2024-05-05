@@ -96,7 +96,7 @@ class ModelSaver(Callback):
         # cleaning a model such that it has default settings e.g. no buffer and no modules/tensors in the loss
         # this is done to avoid mandatory fields when loading a model e.g. a tensor of negatives
         self.trainer.game.loss.remove_fields_negatives()
-        self.trainer.game.sender.unpatch_model()
+        # self.trainer.game.sender.unpatch_model()
         
         return MyCheckpoint(
             epoch=self.epoch,
@@ -123,14 +123,19 @@ class ModelSaver(Callback):
                 if SAVE_BEST_METRIC:
                     model_name = f"best.pt"
                 
+                x = self.get_checkpoint()[1]
+                for name in list(x.keys()):
+                    if 'lora' not in name:
+                        x.pop(name)
+
                 torch.save(
-                    self.get_checkpoint(),
+                    x,
                     self.trainer.checkpoint_path / model_name,
                 )
                 # if self.is_ddp:
                 #     self.trainer.game.module.sender.patch_model()
                 # else:                    
-                self.trainer.game.sender.patch_model()
+                # self.trainer.game.sender.patch_model()
 
     def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC: bool):
         self.epoch = epoch
@@ -192,7 +197,7 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        config["SAVE_BEST_METRIC"] = False
+        # config["SAVE_BEST_METRIC"] = False
         config["WANDB"]["logging"] = False
         config["opts"]["checkpoint_freq"] = 0
     return config

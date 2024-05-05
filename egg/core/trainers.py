@@ -542,7 +542,8 @@ class Trainer:
             if self.optimizer_scheduler:
                 self.optimizer_scheduler.step()
 
-            if batch_id % config["iters_per_eval"] == 0 and batch_id != 0: 
+            if batch_id % config["iters_per_eval"] == 0 and batch_id != 0:
+                torch.cuda.empty_cache()
                 metric = self.rand_neg_val(epoch + 1, WANDB, config = config,  inference=False)
             # Saving model
             # if (self.SAVE_BEST_METRIC and metric > self.best_metric_score) or (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0): 
@@ -648,7 +649,7 @@ class Trainer:
                         """
                         callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], self.SAVE_BEST_METRIC)
                         
-                    if SAVE_BEST_METRIC:
+                    if self.SAVE_BEST_METRIC:
                         self.best_metric_score = metric
 
 

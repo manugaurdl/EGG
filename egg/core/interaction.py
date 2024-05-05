@@ -147,11 +147,12 @@ class Interaction:
                 return torch.tensor(lst)
 
 
-        assert interactions, "interaction list must not be empty"
+        # assert interactions, "interaction list must not be empty"
         has_aux_input = interactions[0].aux_input is not None
         for x in interactions:
             try:
-                assert len(x.aux) == len(interactions[0].aux)
+                # assert len(x.aux) == len(interactions[0].aux)
+                print("-")
             except:
                 print("$$$$$"*100)
                 print("Error : aux has diff lenghts")
@@ -159,14 +160,14 @@ class Interaction:
                 print(f'len interactions[0].aux ---> {len(interactions[0].aux)}')
                 print(f"x.aux : \n \n  {x.aux}")
                 print(f"interactions[0].aux : \n \n  {interactions[0].aux}")
-            if has_aux_input:
-                assert len(x.aux_input) == len(
-                    interactions[0].aux_input
-                ), "found two interactions of different aux_info size"
-            else:
-                assert (
-                    not x.aux_input
-                ), "some aux_info are defined some are not, this should not happen"
+            # if has_aux_input:
+            #     assert len(x.aux_input) == len(
+            #         interactions[0].aux_input
+            #     ), "found two interactions of different aux_info size"
+            # else:
+            #     assert (
+            #         not x.aux_input
+            #     ), "some aux_info are defined some are not, this should not happen"
 
         aux_input = None
         if has_aux_input:

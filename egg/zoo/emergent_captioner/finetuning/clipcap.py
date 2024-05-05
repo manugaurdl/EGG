@@ -820,12 +820,12 @@ class LLavaPhi(nn.Module):
 
 #       #PEFT lora
         
-        lin_layers = self.find_all_linear_names(self.model, self.lm_head) #got all LLM layers
+        lin_layers = self.find_all_linear_names(self.model) #got all LLM layers
         
         last_llm_layers = []
         for l in lin_layers:
-            if self.n_layers == 9 and not self.lm_head::
-                if ("language_model.model.layers.27" in l) or ("language_model.model.layers.28" in l) or ("language_model.model.layers.29" in l) or ("language_model.model.layers.30" in l) or ("language_model.model.layers.31" in l):
+            if self.n_layers == 9 and not self.lm_head:
+                if ("language_model.model.layers.23" in l) or ("language_model.model.layers.24" in l) or ("language_model.model.layers.25" in l) or ("language_model.model.layers.26" in l) or ("language_model.model.layers.27" in l) or ("language_model.model.layers.28" in l) or ("language_model.model.layers.29" in l) or ("language_model.model.layers.30" in l) or ("language_model.model.layers.31" in l) or ("lm_head" in l):
                     last_llm_layers.append(l)
             elif self.lm_head:
                 if ("language_model.model.layers.27" in l) or ("language_model.model.layers.28" in l) or ("language_model.model.layers.29" in l) or ("language_model.model.layers.30" in l) or ("language_model.model.layers.31" in l) or ("lm_head" in l):
