@@ -37,7 +37,7 @@ freeze_wte : False
 freeze_adapter : False
 
 neg_mining:
-  curricullum : {"medium" : 2} # "easy" : 3, "medium": 7, "hard" : 20} #indexed from 1 {"medium" : 3, "hard" : 10}
+  curricullum : {"medium" : 4} # "easy" : 3, "medium": 7, "hard" : 20} #indexed from 1 {"medium" : 3, "hard" : 10}
   bag_size : 5 
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
@@ -45,7 +45,7 @@ neg_mining:
 
 opts: 
   baseline : mean
-  n_epochs : 2
+  n_epochs : 4
   batch_size : 35
   lr : 5e-8 #2e-5
   max_len : 50
