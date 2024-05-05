@@ -158,6 +158,15 @@ class ReinforceCaptionGame(nn.Module):
 
                     text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
                     sr_loss, aux_info_disc_loss = self.loss(text_feats, img_feats, self.training, True,  aux_input)
+                    
+                    aux_info_disc_loss['acc_5'] = aux_info_disc_loss['acc_5'].mean()
+                    aux_info_disc_loss['acc'] = aux_info_disc_loss['acc'].mean()
+                    if not self.training:
+                        aux_info_disc_loss['mean_rank'] = aux_info_disc_loss['mean_rank'].mean()
+                        aux_info_disc_loss['median_rank'] = aux_info_disc_loss['median_rank']
+                        aux_info_disc_loss['clip_s'] = aux_info_disc_loss['clip_s'].mean()
+
+                    
                     aux_info.update(aux_info_disc_loss)
                     #R@1 from GREEDY dist
                     if GREEDY_BASELINE:
@@ -183,7 +192,7 @@ class ReinforceCaptionGame(nn.Module):
                 reinforce_loss = (reward * log_prob).mean()
                 aux_info["reinforce"] = reinforce_loss.detach()
                 aux_info["kl_div"] = kl_div
-                aux_info["log_prob"] =  log_prob.detach()
+                aux_info["log_prob"] =  log_prob.detach().mean()
                 aux_info["batch_acc1"] = batch_acc1
                 reward = reward.mean().item()
             

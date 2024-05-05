@@ -10,7 +10,7 @@ from typing import List, Optional
 from prettytable import PrettyTable
 from tqdm import tqdm
 import torch.distributed as dist
-
+from collections import defaultdict
 try:
     # requires python >= 3.7
     from contextlib import nullcontext
@@ -264,10 +264,10 @@ class Trainer:
         """
         if loss_type == 'discriminative':
             if config['finetune_model'] == "llm":
-                metric =  interaction.aux['acc'].mean().item()
+                metric =  interaction['acc'].mean().item()
             elif config['finetune_model']=="clip":
-                metric = interaction.aux['mmvp_avg']
-            val_log["VAL_R@1"] = interaction.aux['acc'].mean().item()
+                metric = interaction['mmvp_avg']
+            val_log["VAL_R@1"] = interaction['acc'].mean().item()
         
         else:
             metric = summary["CIDEr"]            
@@ -304,9 +304,9 @@ class Trainer:
                 
                 # save inference log
                 test_log = {}
-                test_log['recall_1'] = interaction.aux['acc'].mean().item()
-                test_log['recall_5'] = interaction.aux['acc_5'].mean().item()
-                test_log['CLIP_s'] = interaction.aux['clip_s'].mean().item()
+                test_log['recall_1'] = interaction['acc'].mean().item()
+                test_log['recall_5'] = interaction['acc_5'].mean().item()
+                test_log['CLIP_s'] = interaction['clip_s'].mean().item()
                 test_log.update(log)
 
     
@@ -318,7 +318,7 @@ class Trainer:
             else:
 
                 log["epoch"] = epoch
-                log["val_log_prob"] =  interaction.aux['log_prob'].mean().item()
+                log["val_log_prob"] =  np.array(interaction['log_prob']).mean()
 
                 if name == "rand":
                     wandb.log(log, step = self.STEP)
@@ -400,10 +400,21 @@ class Trainer:
 
         mean_loss /= n_batches
         #if data is dict/tensor --> its gets extended N_batch times. If its a list, a new list of list gets created of len = N_batch
-        full_interaction = Interaction.from_iterable(interactions)
-        img_ids = full_interaction.aux_input['cocoid']
-        captions = full_interaction.aux_input['captions']
-        preds_per_batch = full_interaction.message
+        # full_interaction = Interaction.from_iterable(interactions)
+        full_interaction  = defaultdict(list)
+        for interaction in interactions:
+            for k,v in interaction.aux.items():
+                full_interaction[k].append(v.item())
+        full_interaction  = {k: np.mean(v).mean() for k,v in full_interaction.items()}
+        
+        full_interaction['cocoid'] = [_.item() for _ in interaction.aux_input['cocoid'] for interaction in interactions]
+        full_interaction['message'] = [interaction.message for interaction in interactions]
+
+        full_interaction['captions'] = [interaction.aux_input['captions'] for interaction in interactions]
+        
+        img_ids = full_interaction['cocoid']
+        captions = full_interaction['captions']
+        preds_per_batch = full_interaction['message']
         bsz = len(preds_per_batch[0])
         gold_standard = {}
         
@@ -424,8 +435,8 @@ class Trainer:
         # MMVP eval
         if config['finetune_model'] == "clip":
             mmvp_results = mmvp_vlm_benchmark(self.game.sender.clip, self.game.sender.clip_preproc, "/home/manugaur/MMVP/mmvp_vlm")
-            full_interaction.aux["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
-            full_interaction.aux.update({"mmvp_all" : mmvp_results})
+            full_interaction["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
+            full_interaction.update({"mmvp_all" : mmvp_results})
 
         return mean_loss.item(), full_interaction, reward, summary
 
@@ -560,8 +571,13 @@ class Trainer:
 
 
         mean_loss /= n_batches
-        full_interaction = Interaction.from_iterable(interactions)
+        # full_interaction = Interaction.from_iterable(interactions)
 
+        full_interaction  = defaultdict(list)
+        for interaction in interactions:
+            for k,v in interaction.aux.items():
+                full_interaction[k].append(v.item())
+        full_interaction  = {k: np.mean(v).mean() for k,v in full_interaction.items()}
         # print("****"*30)
         # # print(sum(p.mean() for p in self.game.sender.clip.visual.parameters()))
     

@@ -166,7 +166,7 @@ class CocoNegDataset:
 
     def __len__(self):
         if self.debug:
-            return 80
+            return 20
         else:
             if self.split=='val':
                 return 100

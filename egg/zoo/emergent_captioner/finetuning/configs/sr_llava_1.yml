@@ -1,7 +1,7 @@
-DEBUG : False  # if true : model saving, logging turned off.  
-INIT_VAL : True
+DEBUG : True  # if true : model saving, logging turned off.  
+INIT_VAL : False
 GREEDY_BASELINE : False
-SAVE_BEST_METRIC : False # to save nothing : = False and checkpoint_freq = 0
+SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
 ONLY_VAL : False
 
@@ -30,6 +30,8 @@ temp : 0.4
 max_new_tokens : 50
 lora_rank : 8
 iters_per_eval : 180 # eval every 30 mins
+n_layers : 5
+lm_head : False
 log_spice : False
 
 finetune_model : llm # {gpt, clip} # automatically freeze gpt.transformer or CLIP

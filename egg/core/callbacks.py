@@ -71,26 +71,25 @@ class ConsoleLogger(Callback):
         self.as_json = as_json
 
     def aggregate_print(self, loss: float, logs: Interaction, mode: str, epoch: int):
-        dump = dict(loss=loss)
-        aggregated_metrics = {}
-        for idx, (k, v) in enumerate(logs.aux.items()):
-            if idx==3:
-                v = v.float()
-            if isinstance(v, dict):
-                continue
-            try: 
-                aggregated_metrics[k] = v.mean().item()
-            except:
-                print(True)
-        dump.update(aggregated_metrics)
+        print({k:v for k,v in logs.items() if isinstance(v,int) or isinstance(v,float)})
+        # dump = dict(loss=loss)
+        # aggregated_metrics = {}
+        # for idx, (k, v) in enumerate(logs.items()):
+        #     if isinstance(v, dict):
+        #         continue
+        #     try: 
+        #         aggregated_metrics[k] = v.mean().item()
+        #     except:
+        #         print(True)
+        # dump.update(aggregated_metrics)
 
-        if self.as_json:
-            dump.update(dict(mode=mode, epoch=epoch))
-            output_message = json.dumps(dump)
-        else:
-            output_message = ", ".join(sorted([f"{k}={v}" for k, v in dump.items()]))
-            output_message = f"{mode}: epoch {epoch}, loss {loss}, " + output_message
-        print(output_message, flush=True)
+        # if self.as_json:
+        #     dump.update(dict(mode=mode, epoch=epoch))
+        #     output_message = json.dumps(dump)
+        # else:
+        #     output_message = ", ".join(sorted([f"{k}={v}" for k, v in dump.items()]))
+        #     output_message = f"{mode}: epoch {epoch}, loss {loss}, " + output_message
+        # print(output_message, flush=True)
 
     def on_validation_end(self, loss: float, logs: Interaction, epoch: int):
         self.aggregate_print(loss, logs, "test", epoch)
