@@ -105,7 +105,8 @@ class CocoDataset:
         image = Image.open(os.path.join(self.root, file_path)).convert("RGB")
         
         if self.mllm == "clipcap":
-            sender_input, recv_input = self.transform(image) # they are same
+            sender_input = self.transform(image) # they are same
+            recv_input = sender_input
         elif self.mllm=="llava":
             _ , recv_input = self.transform(image)
             image_processor = CLIPImageProcessor.from_pretrained('openai/clip-vit-large-patch14-336')
@@ -383,7 +384,11 @@ class CocoWrapper:
         if mle_train and split != "test":
             self.tokenize(split)
         shuffle = not debug and split == "train"
-        samples = self.split2samples[split]
+        if split == "test_val":
+            samples = self.split2samples["test"]
+            samples.extend(self.split2samples["val"])
+        else: 
+            samples = self.split2samples[split]
         assert samples, f"Wrong split {split}"
        
         if neg_mining:
@@ -412,6 +417,9 @@ class CocoWrapper:
         if sampler is not None :
             shuffle=None
 
+        if split=="eval":
+            shuffle = True
+            sampler = None
         if neg_mining:
             bag_size = self.neg_mining["val_bag_size"] if split == "val" else self.neg_mining["bag_size"]
             bags_per_batch = int(batch_size/bag_size)

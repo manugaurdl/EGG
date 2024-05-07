@@ -43,6 +43,7 @@ np.random.seed(seed)
 
 
 def main(params, config):
+    print(f"Self Retrieval using {config['captions_type']} captions")
     start = time.time()
     opts = get_common_opts(params=params)
     opts.jatayu = os.path.isdir("/home/manugaur")
@@ -50,39 +51,45 @@ def main(params, config):
 
     print(get_sha())
     
-    # name2wrapper = {
-    #     "conceptual": ConceptualCaptionsWrapper,
-    #     "coco": CocoWrapper,
-    #     "flickr": FlickrWrapper,
-    # }
-    # # args
-    # config["neg_mining"]["do"] = False
-    # wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"])
+    name2wrapper = {
+        "conceptual": ConceptualCaptionsWrapper,
+        "coco": CocoWrapper,
+        "flickr": FlickrWrapper,
+    }
+    # args
+    config["neg_mining"]["do"] = False
+    wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"])
     
-    # data_kwargs = dict(
-    #     batch_size=config["opts"]["batch_size"],
-    #     transform=get_transform(opts.sender_image_size, opts.recv_image_size),
-    #     num_workers=config["num_workers"],
-    #     seed=opts.random_seed,
-    #     debug = False,
-    #     mle_train = config["train_method"] =="mle",
-    #     max_len_token = opts.max_len,
-    #     prefix_len = config["prefix_len"],
-    #     is_dist_leader = opts.distributed_context.is_leader,
-    # )
+    data_kwargs = dict(
+        batch_size=config["opts"]["batch_size"],
+        transform=get_transform(opts.sender_image_size, opts.recv_image_size),
+        mllm = "clipcap",
+        num_workers=config["num_workers"],
+        seed=opts.random_seed,
+        debug = False,
+        mle_train = config["train_method"] =="mle",
+        max_len_token = opts.max_len,
+        prefix_len = config["prefix_len"],
+        is_dist_leader = opts.distributed_context.is_leader,
+    )
 
-    # test_loader = wrapper.get_split(split="test", caps_per_img = 5, neg_mining = False, **data_kwargs)
+    test_loader = wrapper.get_split(split=config['split'], caps_per_img = 5, neg_mining = False, **data_kwargs)
     
     data_dir = "/home/manugaur/nips_benchmark/"
 
-    with open(os.path.join(data_dir, "misc_data", f"{config['captions_type']}_test_val_cocoid2idx.json"), "r") as f:
+    with open(os.path.join("/home/manugaur/nips_benchmark/misc_data", f"coco_{config['split']}_cocoid2idx.json"), "r") as f:
         cocoid2idx = json.load(f)
     idx2cocoid = {v : k for k, v in cocoid2idx.items()}
     # GT image and caption CLIP feats
     # img_feats = torch.load(os.path.join(data_dir, "img_feats", f"coco_test_vitl14.pt"))
     # text_feats = torch.load(os.path.join(data_dir, "text_feats", f"{config['captions_type']}_test_vitl14.pt"))
-    text_feats = torch.load(os.path.join(data_dir, "text_feats", "holistic_test_val_vitl14_avg.pt"))
-    img_feats = torch.load(os.path.join(data_dir, "img_feats", "holistic_test_val_vitl14.pt"))
+    if config['use_gt']:
+        if config['avg_text_feat']:
+            text_feat_name = f"{config['data']}_{config['split']}_{config['scorer']}_avg.pt"
+        else:
+            text_feat_name = f"{config['data']}_{config['split']}_{config['scorer']}.pt"
+        text_feats = torch.load(os.path.join(data_dir, "text_feats", text_feat_name))
+        img_feats = torch.load(os.path.join(data_dir, "img_feats", f"coco_{config['split']}_{config['scorer']}.pt"))
     # sender_input, aux : cocoid, captions
     recall_1 = []
     recall_5 = []
@@ -90,24 +97,55 @@ def main(params, config):
     mean_rank = []
     median_rank = []
     loss = DiscriminativeLoss()
-
+    if config['use_greedy'] and config['avg_text_feat']:
+        raise Exception("Can't have greedy and avg_text_feat together")
+    if config['use_benchmark'] and config['split']!="test_val":
+        raise Exception("Split should be test_val when evaluating on bags")
 #------------------------------------------------------------------------------------------------------------------------------------------------
     """RANDOM 100 batch_size batch using GT"""
+    if not config['use_benchmark'] and config['use_gt']:
+        for batch in tqdm(test_loader, total = len(test_loader)):
+            _,_,_, aux = batch
+            clip_idx = [cocoid2idx[str(cocoid.item())] for cocoid in aux["cocoid"]]
 
-    # for batch in tqdm(test_loader, total = len(test_loader)):
-    #     _,_,_, aux = batch
-    #     clip_idx = [cocoid2idx[str(cocoid.item())] for cocoid in aux["cocoid"]]
+            batch_img_feats = img_feats[clip_idx]
+            batch_text_feats = text_feats[clip_idx]
+            batch_img_feats = batch_img_feats / batch_img_feats.norm(dim=-1, keepdim = True)
+            batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim = True)
 
-    #     batch_img_feats = img_feats[clip_idx]
-    #     batch_text_feats = text_feats[clip_idx]
-    #     batch_img_feats = batch_img_feats / batch_img_feats.norm(dim=-1, keepdim = True)
-    #     batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim = True)
+            acc_per_cap = []
+            acc_5_per_cap =[]
+            clip_s_per_cap = []
+            if config['avg_text_feat']:
+                _, acc = loss(batch_text_feats.squeeze(1),batch_img_feats, False, True, None)
+                recall_1.append(acc['acc'].mean().item())
+                recall_5.append(acc['acc_5'].mean().item())
+                clip_s.append(acc['clip_s'].mean().item())
+            else:
+                if config['use_greedy']:
+                    if config['data']=="coco":
+                        raise Exception("No greedy for COCO")
 
-    #     for i in range(batch_text_feats.shape[1]):
-    #         _, acc = loss(batch_text_feats[:, i, :],batch_img_feats, False, True, None)
-    #         recall_1.append(acc['acc'].mean().item())
-    #         recall_5.append(acc['acc_5'].mean().item())
-    #         clip_s.append(acc['clip_s'].mean().item())
+                    _, acc = loss(batch_text_feats[:,0,:],batch_img_feats, False, True, None)
+                    recall_1.append(acc['acc'].mean().item())
+                    recall_5.append(acc['acc_5'].mean().item())
+                    clip_s.append(acc['clip_s'].mean().item())
+                    
+                else:
+                    for i in range(batch_text_feats.shape[1]):
+                        _, acc = loss(batch_text_feats[:,i,:],batch_img_feats, False, True, None)
+                        acc_per_cap.append(acc['acc'])
+                        acc_5_per_cap.append(acc['acc_5'])
+                        clip_s_per_cap.append(acc['clip_s'])
+
+                    recall_1.append(torch.stack(acc_per_cap).mean(axis = 0).mean().item())
+                    recall_5.append(torch.stack(acc_5_per_cap).mean(axis = 0).mean().item())
+                    clip_s.append(torch.stack(clip_s_per_cap).mean(axis=0).mean().item())
+
+
+        print(f"Recall@1 : {round(np.array(recall_1).mean()*100,1)}")
+        print(f"Recall@5 : {round(np.array(recall_5).mean()*100,1)}")
+        print(f"CLIP score : {round(np.array(clip_s).mean(), 1):.1f}")
 
 #------------------------------------------------------------------------------------------------------------------------------------------------
     ## """RANDOM 100 batch_size batch using MODEL PREDS"""
@@ -154,53 +192,69 @@ def main(params, config):
     # print(f"{captioner}:")
 
 #------------------------------------------------------------------------------------------------------------------------------------------------
-    """RETRIEVAL WITHIN HARD BAGS using GT"""
-    USE_GREEDY_CAP = True # use greedy GT not the sampled ones.
-    RECALL_PER_BAG = True
-    # bag_dir = "/home/manugaur/nips_benchmark/bags/dinov2_vitg14_reg_coco/test"
-    bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_holistic" 
-    bag_size, threshold, num_bags = 10, 0, 150
+    # """RETRIEVAL WITHIN HARD BAGS using GT"""
+    if config['use_benchmark'] and config['use_gt']:
+        for bag_size in [3,5,7,10]: 
+            bag_dir = "/home/manugaur/nips_benchmark/benchmark/benchmark/final_benchmark/"
+            # bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_holistic" 
 
-    # captioner = f"{config['captions_type']}_gt"
-    captioner = "holistic_gt"
+            if config['use_gt']:
+                captioner = f"{config['data']}_gt"
+            
+            #benchmark : list of bags. Each bag: list of cocoids    
+            with open(os.path.join(bag_dir, f"{bag_size}.json"), "r") as f:
+                listofbags = json.load(f)
 
-    with open(os.path.join(bag_dir, f"bsz_{bag_size}_thresh_{threshold}.json"), "r") as f:
-        listofbags = json.load(f)
-    print(len(listofbags))
+            #OLD BAGS
+            # with open(os.path.join("/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_holistic", f"bsz_{bag_size}_thresh_{threshold}.json"), "r") as f:
+            #     listofbags = json.load(f)
+            # num_bags = 100
+            # threshold = 0
 
-    benchmark = []
-    for bag in listofbags:
-        benchmark.append([cocoid2idx[str(cocoid)] for cocoid in bag])
-   
-    for idx , bag in tqdm(enumerate(benchmark), total = len(benchmark)):
-        if not RECALL_PER_BAG and idx == num_bags:
-            break
+
+
+            benchmark = []
+            for bag in listofbags:
+                benchmark.append([cocoid2idx[str(cocoid)] for cocoid in bag])
         
-        bag_img_feats = img_feats[bag]
-        bag_text_feats = text_feats[bag]
-        bag_img_feats = bag_img_feats / bag_img_feats.norm(dim=-1, keepdim = True)
-        bag_text_feats = bag_text_feats / bag_text_feats.norm(dim=-1, keepdim = True)
-        
-        if USE_GREEDY_CAP:
-            if len(bag_text_feats.shape)!=2:
-                bag_text_feats = bag_text_feats[:, 0, :]
-            _, acc = loss(bag_text_feats,bag_img_feats, False, False, None)
-            if RECALL_PER_BAG:
-                recall_1.append([_.item() for _ in acc['acc']])
-            else:
-                recall_1.append(acc['acc'].mean().item())
+            for idx , bag in tqdm(enumerate(benchmark), total = len(benchmark)):
 
-        else: 
-            for i in range(bag_text_feats.shape[1]):
-                _, acc = loss(bag_text_feats[:, i, :],bag_img_feats, False, False, None)
+                bag_img_feats = img_feats[bag]
+                bag_text_feats = text_feats[bag]
+                bag_img_feats = bag_img_feats / bag_img_feats.norm(dim=-1, keepdim = True)
+                bag_text_feats = bag_text_feats / bag_text_feats.norm(dim=-1, keepdim = True)
                 
-                if RECALL_PER_BAG:
+                if config['use_greedy']:
+                    bag_text_feats = bag_text_feats[:, 0, :]
+                    _, acc = loss(bag_text_feats,bag_img_feats, training=False, get_acc_5 = False, aux_input=None)
                     recall_1.append([_.item() for _ in acc['acc']])
+                    clip_s.append(acc['clip_s'].mean().item())
+                
                 else:
-                    recall_1.append(acc['acc'].mean().item())
-                # recall_5.append(acc['acc_5'].mean().item())
-                clip_s.append(acc['clip_s'].mean().item())
+                    if config['avg_text_feat']:
+                        _, acc = loss(bag_text_feats.squeeze(1),bag_img_feats, training=False, get_acc_5 = False, aux_input=None)
+                        recall_1.append(acc['acc'].mean().item())
+                        clip_s.append(acc['clip_s'].mean().item())                    
+                    
+                    else:
+                        acc_per_cap = []
+                        clip_s_per_cap = []
+                        for i in range(bag_text_feats.shape[1]):
+                            _, acc = loss(bag_text_feats[:,i,:],bag_img_feats, False, False, None)
+                            acc_per_cap.append(acc['acc'].mean())
+                            clip_s_per_cap.append(acc['clip_s'].mean())
+                        recall_1.append(torch.stack(acc_per_cap).mean().item())
+                        clip_s.append(torch.stack(clip_s_per_cap).mean().mean().item())
+            print(f"| BAG SIZE = {bag_size}")      
 
+            with open(f"/home/manugaur/nips_benchmark/recall_per_bag/final/bsz_{bag_size}_{captioner}.json", "w") as f:
+                json.dump(recall_1, f)
+            # print(f"{round(np.array(recall_1).mean()*100,2)}/ {np.array(mean_rank).mean():.2f}/ {np.array(median_rank).mean():.2f}")
+            print(f"Recall@1 : {round(np.array(recall_1).mean()*100,1)}")
+            # print(f"Mean rank : {np.array(mean_rank).mean():.2f}")
+            # print(f"Median rank : {np.array(median_rank).mean():.2f}")
+            print(f"CLIP score : {round(np.array(clip_s).mean(), 2):.2f}")
+            recall_1 = []
 #------------------------------------------------------------------------------------------------------------------------------------------------
     """RETRIEVAL WITHIN HARD BAGS using MODEL PREDS"""
     
@@ -264,11 +318,11 @@ def main(params, config):
     # print(f"num bags : {num_bags}")
     # print("\n")
 #------------------------------------------------------------------------------------------------------------------------------------------------
-    if  RECALL_PER_BAG:
-        with open(f"/home/manugaur/nips_benchmark/recall_per_bag/bsz_{bag_size}_thresh_{threshold}_{captioner}.json", "w") as f:
-            json.dump(recall_1, f)
+    # if  RECALL_PER_BAG:
+    #     with open(f"/home/manugaur/nips_benchmark/recall_per_bag/bsz_{bag_size}_thresh_{threshold}_{captioner}.json", "w") as f:
+    #         json.dump(recall_1, f)
     # print(f"{round(np.array(recall_1).mean()*100,2)}/ {np.array(mean_rank).mean():.2f}/ {np.array(median_rank).mean():.2f}")
-    print(f"Recall@1 : {round(np.array(recall_1).mean()*100,2)}")
+    # print(f"Recall@1 : {round(np.array(recall_1).mean()*100,2)}")
     # print(f"Recall@5 : {round(np.array(recall_5).mean()*100,2)}")
     # print(f"Mean rank : {np.array(mean_rank).mean():.2f}")
     # print(f"Median rank : {np.array(median_rank).mean():.2f}")
@@ -295,7 +349,14 @@ if __name__ == "__main__":
     config = get_config(config_filename)
     config = process_config(config, use_ddp, sys.argv[1:])
     params = get_cl_args(config)
-    config["captions_type"] = "holistic"
-    config["opts"]["batch_size"]= 200
-    print(f"Self Retrieval using {config['captions_type']} captions")
-    main(params, config)
+    
+    # params
+    config['use_benchmark'] = True
+    config["use_gt"] = True
+    config['data'] = "mistral"
+    config["opts"]["batch_size"]= 100
+    config['split'] = "test_val"
+    config['scorer'] =  "vitl14"  # "", "vitb32"
+    config['use_greedy'] = True
+    config['avg_text_feat'] = False 
+    main(params, config) 

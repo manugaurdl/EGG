@@ -101,7 +101,7 @@ class DiscriminativeLoss(Loss):
         median_rank = rank.median()
         out["mean_rank"] = mean_rank
         out["median_rank"] = median_rank
-        clip_s = torch.clamp(sims.diag(0)*100, min = 0)
+        clip_s = torch.clamp(sims[:, 0]*100, min = 0)
         out["clip_s"] =clip_s
         
         return loss, out
