@@ -572,7 +572,7 @@ class LLavaSender(nn.Module):
         self.top_p=None
         self.num_beams=1
         self.max_new_tokens= 64
-        qs = 'Describe the given image'
+        qs = 'Describe the image briefly.'
         #--------------------
         disable_torch_init()
 
@@ -815,7 +815,7 @@ class LLavaPhi(nn.Module):
 
 
         self.processor = AutoProcessor.from_pretrained(model_id)
-        self.prompt = "<|user|>\n<image>\nDescribe the image briefly in 1 sentence.<|end|>\n<|assistant|>\n"
+        self.prompt = "<|user|>\n<image>\nDescribe the image briefly.<|end|>\n<|assistant|>\n"
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 #       #PEFT lora
