@@ -122,7 +122,7 @@ class ReinforceCaptionGame(nn.Module):
             #llava clip -> self.sender.model.model.vision_tower.vision_tower.vision_model
             #CLIP zero shot baseline
 
-            if self.mllm == "clipcap":    
+            if self.mllm == "clipcap" and contrastive:    
                 sender_img_feats = self.sender.clip.encode_image(receiver_input)
                 sender_img_feats = sender_img_feats / sender_img_feats.norm(dim=1, keepdim=True)
 
@@ -147,7 +147,7 @@ class ReinforceCaptionGame(nn.Module):
             reward = None
             if reinforce or not self.training :
                 if self.mllm=="clipcap":
-                    captions, log_prob, kl_div= self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
+                      captions, log_prob, kl_div= self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
                 elif self.mllm=="llava-phi":
                     captions, log_prob, kl_div, receiver_input = self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
 

@@ -86,10 +86,13 @@ def main(params, config):
         val_loader_rand = wrapper.get_split(split="val", caps_per_img = 5, neg_mining = False,  **data_kwargs)
         val_loader_neg = None
     else:
-        # val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
-        val_loader_rand = None
-        val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True, level = config['neg_mining']['val_level'],  **data_kwargs)
-        # val_loader_neg = None
+        if config['neg_mining']['val_level'] =="rand":
+            val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
+            val_loader_neg = None
+            
+        else:
+            val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True, level = config['neg_mining']['val_level'],  **data_kwargs)
+            val_loader_rand = None
 
     #test
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
@@ -173,22 +176,22 @@ def main(params, config):
         trainer.train(config, opts)
 
     #Get inference preds
-    if not os.path.isdir(config["inference"]["output_dir"]):
-        os.makedirs(config["inference"]["output_dir"])
+    # if not os.path.isdir(config["inference"]["output_dir"]):
+    #     os.makedirs(config["inference"]["output_dir"])
 
-    # getting MLE preds : comment this and path to inference_preds and inference_log
+    # # getting MLE preds : comment this and path to inference_preds and inference_log
 
-    if config['mllm'] == "clipcap":   
-        trainer.game.sender.unpatch_model()
-        trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
-        trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
+    # if config['mllm'] == "clipcap":   
+    #     trainer.game.sender.unpatch_model()
+    #     trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
+    #     trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
 
-        # trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
+    #     # trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
 
-        config["WANDB"]["logging"] = False
+    #     config["WANDB"]["logging"] = False
 
-        if config["train_method"] != "mle":
-            trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
+    #     if config["train_method"] != "mle":
+    #         trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")

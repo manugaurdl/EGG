@@ -35,9 +35,10 @@ from egg.zoo.emergent_captioner.finetuning.utils import int2mil, trainable_param
 #     tokenizer_image_token,
 #     get_model_name_from_path,
 # )
-from transformers import AutoProcessor, LlavaForConditionalGeneration
-from transformers import (AutoTokenizer, BitsAndBytesConfig, StoppingCriteria,
-                          StoppingCriteriaList, TextStreamer)
+
+# from transformers import AutoProcessor, LlavaForConditionalGeneration
+# from transformers import (AutoTokenizer, BitsAndBytesConfig, StoppingCriteria,
+#                           StoppingCriteriaList, TextStreamer)
 
 import time
 from torch.cuda.amp import autocast
@@ -295,7 +296,7 @@ class ClipCapModel(nn.Module):
 
         self.kl_regularizer = KLRegularizer()
 
-    def forward(self, image_feats, aux_input=None, CIDER_OPTIM = False, greedy_baseline = False, train_method = None):
+    def forward(self, image_feats, aux_input=None, CIDER_OPTIM = False, use_fp16= False, greedy_baseline = False, train_method = None):
         if train_method == "mle" and self.training: 
             prompts = self.clip_project(image_feats) #16,7680
             prompts = prompts.view(image_feats.shape[0], self.nb_prefix_tokens, -1) # 16,10,768
@@ -471,7 +472,7 @@ class ClipCapSender(nn.Module):
             if clipcap_path is not None:
                 print("| LOADED CLIPCAP MODEL")
                 desired_format_state_dict = torch.load(official_clipcap_weights)
-                saved_state_dict = torch.load(clipcap_path)[1]
+                saved_state_dict = torch.load(clipcap_path)
                 
                 
                 ################################################################################
@@ -497,7 +498,7 @@ class ClipCapSender(nn.Module):
                 # self.clipcap.load_state_dict(desired_format_state_dict)
 
 
-    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, greedy_baseline = False, train_method = None):
+    def forward(self, images: torch.Tensor, aux_input: Dict[Any, torch.Tensor] = None, CIDER_OPTIM= False, use_fp16 = False, greedy_baseline = False, train_method = None):
         #if loading CLIP on GPU
         image_feats = self.clip.visual(images)
 
@@ -508,10 +509,10 @@ class ClipCapSender(nn.Module):
         if train_method == "mle":
             if self.training:
                 image_feats = self.repeat_tensors(aux_input['tokens'].shape[1], image_feats) #ABC --> AAA..BBB..CCC..
-            return self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline, train_method)
+            return self.clipcap(image_feats, aux_input, CIDER_OPTIM, use_fp16,greedy_baseline,train_method)
 
         else:
-            captions, log_probs, kl_div = self.clipcap(image_feats, aux_input, CIDER_OPTIM, greedy_baseline, train_method)
+            captions, log_probs, kl_div = self.clipcap(image_feats, aux_input, use_fp16, CIDER_OPTIM, greedy_baseline, train_method)
             return captions, log_probs, kl_div
 
     def repeat_tensors(self, n, x):

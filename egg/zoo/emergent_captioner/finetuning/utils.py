@@ -200,7 +200,7 @@ def process_config(config, use_ddp, sys_args):
     config["opts"]["checkpoint_dir"] = os.path.join(config['opts']['checkpoint_dir'].split("checkpoints")[0], f"checkpoints/{sys_args[1] + '/' + sys_args[0].split('_')[0]}_{config['WANDB']['run_name']}") #data/method
     config["WANDB"]["run_name"] = f"{sys_args[0].split('_')[0]}_{sys_args[1]}_{config['WANDB']['run_name']}"#{method}_{data}
     if "mle_model_path" in config["opts"]:
-        config["opts"]["mle_model_path"] = os.path.join(config['opts']['mle_model_path'].split("/checkpoints")[0], f"checkpoints/{sys_args[1]}/mle_len_50/best.pt") #mle_1_train_cap    
+        config["opts"]["mle_model_path"] = os.path.join(config['opts']['mle_model_path'].split("/checkpoints")[0], f"checkpoints/{sys_args[1]}/mle_final/best.pt") #mle_1_train_cap    
         print(f"| Loaded MLE model :{config['opts']['mle_model_path']}")
 
     if config["ONLY_INFERENCE"] or config["ONLY_VAL"]:

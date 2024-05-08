@@ -26,21 +26,21 @@ mllm : "llava-phi" # {llava, clipcap}
 # clip_text : True
 
 #hparams:
-temp : 0.3
-max_new_tokens : 50
+temp : 0.4
+max_new_tokens : 60
 lora_rank : 8
-iters_per_eval : 180 # eval every 30 mins
+iters_per_eval : 360 # eval every 30 mins
 log_spice : False
 n_layers : 9
 lm_head : False
-log_spice : False
+
 
 finetune_model : llm # {gpt, clip} # automatically freeze gpt.transformer or CLIP
 freeze_wte : False
 freeze_adapter : False
 
 neg_mining:
-  curricullum : {"medium" : 4} # "easy" : 3, "medium": 7, "hard" : 20} #indexed from 1 {"medium" : 3, "hard" : 10}
+  curricullum : {"medium" : 10} # "easy" : 3, "medium": 7, "hard" : 20} #indexed from 1 {"medium" : 3, "hard" : 10}
   bag_size : 5 
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
@@ -48,10 +48,10 @@ neg_mining:
 
 opts: 
   baseline : mean
-  n_epochs : 4
+  n_epochs : 10
   batch_size : 25
-  lr : 1e-8 #2e-5
-  max_len : 50
+  lr : 5e-8 #2e-5
+  max_len : 60
   checkpoint_freq : 0
   num_workers : 8
   dataset_dir : /home/manugaur/coco
@@ -65,7 +65,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  llava_lora_9layers_t0.3_M4_bsz5_lr1e8 #suffix to "sr_{data}_"
+  run_name :  llava_lora_9layers_t0.4_M10_bsz5_lr5e8 #suffix to "sr_{data}_"
   log_mmvp_all : True
 
 inference : 

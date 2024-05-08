@@ -237,7 +237,7 @@ class CocoWrapper:
         self.neg_mining = neg_mining
 
         if self.captions_type != "coco":
-            self.id2caption = open_pickle(os.path.join(dataset_dir, f"synthetic_data/cocoid2caption_{self.captions_type}_preproc.pkl"))
+            self.id2caption = open_pickle(os.path.join(dataset_dir, f"synthetic_data/{self.captions_type}_preproc_5.pkl"))
             assert isinstance(list(self.id2caption.values())[0], list), "cocoid2cap is not id --> list of caps"
         
         self.split2samples = self._load_splits(jatayu) # {test,val,train,restval} --> {test[0] :(img_path, list of 5 caps, cocoid)}

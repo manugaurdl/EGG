@@ -1,11 +1,11 @@
-DEBUG : False
-INIT_VAL : True
+DEBUG : True
+INIT_VAL : False
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
 ONLY_VAL : False
 
-captions_type : "coco" #coco, (mistral, mistral_4), blip_holistic
+captions_type : "mistral" #coco, (mistral, mistral_4), blip_holistic
 train_method : "mle" # (discriminative, cider, mle)
 prefix_len : 10
 warmup_ratio : 0.034
@@ -35,7 +35,7 @@ neg_mining:
 
 opts: 
   baseline : mean
-  n_epochs : 10
+  n_epochs : 1
   batch_size : 32 #10 for ada
   lr :  2e-5
   max_len : 50
@@ -46,7 +46,7 @@ opts:
   recv_clip_model : ViT-L/14@336px #ViT-B/32
 
 WANDB :
-  logging : True
+  logging : False
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
