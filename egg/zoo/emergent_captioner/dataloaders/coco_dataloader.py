@@ -54,10 +54,8 @@ class CocoDataset:
 
     def __len__(self):
         if self.debug:
-            return 40
+            return 200
         else:
-            if self.split=="val":
-                return 250
             return len(self.samples)
     
     def pad(self,tokens):
@@ -87,8 +85,6 @@ class CocoDataset:
 
     def get_tokens(self,cocoid):
         path =  f"{self.path2tokens}/{cocoid}"
-        # compare with calling self.pad 2 times with list comprehension and stack
-        # compare with storing all 5 captions as single tensor, with padding as -1
         tokens = []
         masks = []
         for i in range(self.caps_per_img):
@@ -169,8 +165,6 @@ class CocoNegDataset:
         if self.debug:
             return 20
         else:
-            if self.split=='val':
-                return 100
             return len(self.bags)
 
 

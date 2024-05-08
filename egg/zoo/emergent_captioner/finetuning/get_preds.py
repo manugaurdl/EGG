@@ -37,12 +37,6 @@ np.random.seed(seed)
 # "MASTER_ADDR", "MASTER_PORT", "WORLD_SIZE", "RANK", "LOCAL_RANK"
 # os.environ["CUDA_VISIBLE_DEVICES"] = str((0))
 os.environ["WANDB_API_KEY"] = "b389b1a0f740ce1efcfd09b332fd3a83ef6130fe"
-
-def get_loader(wrapper, level, data_kwargs):
-        if level == "rand":
-            return wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = False,  **data_kwargs)
-        else:
-            return wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = True, level = level,  **data_kwargs)
     
 
 def main(params, config):
@@ -67,7 +61,7 @@ def main(params, config):
     wrapper = name2wrapper[opts.train_dataset](captions_type = config["captions_type"], dataset_dir = opts.dataset_dir, jatayu = opts.jatayu, neg_mining = config["neg_mining"])
     
     data_kwargs = dict(
-        batch_size=opts.batch_size,
+        batch_size=100,
         transform=get_transform(opts.sender_image_size, opts.recv_image_size),
         mllm = config['mllm'],
         num_workers=config["num_workers"],
@@ -78,51 +72,37 @@ def main(params, config):
         prefix_len = config["prefix_len"],
         is_dist_leader = opts.distributed_context.is_leader,
     )
-    
-    #train
-    train_loaders = {level : get_loader(wrapper, level, data_kwargs) for level in config["neg_mining"]["curricullum"].keys()}
-    #val
-    if config['train_method'] == "mle":
-        val_loader_rand = wrapper.get_split(split="val", caps_per_img = 5, neg_mining = False,  **data_kwargs)
-        val_loader_neg = None
-    else:
-        # val_loader_rand = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False,  **data_kwargs)
-        val_loader_rand = None
-        val_loader_neg = wrapper.get_split(split="val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = True, level = config['neg_mining']['val_level'],  **data_kwargs)
-        # val_loader_neg = None
 
     #test
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
     data_kwargs["mle_train"] = False
-    test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False, **data_kwargs)
-    # for idx, batch in tqdm(enumerate(train_loader),total = len(train_loader)):
-    #     pass
+    test_loader = wrapper.get_split(split="test", caps_per_img = 5, neg_mining = False, **data_kwargs)
 
     game = build_game(opts, config)
     # print_grad_info(game)
 
-    if config['freeze_wte']:
-        for p in game.sender.clipcap.gpt.lm_head.parameters():
-            p.requires_grad = False
-        for p in game.sender.clipcap.gpt.transformer.wte.parameters():
-            p.requires_grad = False
+    # if config['freeze_wte']:
+    #     for p in game.sender.clipcap.gpt.lm_head.parameters():
+    #         p.requires_grad = False
+    #     for p in game.sender.clipcap.gpt.transformer.wte.parameters():
+    #         p.requires_grad = False
     
-    if config["diff_lr"]:
-        optimizer = torch.optim.AdamW(
-            [
-                {"params": game.receiver.clip.parameters()},
-                {"params": game.sender.clipcap.clip_project.parameters(), "lr" : 5e-9},
-                {"params": game.sender.clipcap.gpt.parameters()},
-            ],
-            lr=opts.lr,
-        )
-    else:
-        optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
+    # if config["diff_lr"]:
+    #     optimizer = torch.optim.AdamW(
+    #         [
+    #             {"params": game.receiver.clip.parameters()},
+    #             {"params": game.sender.clipcap.clip_project.parameters(), "lr" : 5e-9},
+    #             {"params": game.sender.clipcap.gpt.parameters()},
+    #         ],
+    #         lr=opts.lr,
+    #     )
+    # else:
+    optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
     # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
 
     # Create trainers object
     if config["train_method"] == "mle":
-        total_steps = opts.n_epochs* len(train_loaders['rand'])
+        total_steps = opts.n_epochs* len(train_loader)
         scheduler = get_linear_schedule_with_warmup(
                     optimizer, num_warmup_steps=int(total_steps * config["warmup_ratio"]), num_training_steps= total_steps)
 
@@ -136,7 +116,7 @@ def main(params, config):
             inference_data = test_loader,
             callbacks=[
                 ConsoleLogger(as_json=True, print_train_loss=True),
-                ModelSaver(opts, config),
+                ModelSaver(opts),
             ],
             debug=opts.debug,
         )
@@ -150,7 +130,7 @@ def main(params, config):
         inference_data = test_loader,
         callbacks=[
             ConsoleLogger(as_json=True, print_train_loss=True),
-            ModelSaver(opts, config),
+            ModelSaver(opts),
         ],
         debug=opts.debug,
         )  
@@ -161,12 +141,12 @@ def main(params, config):
     if config['mllm'] == "clipcap" : #and config["train_method"] != "mle":   
         trainer.game.sender.patch_model(batch_size = opts.batch_size, prefix_len = config['prefix_len'], )
 
-    #patching unfreezes wte. If finetuning CLIP with fully frozen GPT, run this :     
-    if config['freeze_wte']:
-        for p in trainer.game.sender.clipcap.gpt.lm_head.parameters():
-            p.requires_grad = False
-        for p in game.sender.clipcap.gpt.transformer.wte.parameters():
-            p.requires_grad = False
+    # #patching unfreezes wte. If finetuning CLIP with fully frozen GPT, run this :     
+    # if config['freeze_wte']:
+    #     for p in trainer.game.sender.clipcap.gpt.lm_head.parameters():
+    #         p.requires_grad = False
+    #     for p in game.sender.clipcap.gpt.transformer.wte.parameters():
+    #         p.requires_grad = False
 
     #Training
     if not config["ONLY_INFERENCE"]:
@@ -182,8 +162,8 @@ def main(params, config):
         trainer.game.sender.unpatch_model()
         trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
         trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
-
-        # trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
+        
+        trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
 
         config["WANDB"]["logging"] = False
 
@@ -207,6 +187,11 @@ if __name__ == "__main__":
     config_filename = f"egg/zoo/emergent_captioner/finetuning/configs/{sys.argv[1:][0]}.yml"
     config = get_config(config_filename)
     config = process_config(config, use_ddp, sys.argv[1:])
+
+    #hparams
+    config["inference"]["batch_size"] = 100
+
+
     params = get_cl_args(config)
 
 

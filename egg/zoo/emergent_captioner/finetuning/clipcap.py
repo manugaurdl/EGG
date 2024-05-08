@@ -446,7 +446,7 @@ class ClipCapSender(nn.Module):
         assert max_len < 75  # clip maximum context size
 
         # self.clip_vit = clip.load(clip_model)[0].visual
-        self.finetune_llm = config["finetune_model"]=="gpt"
+        self.finetune_llm = config["finetune_model"]=="llm"
         self.clip, self.clip_preproc = clip.load(clip_model)
         convert_models_to_fp32(self.clip)
 

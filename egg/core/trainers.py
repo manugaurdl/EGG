@@ -402,11 +402,12 @@ class Trainer:
         #if data is dict/tensor --> its gets extended N_batch times. If its a list, a new list of list gets created of len = N_batch
         # full_interaction = Interaction.from_iterable(interactions)
         full_interaction  = defaultdict(list)
-        for interaction in interactions:
-            for k,v in interaction.aux.items():
-                full_interaction[k].append(v.item())
-        full_interaction  = {k: np.mean(v).mean() for k,v in full_interaction.items()}
-        
+        if config['train_method']=="discriminative":
+            for interaction in interactions:
+                for k,v in interaction.aux.items():
+                    full_interaction[k].append(v.item())
+            full_interaction  = {k: np.mean(v).mean() for k,v in full_interaction.items()}
+            
         full_interaction['cocoid'] = [_.item() for _ in interaction.aux_input['cocoid'] for interaction in interactions]
         full_interaction['message'] = [interaction.message for interaction in interactions]
 
@@ -552,8 +553,8 @@ class Trainer:
             self.STEP+=1
             if self.optimizer_scheduler:
                 self.optimizer_scheduler.step()
-
-            if batch_id % config["iters_per_eval"] == 0 and batch_id != 0:
+            
+            if config['mllm']=="llava-phi" and batch_id % config["iters_per_eval"] == 0 and batch_id != 0:
                 torch.cuda.empty_cache()
                 metric = self.rand_neg_val(epoch + 1, WANDB, config = config,  inference=False)
             # Saving model

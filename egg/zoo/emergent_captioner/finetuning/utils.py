@@ -74,9 +74,9 @@ class StopTokenLogitsProcessor(LogitsProcessor):
 
 
 class ModelSaver(Callback):
-    def __init__(self, opts: argparse.ArgumentParser):
+    def __init__(self, opts: argparse.ArgumentParser, config : dict):
         self.opts = opts
-
+        self.config = config
     def get_checkpoint(self):
         self.is_ddp = self.trainer.distributed_context.is_distributed
 
@@ -127,16 +127,18 @@ class ModelSaver(Callback):
                     model_name = f"best.pt"
                 
                 x = self.get_checkpoint()[1]
-                for name in list(x.keys()):
-                    if 'lora' not in name:
-                        x.pop(name)
+                if self.opts.loss_type!="mle":
+                    for name in list(x.keys()):
+                        if 'lora' not in name:
+                            x.pop(name)
 
                 torch.save(
                     x,
                     self.trainer.checkpoint_path / model_name,
                 )
-                optimizer_path = os.path.join(str(self.trainer.checkpoint_path / model_name).split('/best')[0],"optimizer.pth")
-                torch.save(self.trainer.optimizer.state_dict, optimizer_path)
+                if self.config['mllm']=="llava-phi":
+                    optimizer_path = os.path.join(str(self.trainer.checkpoint_path / model_name).split('/best')[0],"optimizer.pth")
+                    torch.save(self.trainer.optimizer.state_dict, optimizer_path)
                 # if self.is_ddp:
                 #     self.trainer.game.module.sender.patch_model()
                 # else:         
@@ -205,7 +207,7 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        config["SAVE_BEST_METRIC"] = False
+        # config["SAVE_BEST_METRIC"] = False
         config["WANDB"]["logging"] = False
         config["opts"]["checkpoint_freq"] = 0
     return config
@@ -227,9 +229,9 @@ def get_best_state_dict(config):
     
     desired_format_state_dict = torch.load(config["official_clipcap_weights"])
     if config["SAVE_BEST_METRIC"]:
-        saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "best.pt"))[1]
+        saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "best.pt"))#[1]
     else:
-        saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "e_10.pt"))[1]
+        saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "e_10.pt"))#[1]
 
     state_dict = {}
     
