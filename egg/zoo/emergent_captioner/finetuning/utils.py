@@ -127,7 +127,7 @@ class ModelSaver(Callback):
                     model_name = f"best.pt"
                 
                 x = self.get_checkpoint()[1]
-                if self.opts.loss_type!="mle":
+                if self.config['mllm']=="llava-phi":
                     for name in list(x.keys()):
                         if 'lora' not in name:
                             x.pop(name)
@@ -207,7 +207,7 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        # config["SAVE_BEST_METRIC"] = False
+        config["SAVE_BEST_METRIC"] = False
         config["WANDB"]["logging"] = False
         config["opts"]["checkpoint_freq"] = 0
     return config

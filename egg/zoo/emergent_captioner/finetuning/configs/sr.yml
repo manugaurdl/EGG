@@ -1,5 +1,5 @@
-DEBUG : True  # if true : model saving, logging turned off.  
-INIT_VAL : False
+DEBUG : False  # if true : model saving, logging turned off.  
+INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
@@ -14,9 +14,10 @@ num_workers : 16
 CAPS_PER_IMG_train: 5 # maybe use in CL
 CAPS_PER_IMG_val: 5 # NLG eval
 fp16: False
-diff_lr: True
+diff_lr: False
 contrastive : False
 reinforce : True
+mllm : "clipcap"
 #lora
 lora : True
 lora_rank : 32 #64 for clip
@@ -26,7 +27,6 @@ log_spice : True
 finetune_model : llm # {gpt, clip} # automatically freeze gpt.transformer or CLIP
 freeze_wte : False
 freeze_adapter : False
-mllm : "clipcap"
 
 neg_mining:
   curricullum : {"rand" : 10} #,  "medium" : 5, "hard" : 10} # indexed from 1
@@ -37,7 +37,7 @@ neg_mining:
 
 opts: 
   baseline : mean
-  n_epochs : 1
+  n_epochs : 10
   batch_size : 100
   lr : 9e-8 #2e-5
   max_len : 50
@@ -49,14 +49,14 @@ opts:
   recv_clip_model : ViT-B/32 #ViT-L/14@336px
 
 WANDB:
-  logging : False
+  logging : True
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
   run_name :  final #suffix to "sr_{data}_"
-  log_mmvp_all : True
+  log_mmvp_all : False
 
 inference : 
   batch_size : 128
