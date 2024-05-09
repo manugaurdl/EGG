@@ -434,8 +434,8 @@ class Trainer:
 
 
         # MMVP eval
-        if True or config['finetune_model'] == "clip":
-            mmvp_results = mmvp_vlm_benchmark(self.game.sender, self.game.sender.clip_preproc, "/home/manugaur/MMVP_benchmark")
+        if config['finetune_model'] == "clip":
+            mmvp_results = mmvp_mllm_benchmark(self.game.sender, self.game.sender.clip_preproc, "/home/manugaur/MMVP_benchmark")
             full_interaction["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
             full_interaction.update({"mmvp_all" : mmvp_results})
 

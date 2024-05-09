@@ -414,6 +414,7 @@ class CocoWrapper:
         if split=="eval":
             shuffle = True
             sampler = None
+
         if neg_mining:
             bag_size = self.neg_mining["val_bag_size"] if split == "val" else self.neg_mining["bag_size"]
             bags_per_batch = int(batch_size/bag_size)
@@ -426,7 +427,7 @@ class CocoWrapper:
                 collate_fn = hard_neg_collate,
                 num_workers=num_workers,
                 pin_memory=True,
-                drop_last=True,
+                drop_last=False,
             )
         else:
                 
@@ -437,7 +438,7 @@ class CocoWrapper:
                 sampler=sampler,
                 num_workers=num_workers,
                 pin_memory=True,
-                drop_last=True,
+                drop_last=False,
             )
 
         return loader
