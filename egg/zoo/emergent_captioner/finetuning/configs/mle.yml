@@ -1,4 +1,4 @@
-DEBUG : False
+DEBUG : True
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0

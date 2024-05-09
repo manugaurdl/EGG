@@ -43,7 +43,7 @@ from egg.zoo.emergent_captioner.utils import (
 )
 from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metrics
 from egg.zoo.emergent_captioner.finetuning.losses import DiscriminativeLoss
-from egg.zoo.emergent_captioner.evaluation.mmvp_vlm import mmvp_vlm_benchmark
+from egg.zoo.emergent_captioner.evaluation.mmvp_mllm import mmvp_mllm_benchmark
 
 
 try:
@@ -434,8 +434,8 @@ class Trainer:
 
 
         # MMVP eval
-        if config['finetune_model'] == "clip":
-            mmvp_results = mmvp_vlm_benchmark(self.game.sender.clip, self.game.sender.clip_preproc, "/home/manugaur/MMVP/mmvp_vlm")
+        if True or config['finetune_model'] == "clip":
+            mmvp_results = mmvp_vlm_benchmark(self.game.sender, self.game.sender.clip_preproc, "/home/manugaur/MMVP_benchmark")
             full_interaction["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
             full_interaction.update({"mmvp_all" : mmvp_results})
 

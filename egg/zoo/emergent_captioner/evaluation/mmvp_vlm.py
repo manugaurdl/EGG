@@ -119,4 +119,3 @@ def mmvp_vlm_benchmark(model, preprocess, benchmark_dir, device = "cpu"):
 #     data[model] = [results[model][category] for category in categories]
 
 # print(results)
-

@@ -1,5 +1,5 @@
-DEBUG : False  # if true : model saving, logging turned off.  
-INIT_VAL : True
+DEBUG : True  # if true : model saving, logging turned off.  
+INIT_VAL : False
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
@@ -49,7 +49,7 @@ opts:
   recv_clip_model : ViT-B/32 #ViT-L/14@336px
 
 WANDB:
-  logging : True
+  logging : False
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
