@@ -103,6 +103,8 @@ class CocoDataset:
         if self.mllm == "clipcap":
             sender_input = self.transform(image) # they are same
             recv_input = sender_input
+            # torch.save(sender_input, os.path.join("/home/manugaur/EGG/sender_input", f"{image_id}.pt"))
+
         elif self.mllm=="llava":
             _ , recv_input = self.transform(image)
             image_processor = CLIPImageProcessor.from_pretrained('openai/clip-vit-large-patch14-336')
@@ -180,8 +182,10 @@ class CocoNegDataset:
                 sample_idx = self.cocoid2samples_idx[cocoid]
                 file_path, captions, image_id = self.samples[sample_idx]
                 assert image_id == cocoid
-
-                sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/{self.split}", f"{cocoid}.pt")))
+                if os.path.isdir("/home/manugaur/EGG/sender_input"):
+                    sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_input/", f"{cocoid}.pt")))
+                else:
+                    sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/", f"{cocoid}.pt")))
 
                 # aux_list.append({"cocoid": torch.tensor([image_id]), "captions": captions[:5]}) 
                 # aux_list.append({"captions": captions[:5]}) 

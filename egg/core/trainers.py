@@ -352,7 +352,7 @@ class Trainer:
         return metric
 
     def eval(self, loader, inference : bool, config : dict, data=None, GREEDY_BASELINE = False, train_method = None):
-
+        
         mean_loss = 0.0
         interactions = []
         n_batches = 0
@@ -360,6 +360,7 @@ class Trainer:
 
         with torch.no_grad():
             for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
+
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)

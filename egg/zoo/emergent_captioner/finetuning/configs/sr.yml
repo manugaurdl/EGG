@@ -1,5 +1,5 @@
-DEBUG : True  # if true : model saving, logging turned off.  
-INIT_VAL : False
+DEBUG : False  # if true : model saving, logging turned off.  
+INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
