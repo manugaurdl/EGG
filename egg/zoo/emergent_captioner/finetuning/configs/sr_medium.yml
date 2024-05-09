@@ -1,4 +1,4 @@
-DEBUG : True  # if true : model saving, logging turned off.  
+DEBUG : False  # if true : model saving, logging turned off.  
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
@@ -37,7 +37,7 @@ neg_mining:
 
 opts: 
   baseline : mean
-  n_epochs : 1
+  n_epochs : 10
   batch_size : 100
   lr : 9e-8 #2e-5
   max_len : 50

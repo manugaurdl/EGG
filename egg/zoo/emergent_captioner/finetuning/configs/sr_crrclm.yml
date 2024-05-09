@@ -29,7 +29,7 @@ freeze_wte : False
 freeze_adapter : False
 
 neg_mining:
-  curricullum : {"easy" : 10} #,  "medium" : 5, "hard" : 10} # indexed from 1
+  curricullum : {"rand" : 2, "medium": 6, "hard" : 10} #,  "medium" : 5, "hard" : 10} # indexed from 1
   bag_size : 3
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
@@ -55,7 +55,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  easy_bsz3_final #suffix to "sr_{data}_"
+  run_name :  2R6M10H_bsz3_final #suffix to "sr_{data}_"
   log_mmvp_all : False
 
 inference : 
