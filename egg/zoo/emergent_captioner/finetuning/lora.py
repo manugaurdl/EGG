@@ -88,20 +88,20 @@ def LoRA(model,  rank, model_type, config):
         print(f"trainable params after LORA :{trainable_params(model)}")
     
     else:
-        print(f"CLIP trainable params before LORA :{trainable_params(clip)}")
+        print(f"CLIP trainable params before LORA :{trainable_params(model.clip)}")
         for l_num in range(12):
             parametrize.register_parametrization(
-                clip.visual.transformer.resblocks[l_num].attn,
+                model.clip.visual.transformer.resblocks[l_num].attn,
                 "in_proj_weight", 
-                inproj_parameterization(clip.visual.transformer.resblocks[l_num].attn,
-                next(clip.visual.parameters()).device,
+                inproj_parameterization(model.clip.visual.transformer.resblocks[l_num].attn,
+                next(model.clip.visual.parameters()).device,
                 rank=rank,
                 lora_alpha=16)
                         )
         if config['clip_mlp_ft']:
             for l_num in range(12):
-                parameterize(clip.visual.transformer.resblocks[l_num].mlp.c_fc, "weight", rank)
-                parameterize(clip.visual.transformer.resblocks[l_num].mlp.c_proj, "weight", rank)
+                parameterize(model.clip.visual.transformer.resblocks[l_num].mlp.c_fc, "weight", rank)
+                parameterize(model.clip.visual.transformer.resblocks[l_num].mlp.c_proj, "weight", rank)
 
         if config["clip_text"]:
             for l_num in range(12):
@@ -123,5 +123,5 @@ def LoRA(model,  rank, model_type, config):
             else:
                 param.requires_grad = False            
     
-        print(f"CLIP trainable params before LORA :{trainable_params(clip)}")
+        print(f"CLIP trainable params before LORA :{trainable_params(model.clip)}")
 

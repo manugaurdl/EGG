@@ -104,18 +104,12 @@ def main(params, config):
     game = build_game(opts, config)
     # print_grad_info(game)
 
-    if config['freeze_wte']:
-        for p in game.sender.clipcap.gpt.lm_head.parameters():
-            p.requires_grad = False
-        for p in game.sender.clipcap.gpt.transformer.wte.parameters():
-            p.requires_grad = False
-    
-    if config["diff_lr"]:
+
+    if config["finetune_model"]=="clip":
         optimizer = torch.optim.AdamW(
             [
-                {"params": game.receiver.clip.parameters()},
-                {"params": game.sender.clipcap.clip_project.parameters(), "lr" : 5e-9},
-                {"params": game.sender.clipcap.gpt.parameters()},
+                {"params": game.sender.clip.visual.parameters()},
+                {"params": game.sender.clipcap.clip_project.parameters()},
             ],
             lr=opts.lr,
         )

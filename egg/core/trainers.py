@@ -44,7 +44,8 @@ from egg.zoo.emergent_captioner.utils import (
 from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metrics
 from egg.zoo.emergent_captioner.finetuning.losses import DiscriminativeLoss
 from egg.zoo.emergent_captioner.evaluation.mmvp_mllm import mmvp_mllm_benchmark
-from egg.zoo.emergent_captioner.evaluation.winoground import winoground_benchmark
+from egg.zoo.emergent_captioner.evaluation.mmvp_vlm import mmvp_vlm_benchmark
+from egg.zoo.emergent_captioner.evaluation.winoground_vlm import winoground_vlm
 
 try:
     from torch.cuda.amp import GradScaler, autocast
@@ -246,12 +247,13 @@ class Trainer:
             val_log["SPICE"] = summary["SPICE"]
 
         if config["finetune_model"] == "clip":
-            val_log["mmvp_avg"] = interaction.aux['mmvp_avg']
-            val_log["recall_5_clip_zs"] = interaction.aux['recall_5_clip_zs'].mean()
-            val_log["recall_1_clip_zs"] = interaction.aux["recall_1_clip_zs"].mean()
+            val_log["mmvp_avg"] = interaction['mmvp_avg']
+            # val_log["recall_5_clip_zs"] = interaction.aux['recall_5_clip_zs'].mean()
+            # val_log["recall_1_clip_zs"] = interaction.aux["recall_1_clip_zs"].mean()
+            val_log.update(interaction['wino'])
 
             if config["WANDB"]["log_mmvp_all"]:
-                val_log.update(interaction.aux['mmvp_all'])
+                val_log.update(interaction['mmvp_all'])
         # if WANDB.log _mmvp_aspects:
         #     val_log.update(all mmvp aspects from interaction.aux)
 
@@ -266,7 +268,8 @@ class Trainer:
             if config['finetune_model'] == "llm":
                 metric =  interaction['acc'].mean().item()
             elif config['finetune_model']=="clip":
-                metric = interaction['mmvp_avg']
+                # metric = interaction['mmvp_avg']
+                metric = interaction['wino']['wino_text_rand_25']
             val_log["VAL_R@1"] = interaction['acc'].mean().item()
         
         else:
@@ -435,14 +438,14 @@ class Trainer:
 
 
         # MMVP eval
-        if True or config['finetune_model'] == "clip":
-            
-            wino_scores = winoground_benchmark(self.game.sender, self.game.sender.clip_preproc)
-            print(wino_scores)
-            mmvp_results = mmvp_mllm_benchmark(self.game.sender, self.game.sender.clip_preproc, "/home/manugaur/MMVP_benchmark")
+        if config['finetune_model'] == "clip":
+
+            mmvp_results = mmvp_vlm_benchmark(self.game.sender.clip, self.game.sender.clip_preproc, "/home/manugaur/mmvp_vlm")
             full_interaction["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
             full_interaction.update({"mmvp_all" : mmvp_results})
 
+            wino_scores = winoground_vlm(self.game.sender.clip, self.game.sender.clip_preproc)
+            full_interaction["wino"] = wino_scores
         return mean_loss.item(), full_interaction, reward, summary
 
     def train_epoch(self,loader, WANDB, GREEDY_BASELINE, train_method, opts, config, epoch):

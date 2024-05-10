@@ -15,6 +15,7 @@ from egg.zoo.emergent_captioner.finetuning.lora import LoRA
 import pickle
 import clip
 from egg.zoo.emergent_captioner.dataloaders import get_transform
+from egg.zoo.emergent_captioner.finetuning.utils import int2mil, trainable_params
 
 transform = get_transform(224, None)
 
@@ -339,6 +340,14 @@ def build_game(opts, config):
         #     pickle.dump(original_weights, f)
 
         LoRA(sender,config["lora_rank"], config['finetune_model'], config)
+    
+    if config['freeze_adapter']:
+        for p in sender.clipcap.clip_project.parameters():
+            p.requires_grad = False
+    
+    if config['freeze_wte']:
+        for p in sender.clipcap.gpt.lm_head.parameters():
+            p.requires_grad = False
     
     # if config['freeze_adapter']:
     #     for name, p in sender.clipcap.clip_project.named_parameters():
