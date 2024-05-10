@@ -89,7 +89,7 @@ def main(params, config):
         else:
             text_feat_name = f"{config['data']}_{config['split']}_{config['scorer']}.pt"
         text_feats = torch.load(os.path.join(data_dir, "text_feats", text_feat_name))
-        img_feats = torch.load(os.path.join(data_dir, "img_feats", f"coco_{config['split']}_{config['scorer']}.pt"))
+    img_feats = torch.load(os.path.join(data_dir, "img_feats", f"coco_{config['split']}_{config['scorer']}.pt"))
     # sender_input, aux : cocoid, captions
     recall_1 = []
     recall_5 = []
@@ -103,6 +103,7 @@ def main(params, config):
         raise Exception("Split should be test_val when evaluating on bags")
 #------------------------------------------------------------------------------------------------------------------------------------------------
     """RANDOM 100 batch_size batch using GT"""
+    
     if not config['use_benchmark'] and config['use_gt']:
         for batch in tqdm(test_loader, total = len(test_loader)):
             _,_,_, aux = batch
@@ -148,48 +149,50 @@ def main(params, config):
         print(f"CLIP score : {round(np.array(clip_s).mean(), 1):.1f}")
 
 #------------------------------------------------------------------------------------------------------------------------------------------------
-    ## """RANDOM 100 batch_size batch using MODEL PREDS"""
+    """RANDOM 100 batch_size batch using MODEL PREDS"""
     
-    # #CLIP 
-    # model_name = "ViT-L/14@336px"
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    # model, preprocess = clip.load(model_name, device=device)
-    # model.eval()
+    if not config['use_benchmark'] and not config['use_gt']:
 
-    # #get preds
-    # captioner = "coco_cider_lora_rank32_g_baseline"
+        model_name = "ViT-B/32"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model, preprocess = clip.load(model_name, device=device)
+        model.eval()
 
-    # bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_coco"
-    # preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+        captioner = f"{config['data']}_{config['method']}_final"        
+        preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
 
-    # with open(preds_path, "rb") as f:
-    #     preds = pickle.load(f)
-    # get_acc_5 = True
-
-
-    # for batch in tqdm(test_loader, total = len(test_loader)):
-    #     _,_,_, aux = batch
-    #     clip_idx = [cocoid2idx[str(cocoid.item())] for cocoid in aux["cocoid"]]
-
-    #     batch_img_feats = img_feats[clip_idx]
-    #     batch_caps = [preds[int(idx2cocoid[i])] for i in clip_idx]
-    #     with torch.no_grad():
-    #         batch_text_feats = model.encode_text(clip.tokenize(batch_caps, context_length=77, truncate=True).to(device))
-
+        with open(preds_path, "rb") as f:
+            preds = pickle.load(f)
         
-    #     _, acc = loss(batch_text_feats ,batch_img_feats, False, get_acc_5,  None)
-    #     recall_1.append(acc['acc'].mean().item())
-    #     recall_5.append(acc['acc_5'].mean().item())
-    #     clip_s.append(acc['clip_s'].mean().item())
-    #     mean_rank.append(acc['mean_rank'].item())
-    #     median_rank.append(acc['median_rank'].item())
+        get_acc_5 = True
 
-    
-    #     del batch_img_feats
-    #     del batch_text_feats
-    #     torch.cuda.empty_cache()
-    # print("\n")
-    # print(f"{captioner}:")
+        for batch in tqdm(test_loader, total = len(test_loader)):
+            _,_,_, aux = batch
+            clip_idx = [cocoid2idx[str(cocoid.item())] for cocoid in aux["cocoid"]]
+
+            batch_img_feats = img_feats[clip_idx]
+            try:
+                bag_caps  = [preds[_.item()] for _ in aux['cocoid']]
+            except:
+                print(True)
+        
+            with torch.no_grad():
+                batch_text_feats = model.encode_text(clip.tokenize(bag_caps, context_length=77, truncate=True).to(device))
+                batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim=True)
+                
+            batch_img_feats = batch_img_feats / batch_img_feats.norm(dim=-1, keepdim = True)
+            batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim = True)
+
+            _, acc = loss(batch_text_feats,batch_img_feats, False, True, None)
+            recall_1.append(acc['acc'].mean().item())
+            recall_5.append(acc['acc_5'].mean().item())
+            clip_s.append(acc['clip_s'].mean().item())
+                    
+
+        print(f"Recall@1 : {round(np.array(recall_1).mean()*100,1)}")
+        print(f"Recall@5 : {round(np.array(recall_5).mean()*100,1)}")
+        print(f"CLIP score : {round(np.array(clip_s).mean(), 1):.1f}")
+
 
 #------------------------------------------------------------------------------------------------------------------------------------------------
     # """RETRIEVAL WITHIN HARD BAGS using GT"""
@@ -256,67 +259,69 @@ def main(params, config):
             print(f"CLIP score : {round(np.array(clip_s).mean(), 2):.2f}")
             recall_1 = []
 #------------------------------------------------------------------------------------------------------------------------------------------------
-    """RETRIEVAL WITHIN HARD BAGS using MODEL PREDS"""
+
+    #"""RETRIEVAL WITHIN HARD BAGS using MODEL PREDS"""
     
-    # # 3,1,300 | 5,1,122 | 7,2,125 | 10,3,81| 20,7,10
-    # RECALL_PER_BAG = True
-    # bag_size, threshold, num_bags = 3, 0, 30
-    # captioner =  "blip2mistral_sr_baseline"#"coco_sr_bsz_200"
- 
-    # #CLIP 
-    # model_name = "ViT-L/14@336px"
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    # model, preprocess = clip.load(model_name, device=device)
-    # model.eval()
+    if config['use_benchmark'] and not config['use_gt']:
 
-    # bag_dir = "/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_coco"
-    # preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+        model_name = "ViT-B/32"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model, preprocess = clip.load(model_name, device=device)
+        model.eval()
 
-    # with open(preds_path, "rb") as f:
-    #     preds = pickle.load(f)
-    
-    # with open(os.path.join(bag_dir, f"bsz_{bag_size}_thresh_{threshold}.json"), "r") as f:
-    #     listofbags = json.load(f)
+        captioner = f"{config['data']}_{config['method']}_final"        
+        preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
 
-    # get_acc_5 = bag_size > 5
-
-
-    # benchmark = []
-    # for bag_idx, bag in enumerate(listofbags):
-    #     if bag_idx ==num_bags:
-    #         break
-    #     benchmark.append([cocoid2idx[str(cocoid)] for cocoid in bag])
-   
-    # for bag_idx , bag in tqdm(enumerate(benchmark), total =num_bags):
-
-    #     bag_img_feats = img_feats[bag]
-    #     bag_img_feats = bag_img_feats / bag_img_feats.norm(dim=-1, keepdim = True)
-    # #     batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim = True)
-    #     bag_caps =  [preds[int(idx2cocoid[clip_idx])] for clip_idx in bag]
-    #     with torch.no_grad():
-    #         bag_text_feats = model.encode_text(clip.tokenize(bag_caps, context_length=77, truncate=True).to(device))
-    #         bag_text_feats = bag_text_feats / bag_text_feats.norm(dim=-1, keepdim=True)
+        with open(preds_path, "rb") as f:
+            preds = pickle.load(f)
         
-    #     _, acc = loss(bag_text_feats ,bag_img_feats,  False, get_acc_5, None)
-        
-    #     if RECALL_PER_BAG:
-    #         recall_1.append([_.item() for _ in acc['acc']])
-    #     else:
-    #         recall_1.append(acc['acc'].mean().item())
-    #     if get_acc_5:
-    #         recall_5.append(acc['acc_5'].mean().item())
-    #     clip_s.append(acc['clip_s'].mean().item())
-    #     mean_rank.append(acc['mean_rank'].item())
-    #     median_rank.append(acc['median_rank'].item())
+        get_acc_5 = False
 
-    #     del bag_img_feats
-    #     del bag_text_feats
-    #     torch.cuda.empty_cache()
-    # print("\n")
-    # print(f"bag size : {bag_size}")
-    # print(f"threshold : {threshold}")
-    # print(f"num bags : {num_bags}")
-    # print("\n")
+        for bag_size in [3,5,7,10]: 
+            bag_dir = "/home/manugaur/nips_benchmark/benchmark/benchmark/final_benchmark/"
+            
+            #benchmark : list of bags. Each bag: list of cocoids    
+            with open(os.path.join(bag_dir, f"{bag_size}.json"), "r") as f:
+                listofbags = json.load(f)
+
+            #OLD BAGS
+            # with open(os.path.join("/home/manugaur/nips_benchmark/bags/clip_vitl14_mm_holistic", f"bsz_{bag_size}_thresh_{threshold}.json"), "r") as f:
+            #     listofbags = json.load(f)
+            # num_bags = 100
+            # threshold = 0
+
+            benchmark = []
+            for bag in listofbags:
+                benchmark.append([cocoid2idx[str(cocoid)] for cocoid in bag])
+            
+            for idx , bag in tqdm(enumerate(benchmark), total = len(benchmark)):
+                    
+
+                bag_img_feats = img_feats[bag]
+                batch_caps = [preds[int(idx2cocoid[_])].strip() for _ in bag]
+
+                with torch.no_grad():
+                    batch_text_feats = model.encode_text(clip.tokenize(batch_caps, context_length=77, truncate=True).to(device))
+                    batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim=True)
+
+                    bag_img_feats = bag_img_feats / bag_img_feats.norm(dim=-1, keepdim = True)
+                    batch_text_feats = batch_text_feats / batch_text_feats.norm(dim=-1, keepdim = True)
+                    
+
+                    _, acc = loss(batch_text_feats,bag_img_feats, training=False, get_acc_5 = False, aux_input=None)
+                    recall_1.append([_.item() for _ in acc['acc']])
+                    clip_s.append(acc['clip_s'].mean().item())         
+
+            print(f"| BAG SIZE = {bag_size}")      
+
+            with open(f"/home/manugaur/nips_benchmark/recall_per_bag/final/bsz_{bag_size}_{captioner}.json", "w") as f:
+                json.dump(recall_1, f)
+            # print(f"{round(np.array(recall_1).mean()*100,2)}/ {np.array(mean_rank).mean():.2f}/ {np.array(median_rank).mean():.2f}")
+            print(f"Recall@1 : {round(np.array(recall_1).mean()*100,1)}")
+            # print(f"Mean rank : {np.array(mean_rank).mean():.2f}")
+            # print(f"Median rank : {np.array(median_rank).mean():.2f}")
+            print(f"CLIP score : {round(np.array(clip_s).mean(), 2):.2f}")
+            recall_1 = []
 #------------------------------------------------------------------------------------------------------------------------------------------------
     # if  RECALL_PER_BAG:
     #     with open(f"/home/manugaur/nips_benchmark/recall_per_bag/bsz_{bag_size}_thresh_{threshold}_{captioner}.json", "w") as f:
@@ -352,11 +357,12 @@ if __name__ == "__main__":
     
     # params
     config['use_benchmark'] = True
-    config["use_gt"] = True
-    config['data'] = "mistral"
+    config["use_gt"] = False
+    config['method'] = "mle"
+    config['data'] = "coco"
     config["opts"]["batch_size"]= 100
     config['split'] = "test_val"
-    config['scorer'] =  "vitl14"  # "", "vitb32"
-    config['use_greedy'] = True
+    config['scorer'] =  "vitb32"  # "", "vitb32"
+    config['use_greedy'] = False
     config['avg_text_feat'] = False 
     main(params, config) 

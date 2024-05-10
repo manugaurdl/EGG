@@ -1,8 +1,8 @@
-DEBUG : True
+DEBUG : False
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
-ONLY_INFERENCE : False
+ONLY_INFERENCE : True
 ONLY_VAL : False
 
 captions_type : "mistral" #coco, (mistral, mistral_4), blip_holistic

@@ -243,7 +243,7 @@ class Trainer:
                     "ROUGE_L" : summary['ROUGE_L'],
                     }
 
-        if config['log_spice']:
+        if config['log_spice'] and config['captions_type']!="blip2mistral":
             val_log["SPICE"] = summary["SPICE"]
 
         if config["finetune_model"] == "clip":
@@ -306,15 +306,15 @@ class Trainer:
                 self.save_val_preds(interaction, config, inference = True)
                 
                 # save inference log
-                test_log = {}
-                test_log['recall_1'] = interaction['acc'].mean().item()
-                test_log['recall_5'] = interaction['acc_5'].mean().item()
-                test_log['CLIP_s'] = interaction['clip_s'].mean().item()
-                test_log.update(log)
+                # test_log = {}
+                # test_log['recall_1'] = interaction['acc'].mean().item()
+                # test_log['recall_5'] = interaction['acc_5'].mean().item()
+                # test_log['CLIP_s'] = interaction['clip_s'].mean().item()
+                # test_log.update(log)
 
     
-                with open(os.path.join(inference_log_dir,  f"{config['captions_type']}_{config['opts']['checkpoint_dir'].split('/')[-1]}.json"), "w") as f:
-                    json.dump(test_log, f)    
+                # with open(os.path.join(inference_log_dir,  f"{config['captions_type']}_{config['opts']['checkpoint_dir'].split('/')[-1]}.json"), "w") as f:
+                #     json.dump(test_log, f)    
                 # with open("/home/manugaur/EGG/inference_log/blip2mistral_mle.json", "w") as f:
                 #     json.dump(test_log, f)
 
@@ -411,8 +411,13 @@ class Trainer:
                 for k,v in interaction.aux.items():
                     full_interaction[k].append(v.item())
             full_interaction  = {k: np.mean(v).mean() for k,v in full_interaction.items()}
-            
-        full_interaction['cocoid'] = [_.item() for _ in interaction.aux_input['cocoid'] for interaction in interactions]
+
+        
+        full_interaction['cocoid'] = []
+        for interaction in interactions:
+            for _ in interaction.aux_input['cocoid']:
+                full_interaction['cocoid'].append(_.item())
+
         full_interaction['message'] = [interaction.message for interaction in interactions]
 
         full_interaction['captions'] = [interaction.aux_input['captions'] for interaction in interactions]
@@ -434,7 +439,7 @@ class Trainer:
             for j, pred in enumerate(batch):
                 predictions[(i*bsz) + j] = [{"caption" :pred}]
         
-        summary = compute_nlg_metrics(predictions, gold_standard, spice = config["log_spice"] ) # score for each idx stored in summary except bleu
+        summary = compute_nlg_metrics(predictions, gold_standard, spice = config["log_spice"] and config['captions_type']!="blip2mistral") # score for each idx stored in summary except bleu
 
 
         # MMVP eval
@@ -707,8 +712,8 @@ class Trainer:
             self.load_from_checkpoint(latest_file)
     
     def save_val_preds(self, full_interaction, config, inference = False):
-        preds = [j for i in full_interaction.message for j in i]
-        cocoids = [i.item() for i in full_interaction.aux_input['cocoid']]
+        preds = [j.strip() for i in full_interaction["message"] for j in i]
+        cocoids = [i for i in full_interaction['cocoid']]
         val_preds =  dict(zip(cocoids, preds))
 
         if inference:
