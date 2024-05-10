@@ -1,6 +1,6 @@
 DEBUG : False  # if true : model saving, logging turned off.  
 INIT_VAL : True
-GREEDY_BASELINE : False
+GREEDY_BASELINE : True
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
 ONLY_VAL : False
@@ -26,11 +26,11 @@ log_spice : False
 
 finetune_model : clip # {gpt, clip} # automatically freeze gpt.transformer or CLIP
 clip_text : False
-freeze_wte : True
+freeze_wte : False
 freeze_adapter : False
 
 neg_mining:
-  curricullum : {"rand" : 1, "medium" : 2, "hard" : 3} #,  "medium" : 5, "hard" : 10} # indexed from 1
+  curricullum : {"rand" : 20} # , "medium" : 7, "hard" : 20} #,  "medium" : 5, "hard" : 10} # indexed from 1
   bag_size : 5
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
@@ -42,7 +42,7 @@ opts:
   batch_size : 350
   lr : 5e-8 #2e-5
   max_len : 50
-  checkpoint_freq : 1
+  checkpoint_freq : 0
   num_workers : 16
   dataset_dir : /home/manugaur/coco
   mle_model_path : /home/manugaur/EGG/checkpoints/blip2mistral/mle/best.pt #it loads only sender.clipcap (adapter + llm)
@@ -56,7 +56,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  clip_ft_2R7M20H_lr5e8_bsz5_wte_frozen #suffix to "sr_{data}_"
+  run_name :  clip_ft_lr5e8_all_unfrozen_greedyBL #suffix to "sr_{data}_"
   log_mmvp_all : False
 
 inference : 
