@@ -438,6 +438,7 @@ class Trainer:
         if True or config['finetune_model'] == "clip":
             
             wino_scores = winoground_benchmark(self.game.sender, self.game.sender.clip_preproc)
+            print(wino_scores)
             mmvp_results = mmvp_mllm_benchmark(self.game.sender, self.game.sender.clip_preproc, "/home/manugaur/MMVP_benchmark")
             full_interaction["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
             full_interaction.update({"mmvp_all" : mmvp_results})

@@ -181,17 +181,17 @@ def main(params, config):
 
     # # getting MLE preds : comment this and path to inference_preds and inference_log
 
-    # if config['mllm'] == "clipcap":   
-    #     trainer.game.sender.unpatch_model()
-    #     trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
-    #     trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
+    if config['mllm'] == "clipcap":   
+        trainer.game.sender.unpatch_model()
+        trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
+        trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
 
     #     # trainer.game.sender.clipcap.load_state_dict(get_best_state_dict(config))
 
-    #     config["WANDB"]["logging"] = False
+        config["WANDB"]["logging"] = False
 
-    #     if config["train_method"] != "mle":
-    #         trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
+        if config['mllm'] == "clipcap" and config["train_method"] != "mle":
+            trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")
