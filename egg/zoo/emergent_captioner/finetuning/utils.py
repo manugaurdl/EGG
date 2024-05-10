@@ -229,6 +229,7 @@ def get_best_state_dict(config):
     
     desired_format_state_dict = torch.load(config["official_clipcap_weights"])
     if config["SAVE_BEST_METRIC"] or config['ONLY_INFERENCE']:
+        print(f"checkpoint loaded : {os.path.join(config['opts']['checkpoint_dir'], 'best.pt')}")
         saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "best.pt"))#[1]
     else:
         saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "e_10.pt"))#[1]

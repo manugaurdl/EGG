@@ -97,7 +97,7 @@ def main(params, config):
     #test
     data_kwargs["batch_size"] = config["inference"]["batch_size"]
     data_kwargs["mle_train"] = False
-    test_loader = wrapper.get_split(split="test", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False, **data_kwargs)
+    test_loader = wrapper.get_split(split="test_val", caps_per_img = config["CAPS_PER_IMG_val"], neg_mining = False, **data_kwargs)
     # for idx, batch in tqdm(enumerate(train_loader),total = len(train_loader)):
     #     pass
 
@@ -190,7 +190,7 @@ def main(params, config):
 
         config["WANDB"]["logging"] = False
 
-        if config['mllm'] == "clipcap" and config["train_method"] != "mle":
+        if config['mllm'] == "clipcap":
             trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
 
     end = time.time()
