@@ -97,7 +97,12 @@ def count_trainable_parameters(model):
     print(f"Total Trainable Params: {total_params:,}")
     return total_params
 
-    
+base_dir = "/home/manugaur"
+a100_dir = "/home/ubuntu/pranav/pick_edit"
+if os.path.isdir(a100_dir):
+    base_dir = a100_dir
+
+
 class Trainer:
     """
     Implements the training logic. Some common configuration (checkpointing frequency, path, validation frequency)
@@ -250,7 +255,7 @@ class Trainer:
             val_log["mmvp_avg"] = interaction['mmvp_avg']
             # val_log["recall_5_clip_zs"] = interaction.aux['recall_5_clip_zs'].mean()
             # val_log["recall_1_clip_zs"] = interaction.aux["recall_1_clip_zs"].mean()
-            val_log.update(interaction['wino'])
+            # val_log.update(interaction['wino'])
 
             if config["WANDB"]["log_mmvp_all"]:
                 val_log.update(interaction['mmvp_all'])
@@ -265,11 +270,11 @@ class Trainer:
         metric decides how you save model. If clip_ft : save model with highest mmvp.
         """
         if loss_type == 'discriminative':
-            if config['finetune_model'] == "llm":
-                metric =  interaction['acc'].mean().item()
-            elif config['finetune_model']=="clip":
-                # metric = interaction['mmvp_avg']
-                metric = interaction['wino']['wino_text_rand_25']
+            # if config['finetune_model'] == "llm":
+            metric =  interaction['acc'].mean().item()
+            # elif config['finetune_model']=="clip":
+            #     # metric = interaction['mmvp_avg']
+            #     metric = interaction['wino']['wino_text_rand_25']
             val_log["VAL_R@1"] = interaction['acc'].mean().item()
         
         else:
@@ -445,12 +450,12 @@ class Trainer:
         # MMVP eval
         if config['finetune_model'] == "clip":
 
-            mmvp_results = mmvp_vlm_benchmark(self.game.sender.clip, self.game.sender.clip_preproc, "/home/manugaur/mmvp_vlm")
+            mmvp_results = mmvp_vlm_benchmark(self.game.sender.clip, self.game.sender.clip_preproc, os.path.join(base_dir, "mmvp_vlm"))
             full_interaction["mmvp_avg"] =  np.array(list(mmvp_results.values())).mean()
             full_interaction.update({"mmvp_all" : mmvp_results})
 
-            wino_scores = winoground_vlm(self.game.sender.clip, self.game.sender.clip_preproc)
-            full_interaction["wino"] = wino_scores
+            # wino_scores = winoground_vlm(self.game.sender.clip, self.game.sender.clip_preproc)
+            # full_interaction["wino"] = wino_scores
         return mean_loss.item(), full_interaction, reward, summary
 
     def train_epoch(self,loader, WANDB, GREEDY_BASELINE, train_method, opts, config, epoch):
@@ -669,15 +674,16 @@ class Trainer:
                 metric = self.rand_neg_val(epoch + 1, WANDB, config = config)
             
                 # Saving model
-
-                if (self.SAVE_BEST_METRIC and metric > self.best_metric_score) or (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0): 
+                save_epoch = (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0)
+                save_best = (self.SAVE_BEST_METRIC and metric > self.best_metric_score) 
+                if save_best or save_epoch: 
                     for idx, callback in enumerate(self.callbacks):
                         """
                         callbacks.ConsoleLogger: aggregated_print
                         finetuning.utils.ModelSaver: save_clipcap_model > {run_name}_e/final/best.pt                   
                         callbacks.CheckpointSaver: pass
                         """
-                        callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], self.SAVE_BEST_METRIC)
+                        callback.on_epoch_end(train_loss, train_interaction, epoch + 1, config['WANDB']['run_name'], save_best, save_epoch)
                         
                     if self.SAVE_BEST_METRIC:
                         self.best_metric_score = metric

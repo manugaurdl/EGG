@@ -14,6 +14,7 @@ import csv
 def mmvp_vlm_benchmark(model, preprocess, benchmark_dir, device = "cpu"):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # model, preprocess = load(model_name, device=device)
+
     image_dir = os.path.join(benchmark_dir, 'images')
     csv_file = os.path.join(benchmark_dir, 'Questions.csv')
     

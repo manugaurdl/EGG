@@ -116,6 +116,15 @@ def LoRA(model,  rank, model_type, config):
 
                 parameterize(clip.transformer.resblocks[l_num].attn.out_proj, "weight", rank=rank)
             #freeze params
+        if config['adapter_lora']:
+            parameterize(model.clipcap.clip_project.model[0], "weight", config["adapter_rank"])
+            parameterize(model.clipcap.clip_project.model[2], "weight", config["adapter_rank"])
+            
+            for name, param in model.clipcap.clip_project.named_parameters():
+                if 'lora' in name:
+                    continue
+                else:
+                    param.requires_grad = False
 
         for name, param in model.named_parameters():
             if "clip_project" in name or 'lora' in name or 'wte.weight' in name: 

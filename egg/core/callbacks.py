@@ -94,7 +94,7 @@ class ConsoleLogger(Callback):
     def on_validation_end(self, loss: float, logs: Interaction, epoch: int):
         self.aggregate_print(loss, logs, "test", epoch)
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool, CHECKPOINT_FREQ):
         if self.print_train_loss:
             self.aggregate_print(loss, logs, "train", epoch)
 
@@ -212,7 +212,7 @@ class CheckpointSaver(Callback):
         self.max_checkpoints = max_checkpoints
         self.epoch_counter = 0
 
-    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool):
+    def on_epoch_end(self, loss: float, logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC:bool, CHECKPOINT_FREQ : int):
         self.epoch_counter = epoch
         if self.checkpoint_freq > 0 and (epoch % self.checkpoint_freq == 0):
             filename = f"{self.prefix}_{epoch}" if self.prefix else str(epoch)

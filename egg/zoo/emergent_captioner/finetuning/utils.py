@@ -96,10 +96,8 @@ class ModelSaver(Callback):
         # cleaning a model such that it has default settings e.g. no buffer and no modules/tensors in the loss
         # this is done to avoid mandatory fields when loading a model e.g. a tensor of negatives
         self.trainer.game.loss.remove_fields_negatives()
-        try:
-            self.trainer.game.sender.unpatch_model()
-        except:
-            pass
+        
+        self.trainer.game.sender.unpatch_model()
         
         return MyCheckpoint(
             epoch=self.epoch,
@@ -109,7 +107,7 @@ class ModelSaver(Callback):
             opts=self.opts,
         )
 
-    def save_clipclap_model(self, epoch=None, model_name = None, SAVE_BEST_METRIC = None ):
+    def save_clipclap_model(self, epoch=None, model_name = None, SAVE_BEST_METRIC = None, save_epoch = False):
         self.is_ddp = self.trainer.distributed_context.is_distributed
 
         if hasattr(self.trainer, "checkpoint_path"):
@@ -127,30 +125,37 @@ class ModelSaver(Callback):
                     model_name = f"best.pt"
                 
                 x = self.get_checkpoint()[1]
-                if self.config['mllm']=="llava-phi":
+
+                if self.config['finetune_model']=="clip":
                     for name in list(x.keys()):
-                        if 'lora' not in name:
+                        # if 'clip_project' in name or 'lora' in name:
+                        if 'lora' in name:
+                            continue
+                        else:
                             x.pop(name)
 
                 torch.save(
                     x,
                     self.trainer.checkpoint_path / model_name,
                 )
+                if save_epoch:
+                    torch.save(x, str(self.trainer.checkpoint_path / model_name).split("best")[0] + f"epoch_{epoch}")
+
+
+
                 if self.config['mllm']=="llava-phi":
                     optimizer_path = os.path.join(str(self.trainer.checkpoint_path / model_name).split('/best')[0],"optimizer.pth")
                     torch.save(self.trainer.optimizer.state_dict, optimizer_path)
                 # if self.is_ddp:
                 #     self.trainer.game.module.sender.patch_model()
                 # else:         
-                try:           
-                    self.trainer.game.sender.patch_model()
-                except:
-                    pass
+                
+                self.trainer.game.sender.patch_model()
 
-    def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC: bool):
+    def on_epoch_end(self, loss: float, _logs: Interaction, epoch: int, model_name : str, SAVE_BEST_METRIC: bool, save_epoch : bool):
         self.epoch = epoch
         if self.opts.captioner_model == "clipcap":
-            self.save_clipclap_model(epoch=epoch, model_name = model_name, SAVE_BEST_METRIC = SAVE_BEST_METRIC)
+            self.save_clipclap_model(epoch=epoch, model_name = model_name, SAVE_BEST_METRIC = SAVE_BEST_METRIC, save_epoch = save_epoch)
 
     def on_train_end(self, epoch : int, model_name : str):
 
@@ -234,17 +239,7 @@ def get_best_state_dict(config):
     else:
         saved_state_dict = torch.load(os.path.join(config["opts"]["checkpoint_dir"], "e_10.pt"))#[1]
 
-    state_dict = {}
-    
-    #LORA
-    for param,weight in saved_state_dict.items():
-        if "sender.clipcap" in param:
-            state_dict[param.split('clipcap.')[-1]]= weight
-    
-    #else:
-    # for idx, k in enumerate(desired_format_state_dict.keys()):
-    #     state_dict[k] = saved_state_dict["sender.clipcap." + k]
-    return state_dict
+    return saved_state_dict
 
 def int2mil(number):
     if abs(number) >= 100_000:
