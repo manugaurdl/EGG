@@ -358,10 +358,12 @@ if __name__ == "__main__":
     # params
     config['use_benchmark'] = True
     config["use_gt"] = False
-    config['method'] = "mle"
-    config['data'] = "coco"
+    config['method'] = "sr_2R6M10H_bsz3"
+    config['data'] = "blip2mistral"
     config["opts"]["batch_size"]= 100
-    config['split'] = "test_val"
+    config['split'] = "test"
+    if config['use_benchmark']:
+        config['split'] = "test_val"
     config['scorer'] =  "vitb32"  # "", "vitb32"
     config['use_greedy'] = False
     config['avg_text_feat'] = False 
