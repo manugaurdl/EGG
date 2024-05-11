@@ -1,7 +1,7 @@
 DEBUG : False  # if true : model saving, logging turned off.  
 INIT_VAL : True
 GREEDY_BASELINE : False
-SAVE_BEST_METRIC : False # to save nothing : = False and checkpoint_freq = 0
+SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
 ONLY_VAL : False
 
@@ -23,8 +23,8 @@ lora : True
 lora_rank : 32 #64 for clip
 clip_mlp_ft : False
 log_spice : False
-
-finetune_model : llm # {gpt, clip} # automatically freeze gpt.transformer or CLIP
+clip_text : False
+finetune_model : clip # {gpt, clip} # automatically freeze gpt.transformer or CLIP
 freeze_wte : True
 freeze_adapter : False
 

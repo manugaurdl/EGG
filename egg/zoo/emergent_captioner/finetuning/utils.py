@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+True# Copyright (c) Facebook, Inc. and its affiliates.
 
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -207,9 +207,9 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        config["SAVE_BEST_METRIC"] = False
+        # config["SAVE_BEST_METRIC"] = False
         config["WANDB"]["logging"] = False
-        config["opts"]["checkpoint_freq"] = 0
+        # config["opts"]["checkpoint_freq"] = 0
     return config
 
 def get_cl_args(config):
