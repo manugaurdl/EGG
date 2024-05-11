@@ -672,7 +672,7 @@ class Trainer:
             if self.distributed_context.is_leader:
                 torch.cuda.empty_cache()
                 metric = self.rand_neg_val(epoch + 1, WANDB, config = config)
-            
+                
                 # Saving model
                 save_epoch = (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0)
                 save_best = (self.SAVE_BEST_METRIC and metric > self.best_metric_score) 

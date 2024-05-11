@@ -1,5 +1,5 @@
 DEBUG : False  # if true : model saving, logging turned off.  
-INIT_VAL : True
+INIT_VAL : False
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
@@ -18,15 +18,21 @@ diff_lr: False
 contrastive : False
 reinforce : True
 mllm : "clipcap"
+
+
 #lora
 lora : True
-lora_rank : 32 #64 for clip
-clip_mlp_ft : False
-log_spice : False
-clip_text : False
 finetune_model : clip # {gpt, clip} # automatically freeze gpt.transformer or CLIP
+lora_rank : 32
+clip_mlp_ft : True
+adapter_lora : True
+adapter_rank : 32
+clip_text : False
+
+# freezing layers
 freeze_wte : True
 freeze_adapter : False
+log_spice : False
 
 neg_mining:
   curricullum : {"rand" : 20} #,  "medium" : 5, "hard" : 10} # indexed from 1
@@ -55,7 +61,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  lr9e8_lora_r32 # _lr_7e8 #suffix to "sr_{data}_"
+  run_name :  adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
 
 inference : 

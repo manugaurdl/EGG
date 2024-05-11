@@ -96,7 +96,7 @@ class ModelSaver(Callback):
         # cleaning a model such that it has default settings e.g. no buffer and no modules/tensors in the loss
         # this is done to avoid mandatory fields when loading a model e.g. a tensor of negatives
         self.trainer.game.loss.remove_fields_negatives()
-        
+
         self.trainer.game.sender.unpatch_model()
         
         return MyCheckpoint(
@@ -139,7 +139,7 @@ class ModelSaver(Callback):
                     self.trainer.checkpoint_path / model_name,
                 )
                 if save_epoch:
-                    torch.save(x, str(self.trainer.checkpoint_path / model_name).split("best")[0] + f"epoch_{epoch}")
+                    torch.save(x, str(self.trainer.checkpoint_path / model_name).split("best")[0] + f"epoch_{epoch}.pt")
 
 
 
