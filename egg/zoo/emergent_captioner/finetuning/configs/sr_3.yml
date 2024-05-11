@@ -21,7 +21,7 @@ mllm : "clipcap"
 #lora
 lora : True
 lora_rank : 64 #64 for clip
-clip_mlp_ft : False
+clip_mlp_ft : True
 log_spice : False
 
 finetune_model : llm # {gpt, clip} # automatically freeze gpt.transformer or CLIP
