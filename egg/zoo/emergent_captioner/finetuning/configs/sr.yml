@@ -1,7 +1,7 @@
 DEBUG : False  # if true : model saving, logging turned off.  
 INIT_VAL : True
 GREEDY_BASELINE : False
-SAVE_BEST_METRIC : False # to save nothing : = False and checkpoint_freq = 0
+SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : True
 ONLY_VAL : False
 
@@ -37,25 +37,25 @@ neg_mining:
 
 opts: 
   baseline : mean
-  n_epochs : 20
-  batch_size : 250
+  n_epochs : 1
+  batch_size : 100
   lr : 5e-8 #2e-5
   max_len : 50
   checkpoint_freq : 1
   num_workers : 16
   dataset_dir : /home/manugaur/coco
-  # mle_model_path : /home/manugaur/EGG/checkpoints/blip2mistral/mle/best.pt #it loads only sender.clipcap (adapter + llm)
+  mle_model_path : /home/manugaur/EGG/checkpoints/blip2mistral/mle/best.pt #it loads only sender.clipcap (adapter + llm)
   checkpoint_dir : /home/manugaur/EGG/checkpoints/blip2mistral/sr
   recv_clip_model : ViT-B/32 #ViT-L/14@336px
 
 WANDB:
-  logging : True
+  logging : False
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  2R6M10H_bsz3_final # _lr_7e8 #suffix to "sr_{data}_"
+  run_name :  dummy # _lr_7e8 #suffix to "sr_{data}_"
   log_mmvp_all : False
 
 inference : 

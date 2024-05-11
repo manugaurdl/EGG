@@ -669,6 +669,7 @@ class Trainer:
                 metric = self.rand_neg_val(epoch + 1, WANDB, config = config)
             
                 # Saving model
+
                 if (self.SAVE_BEST_METRIC and metric > self.best_metric_score) or (self.opts.checkpoint_freq > 0 and (epoch + 1) % self.opts.checkpoint_freq==0): 
                     for idx, callback in enumerate(self.callbacks):
                         """

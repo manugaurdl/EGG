@@ -470,7 +470,7 @@ class ClipCapSender(nn.Module):
         )
         if train_method != "mle":
             if clipcap_path is not None:
-                print("| LOADED CLIPCAP MODEL")
+                print(f"| LOADED MODEL : {clipcap_path}")
                 desired_format_state_dict = torch.load(official_clipcap_weights)
                 saved_state_dict = torch.load(clipcap_path)
                 
