@@ -74,6 +74,12 @@ def get_loader(epoch, ranges):
         prev_end = end
     raise Exception("epoch out of curricullum")
 
+def get_ds(epoch, config):
+    for start_epoch, level_bsz in config['neg_mining']['curricullum'].items():
+        level, bsz = level_bsz
+        if start_epoch > epoch:
+            return f"{level}_{bsz}"
+
 def count_trainable_parameters(model):
     table = PrettyTable(["Modules", "Requires grad", "Trainable parameters"])
     table.align["Modules"] = "l"
@@ -659,10 +665,15 @@ class Trainer:
             print(f"Training epoch {epoch + 1}")
 
             # for callback in self.callbacks:
-            #     callback.on_epoch_begin(epoch + 1)                 
-            loader = get_loader(epoch, config['neg_mining']['curricullum'])
-
-            train_loss, train_interaction = self.train_epoch(self.train_loaders[loader], WANDB, self.GREEDY_BASELINE, self.train_method, self.opts, config, epoch)
+            #     callback.on_epoch_begin(epoch + 1)
+            
+            level_bsz = get_ds(epoch, config)                 
+            # loader = get_loader(epoch, config['neg_mining']['curricullum'])
+            print("***"*100)
+            print(f"epoch :{epoch}")
+            print(f"level_bsz : {level_bsz}")
+            print("***"*100)
+            train_loss, train_interaction = self.train_epoch(self.train_loaders[level_bsz], WANDB, self.GREEDY_BASELINE, self.train_method, self.opts, config, epoch)
             if WANDB:
                 wandb.log({"Avg Loss" : train_loss,
                             "epoch" : epoch + 1}, step = self.STEP)

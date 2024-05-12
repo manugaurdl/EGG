@@ -38,11 +38,13 @@ np.random.seed(seed)
 # os.environ["CUDA_VISIBLE_DEVICES"] = str((0))
 os.environ["WANDB_API_KEY"] = "b389b1a0f740ce1efcfd09b332fd3a83ef6130fe"
 
-def get_loader(wrapper, level, data_kwargs):
+def get_loader(wrapper, level_bsz, data_kwargs):
+        level, bsz = level_bsz.split("_")
+        print(level_bsz)
         if level == "rand":
             return wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = False,  **data_kwargs)
         else:
-            return wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = True, level = level,  **data_kwargs)
+            return wrapper.get_split(split="train", caps_per_img= config["CAPS_PER_IMG_train"], neg_mining = True, level_bsz = level_bsz,  **data_kwargs)
     
 
 def main(params, config):
@@ -80,7 +82,7 @@ def main(params, config):
     )
     
     #train
-    train_loaders = {level : get_loader(wrapper, level, data_kwargs) for level in config["neg_mining"]["curricullum"].keys()}
+    train_loaders = {f"{i[0]}_{i[1]}" : get_loader(wrapper, f"{i[0]}_{i[1]}", data_kwargs) for i in config["neg_mining"]["curricullum"].values()}
     #val
     if config['train_method'] == "mle":
         val_loader_rand = wrapper.get_split(split="val", caps_per_img = 5, neg_mining = False,  **data_kwargs)

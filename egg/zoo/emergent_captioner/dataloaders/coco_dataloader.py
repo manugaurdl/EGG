@@ -54,7 +54,7 @@ class CocoDataset:
 
     def __len__(self):
         if self.debug:
-            return 10
+            return 100
         else:
             return len(self.samples)
     
@@ -165,7 +165,7 @@ class CocoNegDataset:
 
     def __len__(self):
         if self.debug:
-            return 100
+            return 40
         else:
             return len(self.bags)
 
@@ -259,13 +259,13 @@ class CocoWrapper:
         # self.split2samples['test'] = val_test_list
         
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        neg_train = False
-        if any(key in self.neg_mining["curricullum"] for key in ['easy', "medium", "hard"]):
-            neg_train = True
-        self.split2bags = self.load_bags(jatayu, neg_train)
+        # neg_train = False
+        # if any(key in self.neg_mining["curricullum"] for key in ['easy', "medium", "hard"]):
+        #     neg_train = True
+        self.split2bags = self.load_bags(jatayu, neg_mining['curricullum'])
         print(f"{self.num_omitted_ids} cocoids are removed during preproc for {self.captions_type} captions")
 
-    def load_bags(self, jatayu, neg_train):
+    def load_bags(self, jatayu, curricullum):
         if jatayu:
             # path2bags = "/home/manugaur/EGG/hard_negs/bags/top_k_sim/"  
             path2bags = "/home/manugaur/EGG/hard_negs/bags/diff_levels/"
@@ -274,31 +274,32 @@ class CocoWrapper:
         else:
             path2bags = "/ssd_scratch/cvit/manu/EGG/hard_negs/bags/top_k_sim/"
 
-        split2bags = defaultdict(dict)
-        diff_levels = ['easy', 'hard', 'medium']
-        splits = []
-        splits  = ["test", "val", "train"]
+        """"split  = "train" | Removed val and testing. Train on this. Eval on our bags. """
         
-        for level in diff_levels:
-            for split in splits:
-                if split in ['val', "test"]:
-                    if level in ["medium", "hard"]:
-                        with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['val_bag_size']}.pkl"), "rb") as f:
-                            split2bags[level][split] = pickle.load(f)
-                    else:
-                        continue
-                else:
-                    with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['bag_size']}.pkl"), "rb") as f:
-                        split2bags[level][split] = pickle.load(f)
+        split2bags = {}
+        for i in list(curricullum.values()):
+            level, bsz = i
+            if level=="rand_crrclm":
+                l = []
+                for diff in ['easy', 'medium', 'train']:
+                    l.extend(pickle.load(open(os.path.join(path2bags,f"{diff}/train/bsz_{bsz}.pkl"), "rb")))
+            else:
+                l = pickle.load(open(os.path.join(path2bags,f"{level}/train/bsz_{bsz}.pkl"), "rb"))
+            split2bags[f"{level}_{bsz}"] = l
         
-        rand_crrclm = defaultdict(list)
-        for diff in list(split2bags.keys()):
-            rand_crrclm['train'].extend(split2bags[diff]['train'])
-        split2bags['rand_crrclm'] = rand_crrclm
-        # for split in splits:
-        #     with open(os.path.join(path2bags, split, f"cocoid_bag_size_{self.neg_mining['bag_size']}.json"), "r") as f:
-        #         bags = json.load(f)
-        #     split2bags[split] = bags
+        
+        # for level in diff_levels:
+
+        #     if split in ['val', "test"]:
+        #         if level in ["medium", "hard"]:
+        #             with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['val_bag_size']}.pkl"), "rb") as f:
+        #                 split2bags[level][split] = pickle.load(f)
+        #         else:
+        #             continue
+        #     else:
+        #         with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['bag_size']}.pkl"), "rb") as f:
+        #             split2bags[level][split] = pickle.load(f)
+        
         return split2bags
 
     def tokenize(self,split):
@@ -385,9 +386,11 @@ class CocoWrapper:
         mllm : str,
         num_workers: int = 8,
         seed: int = 111,
-        level : str = None,
+        level_bsz : str = None,
 
     ):
+        if level_bsz is not None:
+            level, bsz = level_bsz.split("_")
         if mle_train and split != "test":
             self.tokenize(split)
         shuffle = not debug and split == "train"
@@ -401,7 +404,7 @@ class CocoWrapper:
         if neg_mining:
             if level == 'rand_crrclm':
                 assert split == 'train', Exception("Random Crrclm is only done for train set.")
-            bags = self.split2bags[level][split] # samples in bags are in cocoid format.
+            bags = self.split2bags[level_bsz] # samples in bags are in cocoid format.
             ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx, mllm = mllm)
         else :
             ds = CocoDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len,transform=transform, debug = debug, mllm = mllm)
@@ -431,7 +434,7 @@ class CocoWrapper:
             sampler = None
 
         if neg_mining:
-            bag_size = self.neg_mining["val_bag_size"] if split == "val" else self.neg_mining["bag_size"]
+            bag_size = int(self.neg_mining["val_bag_size"] if split == "val" else bsz)
             bags_per_batch = int(batch_size/bag_size)
 
             loader = torch.utils.data.DataLoader(
@@ -442,7 +445,7 @@ class CocoWrapper:
                 collate_fn = hard_neg_collate,
                 num_workers=num_workers,
                 pin_memory=True,
-                drop_last=False,
+                drop_last=True,
             )
         else:
                 
@@ -453,7 +456,7 @@ class CocoWrapper:
                 sampler=sampler,
                 num_workers=num_workers,
                 pin_memory=True,
-                drop_last=False,
+                drop_last=True,
             )
 
         return loader

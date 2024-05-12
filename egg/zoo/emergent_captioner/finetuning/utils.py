@@ -140,17 +140,18 @@ class ModelSaver(Callback):
                         continue
                     else:
                         x.pop(name)
-
-                torch.save(
-                    x,
-                    self.trainer.checkpoint_path / model_name,
-                )
+                
+                if SAVE_BEST_METRIC:
+                    torch.save(
+                        x,
+                        self.trainer.checkpoint_path / model_name,
+                    )
                 if save_epoch:
                     torch.save(x, str(self.trainer.checkpoint_path / model_name).split("best")[0] + f"epoch_{epoch}.pt")
 
 
 
-                if self.config['mllm']=="llava-phi":
+                if self.config['save_optimizer'] and SAVE_BEST_METRIC:
                     optimizer_path = os.path.join(str(self.trainer.checkpoint_path / model_name).split('/best')[0],"optimizer.pth")
                     torch.save(self.trainer.optimizer.state_dict, optimizer_path)
                 # if self.is_ddp:
