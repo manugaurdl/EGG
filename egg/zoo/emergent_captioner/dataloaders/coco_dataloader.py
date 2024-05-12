@@ -277,9 +277,7 @@ class CocoWrapper:
         split2bags = defaultdict(dict)
         diff_levels = ['easy', 'hard', 'medium']
         splits = []
-        splits  = ["test", "val"]
-        if neg_train :
-            splits.append("train")
+        splits  = ["test", "val", "train"]
         
         for level in diff_levels:
             for split in splits:
@@ -294,7 +292,6 @@ class CocoWrapper:
                         split2bags[level][split] = pickle.load(f)
         
         rand_crrclm = defaultdict(list)
-
         for diff in list(split2bags.keys()):
             rand_crrclm['train'].extend(split2bags[diff]['train'])
         split2bags['rand_crrclm'] = rand_crrclm
@@ -402,7 +399,7 @@ class CocoWrapper:
         assert samples, f"Wrong split {split}"
        
         if neg_mining:
-            if split == 'rand_crrclm':
+            if level == 'rand_crrclm':
                 assert split == 'train', Exception("Random Crrclm is only done for train set.")
             bags = self.split2bags[level][split] # samples in bags are in cocoid format.
             ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx, mllm = mllm)
