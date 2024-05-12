@@ -129,6 +129,7 @@ class Trainer:
         grad_norm: float = None,
         aggregate_interaction_logs: bool = True,
         debug: bool = False,
+        config:dict = None,
     ):
         """
         :param game: A nn.Module that implements forward(); it is expected that forward returns a tuple of (loss, d),

@@ -117,8 +117,12 @@ def main(params, config):
         )
     else:
         optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
-    # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
-
+        # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
+    
+    # if config['resume_train']['do']:
+    #     path = os.path.join(opts.checkpoint_dir.split("checkpoints")[0], f"checkpoints/{config['captions_type']}", config['resume_train']['path'])
+    #     optimizer.load_state_dict(torch.load(os.path.join(path, "optimizer.pth")))
+        
     # Create trainers object
     if config["train_method"] == "mle":
         total_steps = opts.n_epochs* len(train_loaders['rand'])
@@ -138,6 +142,7 @@ def main(params, config):
                 ModelSaver(opts, config),
             ],
             debug=opts.debug,
+            config= config,
         )
     else:
         trainer = core.Trainer(
@@ -152,6 +157,7 @@ def main(params, config):
             ModelSaver(opts, config),
         ],
         debug=opts.debug,
+        config= config,
         )  
     
     if opts.distributed_context.is_distributed:

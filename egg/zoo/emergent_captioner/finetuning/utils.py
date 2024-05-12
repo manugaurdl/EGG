@@ -116,15 +116,10 @@ class ModelSaver(Callback):
                 and self.trainer.distributed_context.is_leader
             ):
                 self.trainer.checkpoint_path.mkdir(exist_ok=True, parents=True)
-                if model_name is None :
-                    model_name = f"clip_cap_model_e_{epoch if epoch else 'final'}.pt"
-                else:
-                    model_name  = f"e_{epoch if epoch else 'final'}.pt"
+
+                model_name  = f"e_{epoch if epoch else 'final'}.pt"
                 
-                if SAVE_BEST_METRIC:
-                    model_name = f"best.pt"
-                
-                x = self.get_checkpoint()[1]
+                x = self.trainer.game.sender.state_dict()
 
 
                 # if self.config['finetune_model']=="clip":
@@ -144,16 +139,17 @@ class ModelSaver(Callback):
                 if SAVE_BEST_METRIC:
                     torch.save(
                         x,
-                        self.trainer.checkpoint_path / model_name,
+                        self.trainer.checkpoint_path / "best.pt",
                     )
                 if save_epoch:
-                    torch.save(x, str(self.trainer.checkpoint_path / model_name).split("best")[0] + f"epoch_{epoch}.pt")
+                    torch.save(x, str(self.trainer.checkpoint_path / model_name))
 
 
-
-                if self.config['save_optimizer'] and SAVE_BEST_METRIC:
-                    optimizer_path = os.path.join(str(self.trainer.checkpoint_path / model_name).split('/best')[0],"optimizer.pth")
-                    torch.save(self.trainer.optimizer.state_dict, optimizer_path)
+                # optimizer path corresponds to the best.pt checkpoint. Want optim state dict for 7th epoch ? --> train only till 7 epochs!
+                
+                if self.config['neg_mining']['save_optimizer'] and save_epoch:
+                    optimizer_path =  os.path.join(str(self.trainer.checkpoint_path) ,f"optimizer{epoch}.pth")
+                    torch.save(self.trainer.optimizer.state_dict(), optimizer_path)
                 # if self.is_ddp:
                 #     self.trainer.game.module.sender.patch_model()
                 # else:         
@@ -220,9 +216,9 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        config["SAVE_BEST_METRIC"] = False
+        # config["SAVE_BEST_METRIC"] = False
         config["WANDB"]["logging"] = False
-        config["opts"]["checkpoint_freq"] = 0
+        # config["opts"]["checkpoint_freq"] = 0
     return config
 
 def get_cl_args(config):

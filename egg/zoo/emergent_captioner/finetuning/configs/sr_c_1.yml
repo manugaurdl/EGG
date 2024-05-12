@@ -36,9 +36,14 @@ log_spice : False
 
 neg_mining:
   curricullum : {1 : ["easy",5],  3: ["medium", 3], 5 : ["hard", 7], 15 : ["hard", 5], 17:["hard", 7], 20 :["hard", 10]} #,  "medium" : 5, "hard" : 10} # indexed from 1
+  save_optimizer : True
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
   val_level : "rand"
+
+resume_train: 
+  do :  False
+  path : sr_dummy # if None, train from scratch
 
 opts: 
   baseline : mean
@@ -46,7 +51,7 @@ opts:
   batch_size : 100
   lr : 9e-8 #2e-5
   max_len : 50
-  checkpoint_freq : 0
+  checkpoint_freq : 1
   num_workers : 16
   dataset_dir : /home/manugaur/coco
   mle_model_path : /home/manugaur/EGG/checkpoints/blip2mistral/mle/best.pt #it loads only sender.clipcap (adapter + llm)
@@ -60,7 +65,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : 7E20H_bsz5 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
+  run_name : dummy #adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
 
 inference : 
