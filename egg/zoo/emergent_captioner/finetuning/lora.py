@@ -47,7 +47,7 @@ layer, weight_name, linear_layer_parameterization(layer, layer.weight.device, ra
 
 def LoRA(model,  rank, model_type, config):
     
-    if model_type =="llm":
+    if model_type =="llm" or model_type=="both":
         
         print(f"trainable params before LORA :{trainable_params(model)}")
         
@@ -56,12 +56,12 @@ def LoRA(model,  rank, model_type, config):
             for i in range(12):
                 parameterize(model.clipcap.gpt.transformer.h[i].attn.c_attn, "weight", rank)
                 parameterize(model.clipcap.gpt.transformer.h[i].attn.c_proj, "weight", rank)
-                parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc, "weight", rank)
-                parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, "weight", rank)
+                # parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_fc, "weight", rank)
+                # parameterize(model.clipcap.gpt.transformer.h[i].mlp.c_proj, "weight", rank)
             
             # freeze GPT
             for name, param in model.clipcap.gpt.named_parameters():
-                if 'lora' in name or "wte.weight" in name:
+                if 'lora' in name : #or "wte.weight" in name:
                     continue
                 else:
                     param.requires_grad = False
@@ -87,7 +87,7 @@ def LoRA(model,  rank, model_type, config):
 
         print(f"trainable params after LORA :{trainable_params(model)}")
     
-    else:
+    if model_type=="clip" or model_type=="both":
         print(f"CLIP trainable params before LORA :{trainable_params(model.clip)}")
         for l_num in range(12):
             parametrize.register_parametrization(
@@ -127,7 +127,7 @@ def LoRA(model,  rank, model_type, config):
                     param.requires_grad = False
 
         for name, param in model.named_parameters():
-            if "clip_project" in name or 'lora' in name or 'wte.weight' in name: 
+            if "clip_project" in name or 'lora' in name:#or 'wte.weight' in name: 
                 continue
             else:
                 param.requires_grad = False            

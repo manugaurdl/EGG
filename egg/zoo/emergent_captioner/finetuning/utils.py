@@ -126,10 +126,17 @@ class ModelSaver(Callback):
                 
                 x = self.get_checkpoint()[1]
 
+
                 if self.config['finetune_model']=="clip":
                     for name in list(x.keys()):
-                        # if 'clip_project' in name or 'lora' in name:
-                        if 'lora' in name:
+                        condition = 'lora' in name 
+                        if not self.config['adapter_lora']:
+                            condition = condition and 'clip_project' in name
+                        
+                        if not self.config['freeze_wte']:
+                            condition = condition and 'wte.weight' in name 
+
+                        if condition:
                             continue
                         else:
                             x.pop(name)
