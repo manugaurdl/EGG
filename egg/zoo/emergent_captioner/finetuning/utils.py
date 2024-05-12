@@ -259,3 +259,4 @@ def trainable_params(model):
     # print(f'{int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))} trainable params')
     return int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))
     # return sum(p.numel() for p in model.parameters() if p.requires_grad == True)
+
