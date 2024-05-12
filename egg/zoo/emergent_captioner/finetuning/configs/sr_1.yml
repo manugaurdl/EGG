@@ -35,7 +35,7 @@ freeze_adapter : False
 log_spice : False
 
 neg_mining:
-  curricullum : {"hard" : 20} #,  "medium" : 5, "hard" : 10} # indexed from 1
+  curricullum : {"rand" : 20} #,  "medium" : 5, "hard" : 10} # indexed from 1
   bag_size : 5
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
@@ -55,7 +55,7 @@ opts:
   recv_clip_model : ViT-B/32 #ViT-L/14@336px
 
 WANDB:
-  logging : False
+  logging : True
   sweep : False
   sweep_id: ""
   sweep_run_count : 100

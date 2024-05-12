@@ -293,6 +293,11 @@ class CocoWrapper:
                     with open(os.path.join(path2bags,level, split, f"bsz_{self.neg_mining['bag_size']}.pkl"), "rb") as f:
                         split2bags[level][split] = pickle.load(f)
         
+        rand_crrclm = defaultdict(list)
+
+        for diff in list(split2bags.keys()):
+            rand_crrclm['train'].extend(split2bags[diff]['train'])
+        split2bags['rand_crrclm'] = rand_crrclm
         # for split in splits:
         #     with open(os.path.join(path2bags, split, f"cocoid_bag_size_{self.neg_mining['bag_size']}.json"), "r") as f:
         #         bags = json.load(f)
@@ -397,6 +402,8 @@ class CocoWrapper:
         assert samples, f"Wrong split {split}"
        
         if neg_mining:
+            if split == 'rand_crrclm':
+                assert split == 'train', Exception("Random Crrclm is only done for train set.")
             bags = self.split2bags[level][split] # samples in bags are in cocoid format.
             ds = CocoNegDataset(self.dataset_dir, samples, mle_train, split, caps_per_img, self.captions_type, max_len_token, prefix_len, transform, debug, bags, self.cocoid2samples_idx, mllm = mllm)
         else :
