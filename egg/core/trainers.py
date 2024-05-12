@@ -368,7 +368,6 @@ class Trainer:
 
         with torch.no_grad():
             for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
-
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
@@ -484,7 +483,6 @@ class Trainer:
         self.optimizer.zero_grad()
 
         for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
-
             # batch.append(GREEDY_BASELINE)
             if self.debug and batch_id == 10:
                 break

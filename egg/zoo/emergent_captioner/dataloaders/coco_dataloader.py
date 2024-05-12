@@ -54,7 +54,7 @@ class CocoDataset:
 
     def __len__(self):
         if self.debug:
-            return 100
+            return 10
         else:
             return len(self.samples)
     
@@ -182,10 +182,17 @@ class CocoNegDataset:
                 sample_idx = self.cocoid2samples_idx[cocoid]
                 file_path, captions, image_id = self.samples[sample_idx]
                 assert image_id == cocoid
-                if os.path.isdir("/home/manugaur/EGG/sender_input"):
-                    sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_input/", f"{cocoid}.pt")))
+                a100_dir = "/mnt/localdisk-1/figma_scrapped_data/pick_edit"
+                if os.path.isdir(a100_dir):
+#                    torch.save(self.transform(Image.open(os.path.join(self.root, file_path)).convert("RGB")), os.path.join(a100_dir, f"{cocoid}.pt"))
+                    sender_inputs.append(torch.load(os.path.join(a100_dir, f"{cocoid}.pt")))
                 else:
-                    sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/", f"{cocoid}.pt")))
+                    if os.path.isdir("/home/manugaur/EGG/sender_input"):
+                        sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_input/", f"{cocoid}.pt")))
+                    else:
+                        sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/", f"{cocoid}.pt")))
+
+                # sender_inputs.append(self.transform(Image.open(os.path.join(self.root, file_path)).convert("RGB")))
 
                 # aux_list.append({"cocoid": torch.tensor([image_id]), "captions": captions[:5]}) 
                 # aux_list.append({"captions": captions[:5]}) 
@@ -460,3 +467,4 @@ if __name__ == "__main__":
 
     for i, elem in enumerate(dl):
         breakpoint()
+

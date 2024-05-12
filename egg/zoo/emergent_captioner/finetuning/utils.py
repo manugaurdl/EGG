@@ -127,19 +127,19 @@ class ModelSaver(Callback):
                 x = self.get_checkpoint()[1]
 
 
-                if self.config['finetune_model']=="clip":
-                    for name in list(x.keys()):
-                        condition = 'lora' in name 
-                        if not self.config['adapter_lora']:
-                            condition = condition and 'clip_project' in name
-                        
-                        if not self.config['freeze_wte']:
-                            condition = condition and 'wte.weight' in name 
+                # if self.config['finetune_model']=="clip":
+                for name in list(x.keys()):
+                    condition = 'lora' in name 
+                    if not self.config['adapter_lora']:
+                        condition = condition and 'clip_project' in name
+                    
+                    if not self.config['freeze_wte']:
+                        condition = condition and 'wte.weight' in name 
 
-                        if condition:
-                            continue
-                        else:
-                            x.pop(name)
+                    if condition:
+                        continue
+                    else:
+                        x.pop(name)
 
                 torch.save(
                     x,
@@ -219,9 +219,9 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        # config["SAVE_BEST_METRIC"] = False
+        config["SAVE_BEST_METRIC"] = False
         config["WANDB"]["logging"] = False
-        # config["opts"]["checkpoint_freq"] = 0
+        config["opts"]["checkpoint_freq"] = 0
     return config
 
 def get_cl_args(config):
@@ -259,3 +259,4 @@ def trainable_params(model):
     # print(f'{int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))} trainable params')
     return int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))
     # return sum(p.numel() for p in model.parameters() if p.requires_grad == True)
+
