@@ -1,5 +1,5 @@
-DEBUG : True # if true : model saving, logging turned off.  
-INIT_VAL : False
+DEBUG : False # if true : model saving, logging turned off.  
+INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
@@ -61,7 +61,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  both_ft_lr5e8_mlpr32 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
+  run_name :  both_ft_lr5e8_mlpr32_wte_frozen_adpter_ft #adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
 
 inference : 
