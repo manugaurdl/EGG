@@ -54,7 +54,7 @@ class CocoDataset:
 
     def __len__(self):
         if self.debug:
-            return 100
+            return 200
         else:
             return len(self.samples)
     
@@ -275,7 +275,9 @@ class CocoWrapper:
         
         split2bags = {}
         for i in list(curricullum.values()):
-            level, bsz = i
+            level, bsz = i 
+            if level =="rand":
+                continue
             if level=="rand_crrclm":
                 l = []
                 for diff in ['easy', 'medium', 'train']:

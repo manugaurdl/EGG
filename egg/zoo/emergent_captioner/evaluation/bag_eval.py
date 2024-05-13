@@ -12,26 +12,6 @@ from transformers import get_linear_schedule_with_warmup
 from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict, int2mil
 from egg.zoo.emergent_captioner.finetuning.losses import get_loss, DiscriminativeLoss
 
-# import egg.core as core
-# from egg.core import ConsoleLogger
-# from egg.zoo.emergent_captioner.dataloaders import (
-#     CocoWrapper,
-#     ConceptualCaptionsWrapper,
-#     FlickrWrapper,
-#     get_transform,
-# )
-# from egg.zoo.emergent_captioner.finetuning.game import build_game
-# from egg.zoo.emergent_captioner.finetuning.opts import get_common_opts
-# from egg.zoo.emergent_captioner.finetuning.utils import ModelSaver
-# from egg.zoo.emergent_captioner.utils import (
-#     dump_interaction,
-#     get_sha,
-#     log_stats,
-#     print_grad_info,
-#     setup_for_distributed,
-#     store_job_and_task_id,
-# )
-
 seed = 42
 random.seed(seed)
 torch.manual_seed(seed)
@@ -43,8 +23,6 @@ data : misc_data : cocoid2didx, img_feats, inference_preds
 params : config 
 
 """
-
-
 
 def eval_on_bags(config):
     config["opts"]["batch_size"]= 100

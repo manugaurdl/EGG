@@ -218,8 +218,8 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        # config["SAVE_BEST_METRIC"] = False
-        # config["opts"]["checkpoint_freq"] = 0
+        config["SAVE_BEST_METRIC"] = False
+        config["opts"]["checkpoint_freq"] = 0
         config["WANDB"]["logging"] = False
     return config
 
@@ -272,3 +272,21 @@ def load_prev_state(config, game):
                 updated_weights[k] = trained_wts[k]
         
         return optim_state_dict, updated_weights
+
+def load_best_model(trainer, config):
+    if config['mllm'] == "clipcap":   
+        trainer.game.sender.unpatch_model()
+
+    trained_wts = torch.load(os.path.join(config['opts']['checkpoint_dir'], "best.pt"))
+    updated_wts = trainer.game.sender.state_dict().copy()
+    
+    for k in list(trainer.game.sender.state_dict().keys()):
+        if 'sender.' + k in trained_wts:
+            updated_wts[k] = trained_wts['sender.' + k]
+        elif k in trained_wts:
+            updated_wts[k] = trained_wts[k]
+
+    trainer.game.sender.load_state_dict(updated_wts)
+    trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'])
+
+    print(f"| LOADED BEST MODEL FOR INFERENCE ON TEST+VAL SET : {os.path.join(config['opts']['checkpoint_dir'], 'best.pt')}")

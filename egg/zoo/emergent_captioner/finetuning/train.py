@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import random
 from transformers import get_linear_schedule_with_warmup
-from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict, int2mil, load_prev_state
+from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict, int2mil, load_prev_state, load_best_model
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -180,39 +180,16 @@ def main(params, config):
         trainer.train(config, opts)
 
     #Get inference preds
-    # if not os.path.isdir(config["inference"]["output_dir"]):
-    #     os.makedirs(config["inference"]["output_dir"])
+    if not os.path.isdir(config["inference"]["output_dir"]):
+        os.makedirs(config["inference"]["output_dir"])
 
     # # getting MLE preds : comment this and path to inference_preds and inference_log
+    
+    load_best_model(trainer, config)
 
+    config["WANDB"]["logging"] = False
 
-    # if config['mllm'] == "clipcap":   
-    #     trainer.game.sender.unpatch_model()
-
-            
-    #     trained_weights = get_best_state_dict(config)
-    #     frozen_weights = torch.load(config['opts']['mle_model_path'])
-    #     model_state_dict = trainer.game.sender.state_dict()
-    #     out = {}
-    #     for p, weight in model_state_dict.items():
-    #         param = 'sender.' + p
-    #         if 'original' in param:
-    #             lora_og_param = (param.split(".parametrizations")[0] + param.split(".parametrizations")[-1]).split(".original")[0]
-    #             out[param.split("sender.")[-1]] = frozen_weights[lora_og_param]
-    #             continue
-
-    #         if param in trained_weights:
-    #             out[param.split("sender.")[-1]] = trained_weights[param]
-    #         else: 
-    #             out[param.split("sender.")[-1]] = frozen_weights[param]
-
-    #     trainer.game.sender.load_state_dict(out)
-    #     trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
-
-    #     config["WANDB"]["logging"] = False
-
-
-    #     trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
+    trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")
