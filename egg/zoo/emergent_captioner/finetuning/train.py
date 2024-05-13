@@ -184,34 +184,35 @@ def main(params, config):
     #     os.makedirs(config["inference"]["output_dir"])
 
     # # getting MLE preds : comment this and path to inference_preds and inference_log
-    exit()
-    if config['mllm'] == "clipcap":   
-        trainer.game.sender.unpatch_model()
+
+
+    # if config['mllm'] == "clipcap":   
+    #     trainer.game.sender.unpatch_model()
 
             
-        trained_weights = get_best_state_dict(config)
-        frozen_weights = torch.load(config['opts']['mle_model_path'])
-        model_state_dict = trainer.game.sender.state_dict()
-        out = {}
-        for p, weight in model_state_dict.items():
-            param = 'sender.' + p
-            if 'original' in param:
-                lora_og_param = (param.split(".parametrizations")[0] + param.split(".parametrizations")[-1]).split(".original")[0]
-                out[param.split("sender.")[-1]] = frozen_weights[lora_og_param]
-                continue
+    #     trained_weights = get_best_state_dict(config)
+    #     frozen_weights = torch.load(config['opts']['mle_model_path'])
+    #     model_state_dict = trainer.game.sender.state_dict()
+    #     out = {}
+    #     for p, weight in model_state_dict.items():
+    #         param = 'sender.' + p
+    #         if 'original' in param:
+    #             lora_og_param = (param.split(".parametrizations")[0] + param.split(".parametrizations")[-1]).split(".original")[0]
+    #             out[param.split("sender.")[-1]] = frozen_weights[lora_og_param]
+    #             continue
 
-            if param in trained_weights:
-                out[param.split("sender.")[-1]] = trained_weights[param]
-            else: 
-                out[param.split("sender.")[-1]] = frozen_weights[param]
+    #         if param in trained_weights:
+    #             out[param.split("sender.")[-1]] = trained_weights[param]
+    #         else: 
+    #             out[param.split("sender.")[-1]] = frozen_weights[param]
 
-        trainer.game.sender.load_state_dict(out)
-        trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
+    #     trainer.game.sender.load_state_dict(out)
+    #     trainer.game.sender.patch_model(batch_size = config["inference"]["batch_size"], prefix_len = config['prefix_len'], )
 
-        config["WANDB"]["logging"] = False
+    #     config["WANDB"]["logging"] = False
 
 
-        trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
+    #     trainer.train(config, opts, inference = True) #init_val is run. val_data = inference data if inference = True.
 
     end = time.time()
     print(f"| Run took {end - start:.2f} seconds")
