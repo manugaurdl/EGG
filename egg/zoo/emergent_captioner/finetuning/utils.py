@@ -218,9 +218,9 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        config["SAVE_BEST_METRIC"] = False
+        # config["SAVE_BEST_METRIC"] = False
         config["opts"]["checkpoint_freq"] = 0
-        config["WANDB"]["logging"] = False
+        # config["WANDB"]["logging"] = False
     return config
 
 def get_cl_args(config):
