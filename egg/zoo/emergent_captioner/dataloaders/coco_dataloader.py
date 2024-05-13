@@ -185,7 +185,7 @@ class CocoNegDataset:
                 
                 if os.path.isdir(self.a100_dir):
 #                    torch.save(self.transform(Image.open(os.path.join(self.root, file_path)).convert("RGB")), os.path.join(a100_dir, f"{cocoid}.pt"))
-                    sender_inputs.append(torch.load(os.path.join(self.a100_dir, f"{cocoid}.pt")))
+                    sender_inputs.append(torch.load(os.path.join("/mnt/localdisk-1/figma_scrapped_data/pick_edit", f"{cocoid}.pt")))
                 else:
                     sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/", f"{cocoid}.pt")))
 
