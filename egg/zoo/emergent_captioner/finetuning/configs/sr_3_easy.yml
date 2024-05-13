@@ -65,7 +65,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : easy_bsz5_debug #adapter_r32 #lr9e8_lora_r32_mlp_ft 
+  run_name : easy_bsz5 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
 
 inference : 
@@ -74,3 +74,4 @@ inference :
 
 #DEBUG, INIT_VAL | ONLY_INFERENCE,  , logging, save_using_neg
 #CKPT_DIR = f"{data}/{sr}_{config[WANDB][run_name]}
+
