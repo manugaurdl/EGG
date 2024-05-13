@@ -155,7 +155,12 @@ class Trainer:
         self.debug = debug
 
         self.should_stop = False
-        self.start_epoch = 0  # Can be overwritten by checkpoint loader
+        
+        self.start_epoch = 0
+        if config['resume_training']['do']:
+            self.start_epoch = config['resume_training']['load_epoch'] # start epoch should be the next one but ckpts are indexed from 1.
+        
+        
         self.callbacks = callbacks if callbacks else []
         self.grad_norm = grad_norm
         self.aggregate_interaction_logs = aggregate_interaction_logs
@@ -623,7 +628,7 @@ class Trainer:
 
         print(f"Total trainable params : {trainable_params(self.game.sender)}")
         count_trainable_parameters(self.game.sender)
-        n_epochs = config['opts']['n_epochs']
+        n_epochs = n_epochs = [_ for _ in config['neg_mining']['curricullum'].keys()][-1]
         WANDB = config['WANDB']['logging']
         if self.distributed_context.is_distributed:
             WANDB = WANDB and self.distributed_context.is_leader
@@ -643,7 +648,7 @@ class Trainer:
 
         #INIT VAL
         if inference or (self.INIT_VAL and self.distributed_context.is_leader):
-            metric = self.rand_neg_val(0, WANDB, config = config,  inference=inference)
+            metric = self.rand_neg_val(self.start_epoch , WANDB, config = config,  inference=inference)
         if inference:                
             return
 
@@ -670,10 +675,10 @@ class Trainer:
             
             level_bsz = get_ds(epoch, config)                 
             # loader = get_loader(epoch, config['neg_mining']['curricullum'])
-            print("***"*100)
+            print("***"*50)
             print(f"epoch :{epoch}")
             print(f"level_bsz : {level_bsz}")
-            print("***"*100)
+            print("***"*50)
             train_loss, train_interaction = self.train_epoch(self.train_loaders[level_bsz], WANDB, self.GREEDY_BASELINE, self.train_method, self.opts, config, epoch)
             if WANDB:
                 wandb.log({"Avg Loss" : train_loss,

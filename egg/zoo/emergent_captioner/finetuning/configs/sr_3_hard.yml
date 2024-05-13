@@ -35,15 +35,15 @@ freeze_adapter : False
 log_spice : False
 
 neg_mining:
-  curricullum :  {2 : ["easy",5]} #,  "medium" : 5, "hard" : 10} # indexed from 1
+  curricullum :  {4 : ["hard",3]} #,  "medium" : 5, "hard" : 10} # indexed from 1
   save_optimizer : True
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
   val_level : "rand"
 
 resume_training : 
-  do : False
-  dir : sr_easy_bsz5
+  do : True
+  dir : sr_easy_bsz5_debug
   load_epoch  : 2 
 
 opts: 
@@ -65,7 +65,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : easy_bsz5_debug #adapter_r32 #lr9e8_lora_r32_mlp_ft 
+  run_name : hard_bsz3_debug_continued #adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
 
 inference : 

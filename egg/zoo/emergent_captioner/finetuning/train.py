@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import random
 from transformers import get_linear_schedule_with_warmup
-from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict, int2mil
+from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict, int2mil, load_prev_state
 import egg.core as core
 from egg.core import ConsoleLogger
 from egg.zoo.emergent_captioner.dataloaders import (
@@ -119,13 +119,15 @@ def main(params, config):
         optimizer = torch.optim.AdamW(game.sender.parameters(), lr = opts.lr)
         # optimizer = torch.optim.Adam(game.sender.parameters(), lr=opts.lr)
     
-    # if config['resume_train']['do']:
-    #     path = os.path.join(opts.checkpoint_dir.split("checkpoints")[0], f"checkpoints/{config['captions_type']}", config['resume_train']['path'])
-    #     optimizer.load_state_dict(torch.load(os.path.join(path, "optimizer.pth")))
+    if config['resume_training']['do']:
+        optim_state_dict, game_state_dict = load_prev_state(config, game)
+        optimizer.load_state_dict(optim_state_dict)
+        game.sender.load_state_dict(game_state_dict)
         
     # Create trainers object
     if config["train_method"] == "mle":
-        total_steps = opts.n_epochs* len(train_loaders['rand'])
+        n_epochs = [_ for _ in config['neg_mining']['curricullum'].keys()][-1]
+        total_steps = n_epochs* len(train_loaders['rand'])
         scheduler = get_linear_schedule_with_warmup(
                     optimizer, num_warmup_steps=int(total_steps * config["warmup_ratio"]), num_training_steps= total_steps)
 
@@ -182,7 +184,7 @@ def main(params, config):
     #     os.makedirs(config["inference"]["output_dir"])
 
     # # getting MLE preds : comment this and path to inference_preds and inference_log
-
+    exit()
     if config['mllm'] == "clipcap":   
         trainer.game.sender.unpatch_model()
 

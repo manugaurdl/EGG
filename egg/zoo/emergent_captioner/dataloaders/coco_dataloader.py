@@ -162,7 +162,7 @@ class CocoNegDataset:
         self.cocoid2samples_idx = cocoid2samples_idx[split]
         self.bags = bags
         self.mllm = mllm
-
+        self.a100_dir =  "/home/ubuntu/pranav/pick_edit"
     def __len__(self):
         if self.debug:
             return 40
@@ -182,15 +182,12 @@ class CocoNegDataset:
                 sample_idx = self.cocoid2samples_idx[cocoid]
                 file_path, captions, image_id = self.samples[sample_idx]
                 assert image_id == cocoid
-                a100_dir = "/mnt/localdisk-1/figma_scrapped_data/pick_edit"
-                if os.path.isdir(a100_dir):
+                
+                if os.path.isdir(self.a100_dir):
 #                    torch.save(self.transform(Image.open(os.path.join(self.root, file_path)).convert("RGB")), os.path.join(a100_dir, f"{cocoid}.pt"))
-                    sender_inputs.append(torch.load(os.path.join(a100_dir, f"{cocoid}.pt")))
+                    sender_inputs.append(torch.load(os.path.join(self.a100_dir, f"{cocoid}.pt")))
                 else:
-                    if os.path.isdir("/home/manugaur/EGG/sender_input"):
-                        sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_input/", f"{cocoid}.pt")))
-                    else:
-                        sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/", f"{cocoid}.pt")))
+                    sender_inputs.append(torch.load(os.path.join(f"/home/manugaur/EGG/sender_inputs/", f"{cocoid}.pt")))
 
                 # sender_inputs.append(self.transform(Image.open(os.path.join(self.root, file_path)).convert("RGB")))
 

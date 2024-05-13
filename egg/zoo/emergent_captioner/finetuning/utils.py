@@ -123,13 +123,15 @@ class ModelSaver(Callback):
 
 
                 # if self.config['finetune_model']=="clip":
+                # wte is always frozen. Adapter is always trained
                 for name in list(x.keys()):
-                    condition = 'lora' in name 
-                    if not self.config['adapter_lora']:
-                        condition = condition and 'clip_project' in name
+                    condition = 'lora' in name  or 'clip_project' in name
+
+                    # if not self.config['adapter_lora']:
+                    #     condition = condition and 'clip_project' in name
                     
-                    if not self.config['freeze_wte']:
-                        condition = condition and 'wte.weight' in name 
+                    # if not self.config['freeze_wte']:
+                    #     condition = condition and 'wte.weight' in name 
 
                     if condition:
                         continue
@@ -216,9 +218,9 @@ def process_config(config, use_ddp, sys_args):
         config["WANDB"]["logging"] = False
     
     if config["DEBUG"]:
-        # config["SAVE_BEST_METRIC"] = False
+        config["SAVE_BEST_METRIC"] = False
+        config["opts"]["checkpoint_freq"] = 0
         config["WANDB"]["logging"] = False
-        # config["opts"]["checkpoint_freq"] = 0
     return config
 
 def get_cl_args(config):
@@ -257,3 +259,16 @@ def trainable_params(model):
     return int2mil(sum(p.numel() for p in model.parameters() if p.requires_grad == True))
     # return sum(p.numel() for p in model.parameters() if p.requires_grad == True)
 
+def load_prev_state(config, game):
+        load_dir = os.path.join(config['opts']['checkpoint_dir'].split(config['captions_type'])[0], config['captions_type'], config['resume_training']['dir'])
+        
+        optim_state_dict = torch.load(os.path.join(load_dir, f"optimizer{config['resume_training']['load_epoch']}.pth"))
+
+        trained_wts = torch.load(os.path.join(load_dir, f"e_{config['resume_training']['load_epoch']}.pt")) #lora params and clip_project
+        updated_weights = game.sender.state_dict().copy()
+
+        for k in list(game.sender.state_dict().keys()):
+            if k in trained_wts:
+                updated_weights[k] = trained_wts[k]
+        
+        return optim_state_dict, updated_weights
