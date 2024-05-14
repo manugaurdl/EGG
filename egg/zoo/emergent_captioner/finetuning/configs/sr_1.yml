@@ -1,4 +1,4 @@
-DEBUG : True # if true : model saving, logging turned off.  
+DEBUG : False # if true : model saving, logging turned off.  
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
@@ -70,7 +70,7 @@ WANDB:
   log_mmvp_all : False
 
 inference : 
-  batch_size : 64
+  batch_size : 100
   output_dir : /home/manugaur/EGG/inference_preds/
 
 #DEBUG, ONLY_INFERENCE,  INIT_VAL, logging, save_using_neg

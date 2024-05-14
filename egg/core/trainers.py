@@ -46,6 +46,7 @@ from egg.zoo.emergent_captioner.finetuning.losses import DiscriminativeLoss
 from egg.zoo.emergent_captioner.evaluation.mmvp_mllm import mmvp_mllm_benchmark
 from egg.zoo.emergent_captioner.evaluation.mmvp_vlm import mmvp_vlm_benchmark
 from egg.zoo.emergent_captioner.evaluation.winoground_vlm import winoground_vlm
+from egg.zoo.emergent_captioner.evaluation.bag_eval import eval_on_bags
 
 try:
     from torch.cuda.amp import GradScaler, autocast
@@ -748,6 +749,9 @@ class Trainer:
         # print(save_path)
         with open(save_path, "wb") as f:
             pickle.dump(val_preds, f)
+        
+        eval_on_bags(config)
+
 
 # print(f" wte norm : {torch.norm(self.game.sender.clipcap.gpt.transformer.wte.weight)}")   
 # print(f" clip_proj norm : {torch.norm(self.game.sender.clipcap.clip_project.model[0].weight)}")   

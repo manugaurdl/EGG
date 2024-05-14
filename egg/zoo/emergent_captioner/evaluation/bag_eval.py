@@ -9,7 +9,7 @@ import numpy as np
 from tqdm import tqdm
 import random
 from transformers import get_linear_schedule_with_warmup
-from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict, int2mil
+# from egg.zoo.emergent_captioner.finetuning.utils import get_config, process_config, get_cl_args, init_wandb, get_best_state_dict, int2mil
 from egg.zoo.emergent_captioner.finetuning.losses import get_loss, DiscriminativeLoss
 
 seed = 42
@@ -23,10 +23,17 @@ data : misc_data : cocoid2didx, img_feats, inference_preds
 params : config 
 
 """
+base_dir = "/home/manugaur"
 
 def eval_on_bags(config):
+
+
+    config['split'] = "test_val"
+    config['scorer'] =  "vitb32"
+    captioner = f"{config['captions_type']}_{config['opts']['checkpoint_dir'].split('/')[-1]}.pkl"        
+
     config["opts"]["batch_size"]= 100
-    print(f"Self Retrieval using {config['captions_type']} captions")
+    print(f"| Evaluating on benchmark for {config['captions_type']} trained model")
     
     data_dir = os.path.join(base_dir, "nips_benchmark/")
 
@@ -50,8 +57,7 @@ def eval_on_bags(config):
         model, preprocess = clip.load(model_name, device=device)
         model.eval()
 
-        captioner =         
-        preds_path = os.path.join(base_dir, f"EGG/inference_preds/{captioner}.pkl")
+        preds_path = os.path.join(base_dir, f"EGG/inference_preds/{captioner}")
 
         with open(preds_path, "rb") as f:
             preds = pickle.load(f)
@@ -94,12 +100,13 @@ def eval_on_bags(config):
                     clip_s.append(acc['clip_s'].mean().item())         
 
             print(f"| BAG SIZE = {bag_size}")      
+            
+            save_dir = os.path.join(base_dir, f"nips_benchmark/recall_per_bag/final")
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir)
 
-            with open(os.path.join(base_dir, f"nips_benchmark/recall_per_bag/final/bsz_{bag_size}_{captioner}.json"), "w") as f:
+            with open(os.path.join(save_dir,f"bsz_{bag_size}_{captioner}.json"), "w") as f:
                 json.dump(recall_1, f)
-
-            with open(os.path.join(base_dir,f"EGG/eval_bag/{captioner}.json"), "w") as f:
-                json.dump(out, f)
 
             print(f"Recall@1 : {round(np.array(recall_1).mean()*100,1)}")
             print(f"CLIP score : {round(np.array(clip_s).mean(), 2):.2f}")
