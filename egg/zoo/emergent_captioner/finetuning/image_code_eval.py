@@ -55,7 +55,11 @@ def main(params, config):
     # image code params ##########################################
     opts.train_dataset = "image_code"
     opts.dataset_dir = "/home/manugaur/imagecode/data"
-    image_dir = "/workspace/manugaur/imagecode/image-sets"
+    if os.path.isdir("/workspace/manugaur"):
+        image_dir = "/workspace/manugaur/imagecode/image-sets"
+    elif os.path.isdir("/home/manugaur"):
+        image_dir = "/home/manugaur/imagecode/image-sets"
+
     ##################################################################
 
     opts.fp16 = config['fp16']
@@ -184,7 +188,7 @@ def main(params, config):
 
     # # getting MLE preds : comment this and path to inference_preds and inference_log
     
-    # load_best_model(trainer, config)
+    load_best_model(trainer, config)
 
     config["WANDB"]["logging"] = False
 

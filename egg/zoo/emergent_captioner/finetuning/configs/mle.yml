@@ -1,10 +1,10 @@
-DEBUG : True
+DEBUG : False
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
-ONLY_INFERENCE : False
+ONLY_INFERENCE : True
 ONLY_VAL : False
-
+dataset : coco
 captions_type : "mistral" #coco, (mistral, mistral_4), blip_holistic
 train_method : "mle" # (discriminative, cider, mle)
 prefix_len : 10
@@ -21,18 +21,34 @@ contrastive : False
 #hparams
 lora : False
 lora_rank : 32
-log_spice : True
+log_spice : False
 
-finetune_model : llm
 freeze_wte : False
 freeze_adapter : False
+
+#lora
+lora : False
+finetune_model : llm
+lora_rank : 32
+clip_mlp_ft : False
+adapter_lora : False
+adapter_rank : 32
+clip_text : False
+
 neg_mining:
-  curricullum : {"rand" : 10} # "easy" : 3, "medium": 7, "hard" : 20} #indexed from 1 {"medium" : 3, "hard" : 10}
+  curricullum : {10 : ["rand", 5]} # "easy" : 3, "medium": 7, "hard" : 20} #indexed from 1 {"medium" : 3, "hard" : 10}
+  save_optimizer : False
   bag_size : 5
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
   val_level : "rand"
 
+
+resume_training : 
+  do : False
+  dir : sr_easy_bsz5
+  load_epoch  : 2 
+  
 opts: 
   baseline : mean
   n_epochs : 10
@@ -55,7 +71,7 @@ WANDB :
   run_name : "final" #suffix to "sr_{data}_"
  
 inference : 
-  batch_size : 40
+  batch_size : 100
   output_dir : /home/manugaur/EGG/inference_preds/
 
 #DEBUG,INIT_VAL, logging, batch_size

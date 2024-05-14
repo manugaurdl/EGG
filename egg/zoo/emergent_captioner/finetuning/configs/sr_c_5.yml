@@ -2,9 +2,10 @@ DEBUG : False  # if true : model saving, logging turned off.
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
-ONLY_INFERENCE : False
+ONLY_INFERENCE : True
 ONLY_VAL : False
 
+dataset : "imagecode"
 captions_type : "coco" #coco, (mistral, mistral_4), blip_holistic
 train_method : "discriminative" # (discriminative, cider, mle)
 prefix_len : 10
@@ -65,11 +66,11 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : crrclm_6 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
+  run_name :  crrclm_5  # crrclm_6 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
-
+ 
 inference : 
-  batch_size : 128
+  batch_size : 100
   output_dir : /home/manugaur/EGG/inference_preds/
 
 #DEBUG, INIT_VAL | ONLY_INFERENCE,  , logging, save_using_neg

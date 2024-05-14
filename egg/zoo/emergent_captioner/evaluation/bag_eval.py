@@ -111,3 +111,4 @@ def eval_on_bags(config):
             print(f"Recall@1 : {round(np.array(recall_1).mean()*100,1)}")
             print(f"CLIP score : {round(np.array(clip_s).mean(), 2):.2f}")
             recall_1 = []
+

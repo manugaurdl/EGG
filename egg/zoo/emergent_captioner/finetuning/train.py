@@ -125,7 +125,7 @@ def main(params, config):
         game.sender.load_state_dict(game_state_dict)
         
     # Create trainers object
-    if config["train_method"] == "mle":
+    if config["train_method"] == "mle" and not config['ONLY_INFERENCE']:
         n_epochs = [_ for _ in config['neg_mining']['curricullum'].keys()][-1]
         total_steps = n_epochs* len(train_loaders['rand'])
         scheduler = get_linear_schedule_with_warmup(
