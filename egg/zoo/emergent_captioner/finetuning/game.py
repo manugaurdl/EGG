@@ -156,15 +156,45 @@ class ReinforceCaptionGame(nn.Module):
 
                     if not isinstance(receiver_input, torch.Tensor):
                         receiver_input = torch.stack([transform(recv_inp) for recv_inp in receiver_input]).to(next(iter(self.receiver.parameters())))
+                    
+                    ################################## image code eval   ##########
+                    if len(receiver_input.shape)==5:
+                        
+                        text_feats, img_feats = self.receiver(captions, receiver_input.view(-1,3,224,224), aux_input)
+                        img_feats = img_feats.view(-1, 10, text_feats.shape[-1])
+                        text_feats = text_feats.unsqueeze(1)
+                        
+                        acc_1 = []
+                        acc_5 = []
+                        clip_s = []
+                        mean_rank = []
+                        median_rank = []
 
-                    text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
-                    sr_loss, aux_info_disc_loss = self.loss(text_feats, img_feats, self.training, True,  aux_input)
+                        for i in range(text_feats.shape[0]):
+                            sr_loss, aux_info_disc_loss = self.loss(text_feats[i], img_feats[i], self.training, True,  aux_input)
+
+                            acc_1.append(aux_info_disc_loss['acc'])
+                            
+                            acc_5.append(aux_info_disc_loss['acc_5'])
+                            clip_s.append(aux_info_disc_loss['clip_s'])
+                            mean_rank.append(aux_info_disc_loss['mean_rank'])
+                            median_rank.append(aux_info_disc_loss['median_rank'])
+
+                        aux_info_disc_loss['acc_5'] = torch.stack(acc_5)
+                        aux_info_disc_loss['acc'] = torch.stack(acc_1)
+                        aux_info_disc_loss['clip_s'] = torch.stack(clip_s)
+                        aux_info_disc_loss['median_rank'] = torch.stack(median_rank)
+                        aux_info_disc_loss['mean_rank'] = torch.stack(mean_rank)
+
+                    else:
+                        text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
+                        sr_loss, aux_info_disc_loss = self.loss(text_feats, img_feats, self.training, True,  aux_input)
                     
                     aux_info_disc_loss['acc_5'] = aux_info_disc_loss['acc_5'].mean()
                     aux_info_disc_loss['acc'] = aux_info_disc_loss['acc'].mean()
                     if not self.training:
                         aux_info_disc_loss['mean_rank'] = aux_info_disc_loss['mean_rank'].mean()
-                        aux_info_disc_loss['median_rank'] = aux_info_disc_loss['median_rank']
+                        aux_info_disc_loss['median_rank'] = aux_info_disc_loss['median_rank'].float().mean()
                         aux_info_disc_loss['clip_s'] = aux_info_disc_loss['clip_s'].mean()
 
                     

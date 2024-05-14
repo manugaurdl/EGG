@@ -381,6 +381,7 @@ class Trainer:
 
         with torch.no_grad():
             for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
+
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
@@ -422,6 +423,9 @@ class Trainer:
         mean_loss /= n_batches
         #if data is dict/tensor --> its gets extended N_batch times. If its a list, a new list of list gets created of len = N_batch
         # full_interaction = Interaction.from_iterable(interactions)
+        mean_loss /= n_batches
+        #if data is dict/tensor --> its gets extended N_batch times. If its a list, a new list of list gets created of len = N_batch
+        # full_interaction = Interaction.from_iterable(interactions)
         full_interaction  = defaultdict(list)
         if config['train_method']=="discriminative":
             for interaction in interactions:
@@ -429,6 +433,11 @@ class Trainer:
                     full_interaction[k].append(v.item())
             full_interaction  = {k: np.mean(v).mean() for k,v in full_interaction.items()}
 
+        if config['dataset'] =="imagecode":
+            print("| IMAGE CODE results : ")
+            for k,v in full_interaction.items():
+                print(f"{k} = {v:.3f}")
+            exit()
         
         full_interaction['cocoid'] = []
         for interaction in interactions:

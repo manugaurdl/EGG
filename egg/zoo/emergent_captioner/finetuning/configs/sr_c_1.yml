@@ -4,7 +4,7 @@ GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
 ONLY_INFERENCE : False
 ONLY_VAL : False
-
+dataset : "coco"
 captions_type : "coco" #coco, (mistral, mistral_4), blip_holistic
 train_method : "discriminative" # (discriminative, cider, mle)
 prefix_len : 10
@@ -18,7 +18,6 @@ diff_lr: False
 contrastive : False
 reinforce : True
 mllm : "clipcap"
-
 
 #lora
 lora : True
@@ -35,7 +34,7 @@ freeze_adapter : False
 log_spice : False
 
 neg_mining:
-  curricullum :  {4 : ["medium",10], 5 : ["hard",2], 7 : ["hard",3], 10 : ["hard",5], 13 : ["hard",7], 16 : ["hard",10], 20 : ["hard",15]} #,  "medium" : 5, "hard" : 10} # indexed from 1
+  curricullum :  {20 : ["rand",10]}
   save_optimizer : False
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
@@ -65,7 +64,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : crrclm_2 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
+  run_name : both_final #adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
 
 inference : 
