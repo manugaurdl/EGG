@@ -159,7 +159,7 @@ def main(params, config):
         model.eval()
 
         captioner = f"{config['data']}_{config['method']}_final"        
-        preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+        preds_path = f"/home/manugaur/EGG/a100_inference_preds/{captioner}.pkl"
 
         with open(preds_path, "rb") as f:
             preds = pickle.load(f)
@@ -269,7 +269,7 @@ def main(params, config):
         model, preprocess = clip.load(model_name, device=device)
         model.eval()
 
-        captioner = f"{config['data']}_{config['method']}_final"        
+        captioner = f"{config['data']}_{config['method']}"        
         preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
 
         with open(preds_path, "rb") as f:
@@ -358,7 +358,7 @@ if __name__ == "__main__":
     # params
     config['use_benchmark'] = True
     config["use_gt"] = False
-    config['method'] = "sr_2R6M10H_bsz3"
+    config['method'] = "sr_both_ft_hard_bsz10"
     config['data'] = "blip2mistral"
     config["opts"]["batch_size"]= 100
     config['split'] = "test"

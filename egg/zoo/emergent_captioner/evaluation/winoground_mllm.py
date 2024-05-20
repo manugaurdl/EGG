@@ -204,3 +204,4 @@ def winoground_benchmark(model, preprocess):
 #     data[model] = [results[model][category] for category in categories]
 
 # print(results)
+

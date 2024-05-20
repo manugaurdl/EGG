@@ -11,6 +11,8 @@ from egg.zoo.emergent_captioner.finetuning.blip import BlipSender
 from egg.zoo.emergent_captioner.finetuning.clipcap import ClipCapSender, LLavaSender, LLavaPhi
 from egg.zoo.emergent_captioner.finetuning.losses import get_loss, CiderReward, DiscriminativeLoss
 from egg.zoo.emergent_captioner.finetuning.receiver import ClipReceiver
+from egg.zoo.emergent_captioner.finetuning.sender_clip import ClipSender
+
 from egg.zoo.emergent_captioner.finetuning.lora import LoRA
 import pickle
 import clip
@@ -55,8 +57,9 @@ class ReinforceCaptionGame(nn.Module):
         self.prefix_len = config['prefix_len']
         self.mllm = config['mllm']
         self.config = config
+        self.get_sender_clip_feats = ClipSender(self.sender.clip)
 
-    def forward(self, sender_input, cocoids ,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False, contrastive = False, reinforce = True):
+    def forward(self, sender_input, cocoids ,receiver_input=None, aux_input=None, GREEDY_BASELINE = False, train_method= None, inference = False, contrastive = False, reinforce = True, CIDER_SR = False):
         """
         receiver : clip
         sender : clip VIT + clipcap model
@@ -71,17 +74,119 @@ class ReinforceCaptionGame(nn.Module):
         """
         
         CIDER_OPTIM = isinstance(self.loss, CiderReward)
-        if CIDER_OPTIM and not inference:
+
+        if CIDER_SR and self.training:
+
+            if self.training:
+                training = True
+            else:
+                training = False
+            scaling_factor = 0.5
+
+            assert GREEDY_BASELINE, "Cider optim is done with greedy baseline"
+            self.loss_sr = DiscriminativeLoss()
+            self.loss
+            aux_info = {}
+            
+            captions = None
+            reward = None
+            if reinforce or not self.training :
+                if self.mllm=="clipcap":
+                      captions, log_prob, kl_div= self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
+        
+                with torch.no_grad():
+                    
+                    text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) 
+                    policy_acc, aux_info_disc_loss = self.loss_sr(text_feats, img_feats, self.training, True,  aux_input) # SR Reward
+                    policy_acc = policy_acc.detach()
+
+                    aux_info_disc_loss['acc_5'] = aux_info_disc_loss['acc_5'].mean()
+                    aux_info_disc_loss['acc'] = aux_info_disc_loss['acc'].mean()
+                    if not self.training:
+                        aux_info_disc_loss['mean_rank'] = aux_info_disc_loss['mean_rank'].mean()
+                        aux_info_disc_loss['median_rank'] = aux_info_disc_loss['median_rank'].float().mean()
+                        aux_info_disc_loss['clip_s'] = aux_info_disc_loss['clip_s'].mean()
+
+                    
+                    aux_info.update(aux_info_disc_loss)
+
+                    if GREEDY_BASELINE:
+                        if training:
+                            self.eval()
+                        greedy_captions, _, kl_div = self.sender(sender_input, aux_input, greedy_baseline = True)
+                        text_feats_greedy = self.receiver(greedy_captions, receiver_input, aux_input, img_feats = False) 
+                        greedy_acc, _ = self.loss_sr(text_feats_greedy, img_feats, False, True,  aux_input)  # GREEDY reward
+                        greedy_acc = greedy_acc.detach()
+                        greedy_cider = -1 * (torch.tensor(self.loss(greedy_captions, aux_input)).to(log_prob.device).detach())
+                        
+                        baseline = greedy_acc + scaling_factor * greedy_cider
+                        if training:
+                            self.train()
+                    
+
+                #Get CIDer 
+                policy_cider = -1 * (torch.tensor(self.loss(captions, aux_input)).to(log_prob.device).detach())
+
+                policy_reward = policy_acc + scaling_factor * policy_cider 
+                print(f"------" * 30)
+                print(f"R@1 : {policy_acc.mean()}")
+                print(f"CIDEr: {policy_cider.mean()}")
+                print(f"------" * 30)
+                
+                weighted_kl_div = self.kl_div_coeff * kl_div
+                
+                if not GREEDY_BASELINE:
+                    baseline = self.baseline.predict(policy_reward.detach())
+                    if self.training:
+                        self.baseline.update(policy_reward)
+
+                reward = (policy_reward - baseline)
+
+                batch_acc1 = aux_info['acc'].mean()
+                
+                loss = (reward * log_prob).mean()
+
+                aux_info["reinforce"] = loss.detach()
+                aux_info["kl_div"] = kl_div
+                aux_info["log_prob"] =  log_prob.detach().mean()
+                aux_info["batch_acc1"] = batch_acc1
+                reward = reward.mean().item()
+            
+            logging_strategy = (
+                self.train_logging_strategy if self.training else self.test_logging_strategy
+            )
+            interaction = logging_strategy.filtered_interaction(
+                sender_input=sender_input,
+                labels=cocoids,
+                receiver_input=receiver_input,
+                aux_input=aux_input,
+                message=captions,
+                receiver_output=None,
+                message_length=None,
+                aux=aux_info,
+            )
+
+
+        ################################################################################################################################################################
+        
+        elif CIDER_OPTIM and not inference and not CIDER_SR:
+
+            if self.training:
+                training = True
+            else:
+                training = False            
             # get policy cap
-            policy_captions, log_prob, kl_div = self.sender(sender_input, aux_input, greedy_baseline = CIDER_OPTIM) # logprob : (B) --> only one logprob per caption (averaged over all words)
+            policy_captions, log_prob, kl_div = self.sender(sender_input, aux_input) # logprob : (B) --> only one logprob per caption (averaged over all words)
         
             #get greedy_cap
             if GREEDY_BASELINE:
-                self.eval()
+                if training:
+                    self.eval()
                 with torch.no_grad():
-                    greedy_cap, _, _  = self.sender(sender_input, aux_input, False, GREEDY_BASELINE)
+                    greedy_cap, _, _  = self.sender(sender_input, aux_input, False, greedy_baseline = GREEDY_BASELINE)
                     baseline = torch.tensor(self.loss(greedy_cap, aux_input)).to(log_prob.device).detach()
-                self.train()
+                if training:
+                    self.train()
 
             # gt : aux_input
             # baseline --> mean vs greedy
@@ -92,14 +197,15 @@ class ReinforceCaptionGame(nn.Module):
             if not GREEDY_BASELINE:
                 # get policy cap first.
                 baseline = self.baseline.predict(policy_cider.detach())
-            reward = (policy_cider.detach() - baseline) #+ weighted_kl_div
-            reinforce_loss = -1*((reward * log_prob).mean())
+            reward = (policy_cider.detach() - baseline) #+ weighted_kl_div            
+            loss = -1* ((reward * log_prob).mean())
 
             # import ipdb;ipdb.set_trace()
             if self.training and not GREEDY_BASELINE:
                 self.baseline.update(policy_cider)
 
-            aux_info = {'acc' : torch.randn(1,2), "kl_div" : kl_div, "log_prob" : log_prob.detach()}
+            aux_info = {'batch_acc1' : torch.randn(1,2).mean(), "kl_div" : kl_div, "log_prob" : log_prob.detach().mean()}
+            aux_info['reinforce'] = loss.detach().mean() 
             
             logging_strategy = self.test_logging_strategy
 
@@ -114,12 +220,16 @@ class ReinforceCaptionGame(nn.Module):
                 aux=aux_info,
                 )
         
-        elif isinstance(self.loss, DiscriminativeLoss) or inference:
+        elif isinstance(self.loss, DiscriminativeLoss) or not self.training:
             
+            training = self.training
+
             aux_info = {}
-            if inference:
+            if not self.training:
+                self.loss_old = self.loss
                 self.loss = DiscriminativeLoss()
 
+            training = self.training
             #llava clip -> self.sender.model.model.vision_tower.vision_tower.vision_model
             #CLIP zero shot baseline
 
@@ -147,7 +257,7 @@ class ReinforceCaptionGame(nn.Module):
             captions = None
             reward = None
             if reinforce or not self.training :
-                if self.mllm=="clipcap":
+                if self.mllm=="clipcap" and len(receiver_input.shape) !=5 :
                       captions, log_prob, kl_div= self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
                 elif self.mllm=="llava-phi":
                     captions, log_prob, kl_div, receiver_input = self.sender(sender_input, aux_input, use_fp16 = self.config['fp16']) # logprob : (B) --> only one logprob per caption (averaged over all words)
@@ -157,35 +267,43 @@ class ReinforceCaptionGame(nn.Module):
                     if not isinstance(receiver_input, torch.Tensor):
                         receiver_input = torch.stack([transform(recv_inp) for recv_inp in receiver_input]).to(next(iter(self.receiver.parameters())))
                     
-                    ################################## image code eval   ##########
+                    ################################## IMAGE CODE EVAL  ##################################################
+                    
                     if len(receiver_input.shape)==5:
                         
-                        text_feats, img_feats = self.receiver(captions, receiver_input.view(-1,3,224,224), aux_input)
-                        img_feats = img_feats.view(-1, 10, text_feats.shape[-1])
-                        text_feats = text_feats.unsqueeze(1)
-                        
-                        acc_1 = []
-                        acc_5 = []
-                        clip_s = []
-                        mean_rank = []
-                        median_rank = []
-
-                        for i in range(text_feats.shape[0]):
-                            sr_loss, aux_info_disc_loss = self.loss(text_feats[i], img_feats[i], self.training, True,  aux_input)
-
-                            acc_1.append(aux_info_disc_loss['acc'])
+                        if captions is None:
+                            ###VLM Eval 
+                            # sender clip 
                             
-                            acc_5.append(aux_info_disc_loss['acc_5'])
-                            clip_s.append(aux_info_disc_loss['clip_s'])
-                            mean_rank.append(aux_info_disc_loss['mean_rank'])
-                            median_rank.append(aux_info_disc_loss['median_rank'])
+                            text_feats, img_feats = self.get_sender_clip_feats(aux_input['captions'], receiver_input.view(-1,3,224,224), aux_input)
 
-                        aux_info_disc_loss['acc_5'] = torch.stack(acc_5)
-                        aux_info_disc_loss['acc'] = torch.stack(acc_1)
-                        aux_info_disc_loss['clip_s'] = torch.stack(clip_s)
-                        aux_info_disc_loss['median_rank'] = torch.stack(median_rank)
-                        aux_info_disc_loss['mean_rank'] = torch.stack(mean_rank)
+                            # text_feats, img_feats = self.receiver(aux_input['captions'], receiver_input.view(-1,3,224,224), aux_input) 
+                            img_feats = img_feats.view(-1, 10, text_feats.shape[-1]) # img : B, 10, 512
+                            text_feats = text_feats.unsqueeze(1) # text : B, 1 ,512
+                            
+                            acc_1 = []
+                            acc_5 = []
+                            clip_s = []
+                            mean_rank = []
+                            median_rank = []
 
+                            for i in range(text_feats.shape[0]):
+                                sr_loss, aux_info_disc_loss = self.loss(text_feats[i],  img_feats[i], self.training, True,  aux_input)
+
+                                acc_1.append(aux_info_disc_loss['acc'])
+                                
+                                acc_5.append(aux_info_disc_loss['acc_5'])
+                                clip_s.append(aux_info_disc_loss['clip_s'])
+                                mean_rank.append(aux_info_disc_loss['mean_rank'])
+                                median_rank.append(aux_info_disc_loss['median_rank'])
+
+                            aux_info_disc_loss['acc_5'] = torch.stack(acc_5).mean()
+                            aux_info_disc_loss['acc'] = torch.stack(acc_1).mean()
+                            aux_info_disc_loss['clip_s'] = torch.stack(clip_s)
+                            aux_info_disc_loss['median_rank'] = torch.stack(median_rank)
+                            aux_info_disc_loss['mean_rank'] = torch.stack(mean_rank)
+
+                            return aux_info_disc_loss
                     else:
                         text_feats, img_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
                         sr_loss, aux_info_disc_loss = self.loss(text_feats, img_feats, self.training, True,  aux_input)
@@ -201,12 +319,14 @@ class ReinforceCaptionGame(nn.Module):
                     aux_info.update(aux_info_disc_loss)
                     #R@1 from GREEDY dist
                     if GREEDY_BASELINE:
-                        self.eval()
+                        if training :
+                            self.eval()
                         greedy_captions, _, kl_div = self.sender(sender_input, aux_input, greedy_baseline = True)
                         text_feats_greedy = self.receiver(greedy_captions, receiver_input, aux_input, img_feats = False) #clip_feats
                         baseline, _ = self.loss(text_feats_greedy, img_feats, self.training, True,  aux_input)
                         baseline = baseline.detach()
-                        self.train()
+                        if training:
+                            self.train()
                     
                     # text_feats = self.receiver(captions, receiver_input, aux_input) #clip_feats
                     # loss, aux_info = self.loss(text_feats, receiver_input.squeeze(1), self.training, True,  aux_input)
@@ -251,6 +371,8 @@ class ReinforceCaptionGame(nn.Module):
                 message_length=None,
                 aux=aux_info,
             )
+
+            self.loss = self.loss_old
 
         else:
             outputs = self.sender(sender_input, aux_input, train_method= train_method)

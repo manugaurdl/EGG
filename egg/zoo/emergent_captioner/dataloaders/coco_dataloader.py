@@ -165,7 +165,7 @@ class CocoNegDataset:
         self.a100_dir =  "/home/ubuntu/pranav/pick_edit"
     def __len__(self):
         if self.debug:
-            return 40
+            return 50
         else:
             return len(self.bags)
 

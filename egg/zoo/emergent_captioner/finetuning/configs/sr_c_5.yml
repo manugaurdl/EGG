@@ -2,10 +2,11 @@ DEBUG : False  # if true : model saving, logging turned off.
 INIT_VAL : True
 GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
-ONLY_INFERENCE : True
+ONLY_INFERENCE : False
+SAVE_PREDS : False
 ONLY_VAL : False
 
-dataset : "imagecode"
+dataset : "coco"
 captions_type : "coco" #coco, (mistral, mistral_4), blip_holistic
 train_method : "discriminative" # (discriminative, cider, mle)
 prefix_len : 10
@@ -36,7 +37,7 @@ freeze_adapter : False
 log_spice : False
 
 neg_mining:
-  curricullum :  {2 : ["easy", 5] , 7 : ["medium",10], 9 : ["hard",3], 11 : ["hard",5], 14 : ["hard",10], 17 : ["hard",15], 20 : ["hard",20]} 
+  curricullum :  {20 : ["hard", 3]} #  , 7 : ["medium",10], 9 : ["hard",3], 11 : ["hard",5], 14 : ["hard",10], 17 : ["hard",15], 20 : ["hard",20]} 
   save_optimizer : False
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
@@ -60,13 +61,13 @@ opts:
   recv_clip_model : ViT-B/32 #ViT-L/14@336px
 
 WANDB:
-  logging : True
+  logging : False
   sweep : False
   sweep_id: ""
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  crrclm_5  # crrclm_6 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
+  run_name : both_ft_hard_bsz_3 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
  
 inference : 

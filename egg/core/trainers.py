@@ -282,7 +282,7 @@ class Trainer:
         """
         metric decides how you save model. If clip_ft : save model with highest mmvp.
         """
-        if loss_type == 'discriminative':
+        if loss_type == 'discriminative' or config["CIDER_SR"]:
             # if config['finetune_model'] == "llm":
             metric =  interaction['acc'].mean().item()
             # elif config['finetune_model']=="clip":
@@ -386,7 +386,12 @@ class Trainer:
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
                 
-                optimized_loss, interaction, reward = self.game(*batch, train_method = train_method, inference=inference)
+                if config['dataset'] =="imagecode":
+                    interactions.append(self.game(*batch, train_method = train_method, inference=inference))
+                    continue
+                else:    
+                    optimized_loss, interaction, reward = self.game(*batch, train_method = train_method, GREEDY_BASELINE= config['GREEDY_BASELINE'], inference=inference, CIDER_SR = config['CIDER_SR'])
+                
                 
                 """
                 interaction : sender_input=None, receiver_input=None, labels = tensor, aux_input = {cocoid, captions, tokens, mask}, message, receiver_output=None, message_length=None, aux = {"kl_div" = torch.rand(1)}
@@ -419,6 +424,10 @@ class Trainer:
                 interactions.append(interaction)
                 n_batches += 1
 
+        if config['dataset'] =="imagecode":
+            acc = np.array([x['acc'].item() for x in interactions]).mean()
+            print(f"IMAGE CoDe R@1 : {acc} ")
+            exit()
 
         mean_loss /= n_batches
         #if data is dict/tensor --> its gets extended N_batch times. If its a list, a new list of list gets created of len = N_batch
@@ -426,8 +435,9 @@ class Trainer:
         mean_loss /= n_batches
         #if data is dict/tensor --> its gets extended N_batch times. If its a list, a new list of list gets created of len = N_batch
         # full_interaction = Interaction.from_iterable(interactions)
+        
         full_interaction  = defaultdict(list)
-        if config['train_method']=="discriminative":
+        if config['train_method']=="discriminative" or config['CIDER_SR']:
             for interaction in interactions:
                 for k,v in interaction.aux.items():
                     full_interaction[k].append(v.item())
@@ -514,7 +524,7 @@ class Trainer:
 
             # context = autocast() if self.scaler else nullcontext()
             # with context:
-            optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method, contrastive = config['contrastive'], reinforce = config["reinforce"])
+            optimized_loss, interaction, reward = self.game(*batch, GREEDY_BASELINE, train_method, contrastive = config['contrastive'], reinforce = config["reinforce"], CIDER_SR = config['CIDER_SR'])
             #not accumulating gradients currently
             if self.update_freq > 1:
                 # throughout EGG, we minimize _mean_ loss, not sum
@@ -756,9 +766,10 @@ class Trainer:
         
         # print("$$$$"*100)
         # print(save_path)
-        with open(save_path, "wb") as f:
-            pickle.dump(val_preds, f)
-        
+        if config['SAVE_PREDS']:
+            with open(save_path, "wb") as f:
+                pickle.dump(val_preds, f)
+            
         eval_on_bags(config)
 
 

@@ -25,15 +25,17 @@ def collate(batch):
 
     recv_inputs = []
     ids = []
+    caps = []
     for sample in batch:
         recv_inputs.append(sample[2])
         ids.append(sample[1])
-    
+        caps.append(sample[-1]['captions'])
+
     recv_inputs = torch.stack(recv_inputs)
     sender_inputs = recv_inputs[:, 0]
     ids = torch.stack(ids)
 
-    return sender_inputs, ids, recv_inputs, sample[-1] 
+    return sender_inputs, ids, recv_inputs, {"captions" : caps} 
     
     elem = batch[0]
     if isinstance(elem, torch.Tensor):
