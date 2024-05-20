@@ -358,7 +358,7 @@ if __name__ == "__main__":
     # params
     config['use_benchmark'] = True
     config["use_gt"] = False
-    config['method'] = "sr_both_ft_hard_bsz10"
+    config['method'] = "sr_crrclm_5"
     config['data'] = "blip2mistral"
     config["opts"]["batch_size"]= 100
     config['split'] = "test"

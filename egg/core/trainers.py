@@ -423,7 +423,7 @@ class Trainer:
             
                 interactions.append(interaction)
                 n_batches += 1
-
+                torch.cuda.empty_cache()
         if config['dataset'] =="imagecode":
             acc = np.array([x['acc'].item() for x in interactions]).mean()
             print(f"IMAGE CoDe R@1 : {acc} ")
