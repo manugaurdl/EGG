@@ -158,8 +158,8 @@ def main(params, config):
         model, preprocess = clip.load(model_name, device=device)
         model.eval()
 
-        captioner = f"{config['data']}_{config['method']}_final"        
-        preds_path = f"/home/manugaur/EGG/a100_inference_preds/{captioner}.pkl"
+        captioner = f"{config['data']}_{config['method']}"        
+        preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
 
         with open(preds_path, "rb") as f:
             preds = pickle.load(f)
@@ -269,8 +269,9 @@ def main(params, config):
         model, preprocess = clip.load(model_name, device=device)
         model.eval()
 
-        captioner = f"{config['data']}_{config['method']}"        
-        preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+        # captioner = f"{config['data']}_{config['method']}"        
+        # preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+        preds_path = "/home/manugaur/nips_benchmark/baselines/instructblip2_vicuna7b_p2.pkl"
 
         with open(preds_path, "rb") as f:
             preds = pickle.load(f)
@@ -314,8 +315,8 @@ def main(params, config):
 
             print(f"| BAG SIZE = {bag_size}")      
 
-            with open(f"/home/manugaur/nips_benchmark/recall_per_bag/final/bsz_{bag_size}_{captioner}.json", "w") as f:
-                json.dump(recall_1, f)
+            # with open(f"/home/manugaur/nips_benchmark/recall_per_bag/final/bsz_{bag_size}_{captioner}.json", "w") as f:
+            #     json.dump(recall_1, f)
             # print(f"{round(np.array(recall_1).mean()*100,2)}/ {np.array(mean_rank).mean():.2f}/ {np.array(median_rank).mean():.2f}")
             print(f"Recall@1 : {round(np.array(recall_1).mean()*100,1)}")
             # print(f"Mean rank : {np.array(mean_rank).mean():.2f}")
@@ -358,10 +359,10 @@ if __name__ == "__main__":
     # params
     config['use_benchmark'] = True
     config["use_gt"] = False
-    config['method'] = "sr_crrclm_5"
+    config['method'] = "cider_cider_greedyB_llm_lora_ft"
     config['data'] = "blip2mistral"
     config["opts"]["batch_size"]= 100
-    config['split'] = "test"
+    config['split'] = "test_val"
     if config['use_benchmark']:
         config['split'] = "test_val"
     config['scorer'] =  "vitb32"  # "", "vitb32"

@@ -1,11 +1,11 @@
 DEBUG : False  # if true : model saving, logging turned off.  
 INIT_VAL : True
 GREEDY_BASELINE : False
-SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
-ONLY_INFERENCE : False
-SAVE_PREDS : False
+SAVE_BEST_METRIC : False # to save nothing : = False and checkpoint_freq = 0
+ONLY_INFERENCE : True
+SAVE_PREDS : True
 ONLY_VAL : False
-
+CIDER_SR : True 
 dataset : "coco"
 captions_type : "coco" #coco, (mistral, mistral_4), blip_holistic
 train_method : "discriminative" # (discriminative, cider, mle)
@@ -20,7 +20,6 @@ diff_lr: False
 contrastive : False
 reinforce : True
 mllm : "clipcap"
-
 
 #lora
 lora : True
@@ -67,7 +66,7 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name : both_ft_hard_bsz_3 #adapter_r32 #lr9e8_lora_r32_mlp_ft 
+  run_name : both_ft_cider_SR_lamda_5e-1_lr_1e-7_final_crrclm #adapter_r32 #lr9e8_lora_r32_mlp_ft 
   log_mmvp_all : False
  
 inference : 
