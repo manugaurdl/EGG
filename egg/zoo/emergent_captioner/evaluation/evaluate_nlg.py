@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 import pickle
 import os
 import json
+import numpy as np
 from pprint import pprint
 from pycocoevalcap.eval import Bleu, Cider, Meteor, PTBTokenizer, Rouge, Spice
 
@@ -72,11 +73,11 @@ def get_cli_args():
 def run_evaluation():
     # args = get_cli_args()
     base_dir = "/home/manugaur/EGG/inference_preds"
-    file =  "blip2mistral_mle_final.pkl" # blip2mistral_sr_clip_final.pkl"  
+    file =  "mistral_sr_both_ft_cider_SR_lamda_5e-1_lr_1e-7_final_crrclm.pkl" #blip2mistral_sr_both_ft_cider_SR_lamda_5e-1_lr_1e-7_final_crrclm.pkl"
 
     preds = pickle.load(open(os.path.join(base_dir, f"{file}"), "rb"))
-    # gt = pickle.load(open("/home/manugaur/coco/cocoid2caption.pkl" ,"rb")) 
-    gt = pickle.load(open("/home/manugaur/coco/synthetic_data/blip2mistral_preproc_5.pkl" ,"rb")) 
+    gt = pickle.load(open("/home/manugaur/coco/cocoid2caption.pkl" ,"rb")) 
+    # gt = pickle.load(open("/home/manugaur/coco/synthetic_data/blip2mistral_preproc_5.pkl" ,"rb")) 
     gt = {cocoid : gt[cocoid]  for cocoid in preds.keys()}
     
     cocoid2idx = {int(k) : int(v) for k,v in json.load(open("/home/manugaur/nips_benchmark/misc_data/coco_test_cocoid2idx.json", "r")).items()}
