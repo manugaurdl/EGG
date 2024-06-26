@@ -70,10 +70,40 @@ def get_cli_args():
     return parser.parse_args()
 
 
-def run_evaluation():
-    # args = get_cli_args()
+def self_scoring():
+    """
+    Evaluate last ground truth caption against the remaining GT caps
+    """
+    # test set
+    cocoid2idx = {int(k) : int(v) for k,v in json.load(open("/home/manugaur/nips_benchmark/misc_data/coco_test_cocoid2idx.json", "r")).items()}
+    idx2cocoid = {v : k for k,v in cocoid2idx.items()}
+
+    # (x,y)
+    # gt = pickle.load(open("/home/manugaur/coco/cocoid2caption.pkl" ,"rb"))    
+    gt = pickle.load(open("/home/manugaur/coco/synthetic_data/blip2mistral_preproc_5.pkl" ,"rb"))    
+    gt = {cocoid : gt[cocoid][:4]  for cocoid in gt.keys()}
+    preds = {cocoid : gt[cocoid][-1]  for cocoid in gt.keys()}
+    
+    
+    gold_standard = {}
+    for idx in cocoid2idx.values():
+        gold_standard[idx]= [{"caption": cap} for cap in gt[idx2cocoid[idx]]]
+    
+    predictions = {}
+    for idx in cocoid2idx.values():
+        predictions[idx]= [{"caption": preds[idx2cocoid[idx]]}]
+
+    #score
+    cider_scores = list(compute_nlg_metrics(predictions=predictions, gold_standard=gold_standard, only_cider = True)['CIDEr'])
+    cocoid2cider = {idx2cocoid[idx] : cider_scores[idx] for idx in cocoid2idx.values()}
+    print(f" CIDEr score  : {np.array(cider_scores).mean():.3f}")
+
+def test_eval():
     base_dir = "/home/manugaur/EGG/inference_preds"
-    file =  "mistral_sr_both_ft_cider_SR_lamda_5e-1_lr_1e-7_final_crrclm.pkl" #blip2mistral_sr_both_ft_cider_SR_lamda_5e-1_lr_1e-7_final_crrclm.pkl"
+    
+    data = "coco"
+    filename = "sr_lr9e8_lora_r32_mlp_ft"  #"sr_clip_ft_9e-8_curri"
+    file =  f"{data}_{filename}.pkl"
 
     preds = pickle.load(open(os.path.join(base_dir, f"{file}"), "rb"))
     gt = pickle.load(open("/home/manugaur/coco/cocoid2caption.pkl" ,"rb")) 
@@ -81,8 +111,16 @@ def run_evaluation():
     gt = {cocoid : gt[cocoid]  for cocoid in preds.keys()}
     
     cocoid2idx = {int(k) : int(v) for k,v in json.load(open("/home/manugaur/nips_benchmark/misc_data/coco_test_cocoid2idx.json", "r")).items()}
-    idx2cocoid = {v : k for k,v in cocoid2idx.items()}
     
+    """Specify cocoids for which evaluation is to be done"""
+    # cocoids = json.load(open("/home/manugaur/clair/3k_cocoids.json", "r"))
+    # cocoids = list(pickle.load(open(os.path.join(base_dir, f"coco_sr_final.pkl"), "rb")).keys())
+    # cocoids = json.load(open("/home/manugaur/clair/3k_cocoids.json", "r"))
+    # cocoid2idx = {k: v for k,v in cocoid2idx.items() if k in cocoids}
+
+    idx2cocoid = {v : k for k,v in cocoid2idx.items()}
+    print(f"Eval over {len(cocoid2idx)} COCO images")
+
     gold_standard = {}
     for idx in cocoid2idx.values():
         gold_standard[idx]= [{"caption": cap} for cap in gt[idx2cocoid[idx]]]
@@ -97,7 +135,8 @@ def run_evaluation():
     with open(f"/home/manugaur/EGG/cocoid2cider/{file}", "wb") as f:
         pickle.dump(cocoid2cider, f)
 
-    print("| CIDEr scores computed.")
-
+    print(f" CIDEr score  : {np.array(cider_scores).mean():.3f}")
+    
 if __name__ == "__main__":
-    run_evaluation()
+    
+    test_eval()

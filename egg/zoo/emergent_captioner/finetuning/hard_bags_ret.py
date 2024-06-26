@@ -269,16 +269,16 @@ def main(params, config):
         model, preprocess = clip.load(model_name, device=device)
         model.eval()
 
-        # captioner = f"{config['data']}_{config['method']}"        
-        # preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
-        preds_path = "/home/manugaur/nips_benchmark/baselines/instructblip2_vicuna7b_p2.pkl"
+        captioner = f"{config['data']}_{config['method']}"        
+        preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+        # preds_path = "/home/manugaur/nips_benchmark/baselines/instructblip2_vicuna7b_p2.pkl"
 
         with open(preds_path, "rb") as f:
             preds = pickle.load(f)
         
         get_acc_5 = False
 
-        for bag_size in [3,5,7,10]: 
+        for bag_size in [3,5,7]: 
             bag_dir = "/home/manugaur/nips_benchmark/benchmark/benchmark/final_benchmark/"
             
             #benchmark : list of bags. Each bag: list of cocoids    
@@ -359,10 +359,10 @@ if __name__ == "__main__":
     # params
     config['use_benchmark'] = True
     config["use_gt"] = False
-    config['method'] = "cider_cider_greedyB_llm_lora_ft"
-    config['data'] = "blip2mistral"
+    config['method'] = "sr_both_ft_cider_SR_lamda_5e-1_lr_1e-7_final_crrclm"
+    config['data'] = "mistral"
     config["opts"]["batch_size"]= 100
-    config['split'] = "test_val"
+    config['split'] = "val"
     if config['use_benchmark']:
         config['split'] = "test_val"
     config['scorer'] =  "vitb32"  # "", "vitb32"
