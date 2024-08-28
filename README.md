@@ -1,5 +1,11 @@
 # EGG 🐣: Emergence of lanGuage in Games
 
+# ROUGH
+
+1. sender_inputs (70 Gb) : clip image embeddings stored for faster forward prop.
+2. checkpoints (69 Gb) : Discard most ckpts after code is public.
+3. 
+
 ![GitHub](https://img.shields.io/github/license/facebookresearch/EGG)
 [![Python 3.6](https://img.shields.io/badge/python-3.6-blue.svg)](https://www.python.org/downloads/release/python-360/)
 
