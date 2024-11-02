@@ -180,6 +180,7 @@ def main(params, config):
         trainer.train(config, opts)
 
     #Get inference preds
+    config["inference"]["output_dir"] = '/home/manugaur/EGG/TMLR_preds/'
     if not os.path.isdir(config["inference"]["output_dir"]):
         os.makedirs(config["inference"]["output_dir"])
 

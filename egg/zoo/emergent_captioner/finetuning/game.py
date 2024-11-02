@@ -81,9 +81,9 @@ class ReinforceCaptionGame(nn.Module):
                 training = True
             else:
                 training = False
-            scaling_factor = 0.5
+            scaling_factor = 1.0
 
-            assert GREEDY_BASELINE, "Cider optim is done with greedy baseline"
+            # assert GREEDY_BASELINE, "Cider optim is done with greedy baseline"
             self.loss_sr = DiscriminativeLoss()
             self.loss
             aux_info = {}

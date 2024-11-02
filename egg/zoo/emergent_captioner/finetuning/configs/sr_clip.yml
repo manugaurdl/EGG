@@ -1,10 +1,13 @@
 DEBUG : False  # if true : model saving, logging turned off.  
 INIT_VAL : True
-GREEDY_BASELINE : True
+GREEDY_BASELINE : False
 SAVE_BEST_METRIC : True # to save nothing : = False and checkpoint_freq = 0
-ONLY_INFERENCE : False
+ONLY_INFERENCE : True
+SAVE_PREDS :  True
 ONLY_VAL : False
 
+CIDER_SR : False
+dataset : "coco"
 captions_type : "coco" #coco, (mistral, mistral_4), blip_holistic
 train_method : "discriminative" # (discriminative, cider, mle)
 prefix_len : 10
@@ -18,29 +21,37 @@ diff_lr: False
 contrastive : False
 reinforce : True
 mllm : "clipcap"
+
 #lora
 lora : True
+finetune_model : clip # {llm, clip, both} # automatically freeze gpt.transformer or CLIP
 lora_rank : 32
 clip_mlp_ft : True
+adapter_lora : False
+adapter_rank : 32
+clip_text : False
+
+# freezing layers
+freeze_wte : True
+freeze_adapter : False
 log_spice : False
 
-finetune_model : clip # {gpt, clip} # automatically freeze gpt.transformer or CLIP
-clip_text : False
-freeze_wte : False
-freeze_adapter : False
-
 neg_mining:
-  curricullum : {"rand" : 20} # , "medium" : 7, "hard" : 20} #,  "medium" : 5, "hard" : 10} # indexed from 1
-  bag_size : 5
+  curricullum : {20 : ["rand",5]}  #{3 : ["hard", 2] , 8 : ["hard",3], 10 : ["hard",5], 12 : ["hard",7], 14 : ["hard",10], 17 : ["hard",15], 20 : ["hard",20]} 
+  save_optimizer : True
   save_using_neg : False #save model i.e best on neg_dataloader 
   val_bag_size : 5
   val_level : "rand"
 
+resume_training : 
+  do : False
+  dir : sr_easy_bsz5
+  load_epoch  : 2 
+
 opts: 
   baseline : mean
-  n_epochs : 20
-  batch_size : 350
-  lr : 5e-8 #2e-5
+  batch_size : 100
+  lr : 9e-8 #2e-5
   max_len : 50
   checkpoint_freq : 0
   num_workers : 16
@@ -56,12 +67,15 @@ WANDB:
   sweep_run_count : 100
   entity : "manugaur"
   project : "emergent_captioner"
-  run_name :  clip_ft_lr5e8_all_unfrozen_greedyBL #suffix to "sr_{data}_"
+  run_name : clip_final
   log_mmvp_all : False
 
 inference : 
-  batch_size : 128
+  batch_size : 100
   output_dir : /home/manugaur/EGG/inference_preds/
 
-#DEBUG, ONLY_INFERENCE,  INIT_VAL, logging, save_using_neg
+#DEBUG, INIT_VAL | ONLY_INFERENCE,  , logging, save_using_neg
 #CKPT_DIR = f"{data}/{sr}_{config[WANDB][run_name]}
+
+#CIDER_SR : GREEDY_BASELINE = False 
+

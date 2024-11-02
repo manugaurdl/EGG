@@ -45,7 +45,7 @@ from egg.zoo.emergent_captioner.evaluation.evaluate_nlg import compute_nlg_metri
 from egg.zoo.emergent_captioner.finetuning.losses import DiscriminativeLoss
 from egg.zoo.emergent_captioner.evaluation.mmvp_mllm import mmvp_mllm_benchmark
 from egg.zoo.emergent_captioner.evaluation.mmvp_vlm import mmvp_vlm_benchmark
-from egg.zoo.emergent_captioner.evaluation.winoground_vlm import winoground_vlm
+# from egg.zoo.emergent_captioner.evaluation.winoground_vlm import winoground_vlm
 from egg.zoo.emergent_captioner.evaluation.bag_eval import eval_on_bags
 
 try:
@@ -381,7 +381,9 @@ class Trainer:
 
         with torch.no_grad():
             for batch_id, batch in tqdm(enumerate(loader), total = len(loader)):
-
+                if 522198 not in batch[1] and 190756 not in batch[1] and 279806 not in batch[1]:
+                    continue
+                print("Generating")
                 if not isinstance(batch, Batch):
                     batch = Batch(*batch)
                 batch = batch.to(self.device)
@@ -459,6 +461,17 @@ class Trainer:
         full_interaction['captions'] = [interaction.aux_input['captions'] for interaction in interactions]
         
         img_ids = full_interaction['cocoid']
+
+        #TMLR: beam search
+        caps = full_interaction['message'][0]
+        cocoids = [522198,190756,279806]
+        indices = [img_ids.index(i) for i in cocoids]
+        for _, idx in enumerate(indices):
+            print(cocoids[_])
+            print(caps[idx])
+        exit()
+
+
         captions = full_interaction['captions']
         preds_per_batch = full_interaction['message']
         bsz = len(preds_per_batch[0])

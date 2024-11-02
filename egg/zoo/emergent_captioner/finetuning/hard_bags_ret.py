@@ -43,6 +43,9 @@ np.random.seed(seed)
 
 
 def main(params, config):
+    if config['baseline'] is not None:
+        assert(config['use_benchmark'] and not config["use_gt"], "use_gt must be False and use_benchmark must be True when baseline is not None")
+
     print(f"Self Retrieval using {config['captions_type']} captions")
     start = time.time()
     opts = get_common_opts(params=params)
@@ -269,17 +272,19 @@ def main(params, config):
         model, preprocess = clip.load(model_name, device=device)
         model.eval()
 
-        captioner = f"{config['data']}_{config['method']}"        
-        preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
-        # preds_path = "/home/manugaur/nips_benchmark/baselines/instructblip2_vicuna7b_p2.pkl"
+        if config['baseline'] is None:
+            captioner = f"{config['data']}_{config['method']}"        
+            preds_path = f"/home/manugaur/EGG/inference_preds/{captioner}.pkl"
+            # preds_path = "/home/manugaur/nips_benchmark/baselines/instructblip2_vicuna7b_p2.pkl"
 
-        with open(preds_path, "rb") as f:
-            preds = pickle.load(f)
-        
+            with open(preds_path, "rb") as f:
+                preds = pickle.load(f)
+        else:
+            preds = pickle.load(open(f"/home/manugaur/nips_benchmark/baselines/{config['baseline']}.pkl", 'rb'))
         get_acc_5 = False
 
         for bag_size in [3,5,7]: 
-            bag_dir = "/home/manugaur/nips_benchmark/benchmark/benchmark/final_benchmark/"
+            bag_dir = "/home/manugaur/nips_benchmark/final_bags"
             
             #benchmark : list of bags. Each bag: list of cocoids    
             with open(os.path.join(bag_dir, f"{bag_size}.json"), "r") as f:
@@ -358,9 +363,10 @@ if __name__ == "__main__":
     
     # params
     config['use_benchmark'] = True
-    config["use_gt"] = False
-    config['method'] = "sr_both_ft_cider_SR_lamda_5e-1_lr_1e-7_final_crrclm"
-    config['data'] = "mistral"
+    config["use_gt"] = True
+    config['baseline'] = "instblip_123k" # baseline can be MLLM baselines or GT caps with multiple caps per image
+    config['method'] = None #"cider-sr_lambda_1_srlv_lr_1e7_g_baseline_curri"
+    config['data'] = "blip2mistral"
     config["opts"]["batch_size"]= 100
     config['split'] = "val"
     if config['use_benchmark']:
@@ -368,4 +374,4 @@ if __name__ == "__main__":
     config['scorer'] =  "vitb32"  # "", "vitb32"
     config['use_greedy'] = False
     config['avg_text_feat'] = False 
-    main(params, config) 
+    main(params, config)

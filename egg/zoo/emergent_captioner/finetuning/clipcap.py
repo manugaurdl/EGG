@@ -52,10 +52,10 @@ from PIL import Image
 
 def cocoid2img(cocoid):
 
-    if os.path.isdir("/home/manugaur"):
-        img_path = f"/home/manugaur/coco/train2014/COCO_train2014_{int(cocoid):012d}.jpg"
+    if os.path.isdir("/workspace/manugaur"):
+        img_path = f"/workspace/manugaur/coco/train2014/COCO_train2014_{int(cocoid):012d}.jpg"
         if not os.path.isfile(img_path):
-            img_path = f"/home/manugaur/coco/val2014/COCO_val2014_{int(cocoid):012d}.jpg"
+            img_path = f"/workspace/manugaur/coco/val2014/COCO_val2014_{int(cocoid):012d}.jpg"
     else:
         img_path = f"/home/ubuntu/pranav/pick_edit/coco/train2014/COCO_train2014_{int(cocoid):012d}.jpg"
         if not os.path.isfile(img_path):

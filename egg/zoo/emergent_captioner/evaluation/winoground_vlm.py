@@ -11,7 +11,7 @@ import clip
 
 
 
-dataset  = load_dataset('facebook/winoground', use_auth_token="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")
+dataset  = load_dataset('facebook/winoground', use_auth_token="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")
 
 rand_25 = False
 

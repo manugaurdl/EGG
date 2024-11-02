@@ -101,42 +101,52 @@ def self_scoring():
 def test_eval():
     base_dir = "/home/manugaur/EGG/inference_preds"
     
-    data = "coco"
-    filename = "sr_lr9e8_lora_r32_mlp_ft"  #"sr_clip_ft_9e-8_curri"
-    file =  f"{data}_{filename}.pkl"
+    for data in  ["mistral"]:
+        for filename in ["sr_clip_final"]:
+        
+            # data = "coco"
+            # filename = "sr_final"
+            file =  f"{data}_{filename}.pkl"
 
-    preds = pickle.load(open(os.path.join(base_dir, f"{file}"), "rb"))
-    gt = pickle.load(open("/home/manugaur/coco/cocoid2caption.pkl" ,"rb")) 
-    # gt = pickle.load(open("/home/manugaur/coco/synthetic_data/blip2mistral_preproc_5.pkl" ,"rb")) 
-    gt = {cocoid : gt[cocoid]  for cocoid in preds.keys()}
-    
-    cocoid2idx = {int(k) : int(v) for k,v in json.load(open("/home/manugaur/nips_benchmark/misc_data/coco_test_cocoid2idx.json", "r")).items()}
-    
-    """Specify cocoids for which evaluation is to be done"""
-    # cocoids = json.load(open("/home/manugaur/clair/3k_cocoids.json", "r"))
-    # cocoids = list(pickle.load(open(os.path.join(base_dir, f"coco_sr_final.pkl"), "rb")).keys())
-    # cocoids = json.load(open("/home/manugaur/clair/3k_cocoids.json", "r"))
-    # cocoid2idx = {k: v for k,v in cocoid2idx.items() if k in cocoids}
+            preds = pickle.load(open(os.path.join(base_dir, f"{file}"), "rb"))
+            if data =="coco":
+                gt = pickle.load(open("/home/manugaur/coco/cocoid2caption.pkl" ,"rb")) 
+                print("USING COCO GT")
+            else:
+                gt = pickle.load(open(f"/home/manugaur/coco/synthetic_data/{data}_preproc_5.pkl" ,"rb")) 
+                print(f"USING {data.upper()} GT")
+            
+            gt = {cocoid : gt[cocoid]  for cocoid in preds.keys()}
+            
+            cocoid2idx = {int(k) : int(v) for k,v in json.load(open("/home/manugaur/nips_benchmark/misc_data/coco_test_cocoid2idx.json", "r")).items()}
+            cocoids = list(cocoid2idx.keys())
+            
+            """Overwrite cocoids with ids for which evaluation is to be done"""
+            # cocoids = json.load(open("/home/manugaur/clair/3k_cocoids.json", "r"))
+            # cocoids = list(pickle.load(open(os.path.join(base_dir, f"coco_sr_final.pkl"), "rb")).keys())
+            # cocoids = json.load(open("/home/manugaur/clair/3k_cocoids.json", "r"))
+            # cocoids = [554154]
+            
+            # cocoid2idx = {k: v for k,v in cocoid2idx.items() if k in cocoids}
+            idx2cocoid = {v : k for k,v in cocoid2idx.items()}
+            print(f"Eval over {len(cocoid2idx)} COCO images")
 
-    idx2cocoid = {v : k for k,v in cocoid2idx.items()}
-    print(f"Eval over {len(cocoid2idx)} COCO images")
+            gold_standard = {}
+            for idx in cocoid2idx.values():
+                gold_standard[idx]= [{"caption": cap} for cap in gt[idx2cocoid[idx]]]
+            
+            predictions = {}
+            for idx in cocoid2idx.values():
+                predictions[idx]= [{"caption": preds[idx2cocoid[idx]]}]
 
-    gold_standard = {}
-    for idx in cocoid2idx.values():
-        gold_standard[idx]= [{"caption": cap} for cap in gt[idx2cocoid[idx]]]
-    
-    predictions = {}
-    for idx in cocoid2idx.values():
-        predictions[idx]= [{"caption": preds[idx2cocoid[idx]]}]
+            cider_scores = list(compute_nlg_metrics(predictions=predictions, gold_standard=gold_standard, only_cider = True)['CIDEr'])
+            cocoid2cider = {idx2cocoid[idx] : cider_scores[idx] for idx in cocoid2idx.values()}
+            
+            with open(f"/home/manugaur/EGG/cocoid2cider2/{file}", "wb") as f:
+                pickle.dump(cocoid2cider, f)
 
-    cider_scores = list(compute_nlg_metrics(predictions=predictions, gold_standard=gold_standard, only_cider = True)['CIDEr'])
-    cocoid2cider = {idx2cocoid[idx] : cider_scores[idx] for idx in cocoid2idx.values()}
-    
-    with open(f"/home/manugaur/EGG/cocoid2cider/{file}", "wb") as f:
-        pickle.dump(cocoid2cider, f)
+            print(f" CIDEr score {filename}  : {np.array(cider_scores).mean():.3f}")
 
-    print(f" CIDEr score  : {np.array(cider_scores).mean():.3f}")
-    
 if __name__ == "__main__":
     
     test_eval()
